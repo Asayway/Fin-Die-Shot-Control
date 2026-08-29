@@ -28,7 +28,9 @@ import {
   Cpu,
   Hash,
   Activity,
-  History
+  History,
+  Edit3,
+  Wrench
 } from 'lucide-react';
 import { 
   ProductionLineId, 
@@ -49,7 +51,7 @@ import { findMatchingLifeStandard, generateCompositeKey } from '../services/calc
 export { PartMasterView } from './PartMasterView';
 
 const ALL_LINES: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5', 'E6'];
-const ALL_MATERIALS: FinMaterial[] = ['PCM', 'GOLD', 'BARE'];
+const ALL_MATERIALS: FinMaterial[] = ['PCM', 'GOLD', 'BARE', 'HYDROPHILIC', 'EPOXY', 'COPPER'];
 const ALL_TUBE_SIZES: TubeSize[] = ['Ø5', 'Ø7', 'Ø9.52'];
 const ALL_FIN_TYPES: FinType[] = [
   'Slit (half)', 
@@ -59,6 +61,16 @@ const ALL_FIN_TYPES: FinType[] = [
   'Lover',
   'Wide +', 
   'Flat'
+];
+
+const MATERIAL_PRESETS = [
+  { id: 'PCM_010', material: 'PCM', thickness: 0.10, label: 'PCM 0.10mm', tag: 'Standard Pre-Coated', color: 'border-blue-700/60 bg-blue-950/40 text-blue-300' },
+  { id: 'PCM_0105', material: 'PCM', thickness: 0.105, label: 'PCM 0.105mm', tag: 'Medium Heavy', color: 'border-blue-600/60 bg-blue-950/60 text-cyan-300' },
+  { id: 'GOLD_011', material: 'GOLD', thickness: 0.11, label: 'GOLD 0.11mm', tag: 'Gold Hydrophilic Fin', color: 'border-amber-700/60 bg-amber-950/40 text-amber-300' },
+  { id: 'BARE_0095', material: 'BARE', thickness: 0.095, label: 'BARE 0.095mm', tag: 'Bare Aluminum Thin', color: 'border-slate-600 bg-slate-850 text-slate-200' },
+  { id: 'HYDRO_0105', material: 'HYDROPHILIC', thickness: 0.105, label: 'HYDRO 0.105mm', tag: 'Blue Hydrophilic Anti-Rust', color: 'border-cyan-700/60 bg-cyan-950/40 text-cyan-300' },
+  { id: 'EPOXY_0115', material: 'EPOXY', thickness: 0.115, label: 'EPOXY 0.115mm', tag: 'Heavy Anti-Corrosion', color: 'border-purple-700/60 bg-purple-950/40 text-purple-300' },
+  { id: 'COPPER_012', material: 'COPPER', thickness: 0.12, label: 'COPPER 0.12mm', tag: 'Copper Core', color: 'border-rose-700/60 bg-rose-950/40 text-rose-300' }
 ];
 
 const MACHINE_PRESETS: Record<ProductionLineId, string[]> = {
@@ -95,12 +107,47 @@ export const LineConfigurationView: React.FC = () => {
   const [compareTargetId, setCompareTargetId] = useState<string>('');
   const [showDeactivateModal, setShowDeactivateModal] = useState<boolean>(false);
   const [showNewSlotModal, setShowNewSlotModal] = useState<boolean>(false);
+  const [showAddPartModal, setShowAddPartModal] = useState<boolean>(false);
+  const [showEditPartNameModal, setShowEditPartNameModal] = useState<boolean>(false);
 
   // Workflow Form fields
   const [activationReason, setActivationReason] = useState<string>('');
   const [approverName, setApproverName] = useState<string>(currentUser.name);
   const [customSlotName, setCustomSlotName] = useState<string>('');
   const [deactivateReason, setDeactivateReason] = useState<string>('');
+
+  // Part Master Custom & Inline Editing states
+  const [newPartToAssemble, setNewPartToAssemble] = useState<{
+    partCode: string;
+    partName: string;
+    partNameTh: string;
+    stageName: string;
+    category: string;
+    installQty: number;
+    drawingNumber: string;
+    unitCostThb: number;
+    tubeSizeCompat: string;
+  }>({
+    partCode: '',
+    partName: '',
+    partNameTh: '',
+    stageName: 'Piercing Stage',
+    category: 'PUNCH',
+    installQty: 1,
+    drawingNumber: '',
+    unitCostThb: 5000,
+    tubeSizeCompat: 'BOTH'
+  });
+
+  const [partBeingRenamed, setPartBeingRenamed] = useState<{
+    partCode: string;
+    partName: string;
+    partNameTh: string;
+  }>({
+    partCode: '',
+    partName: '',
+    partNameTh: ''
+  });
 
   // Notifications
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error' | 'warning'; text: string } | null>(null);
@@ -426,6 +473,101 @@ export const LineConfigurationView: React.FC = () => {
     setEditingConfig({ ...editingConfig, installedPartQuantities: updated });
   };
 
+  // 1-Click Fast Material & Foil Spec Preset
+  const handleApplyMaterialPreset = (material: FinMaterial, thickness: number, tag: string) => {
+    if (!editingConfig) return;
+    setEditingConfig({
+      ...editingConfig,
+      material,
+      thicknessMm: thickness,
+      reasonForChange: `Switched material to ${material} (${thickness}mm) - ${tag}`
+    });
+    showToast('success', `Applied ${material} (${thickness}mm) preset. Remember to save draft or activate.`);
+  };
+
+  // Stepper for +/- quantities
+  const handleBulkStepQty = (partCode: string, delta: number) => {
+    if (!editingConfig) return;
+    const current = editingConfig.installedPartQuantities?.[partCode] || 0;
+    const next = Math.max(0, current + delta);
+    handleUpdateQty(partCode, next);
+  };
+
+  // Bulk Preset quantities by Category / Part Type
+  const handleBulkSetCategoryQty = (categoryOrKeyword: string, qty: number) => {
+    if (!editingConfig) return;
+    const updated = { ...editingConfig.installedPartQuantities };
+    assemblyAnalysis.items.forEach(item => {
+      if (categoryOrKeyword === 'PUNCH' && (item.category === 'PUNCH' || item.partCode.includes('PUNCH'))) {
+        updated[item.partCode] = qty;
+      } else if (categoryOrKeyword === 'BLADE' && (item.category === 'BLADE' || item.partCode.includes('SLIT') || item.partCode.includes('BLADE'))) {
+        updated[item.partCode] = qty;
+      } else if (categoryOrKeyword === 'CUTOFF' && (item.partCode.includes('CUT-OFF') || item.partCode.includes('CUTOFF'))) {
+        updated[item.partCode] = qty;
+      } else if (categoryOrKeyword === 'SIDECUT' && (item.partCode.includes('SIDE-CUT') || item.partCode.includes('SIDECUT'))) {
+        updated[item.partCode] = qty;
+      } else if (categoryOrKeyword === 'ALL') {
+        updated[item.partCode] = qty;
+      }
+    });
+    setEditingConfig({ ...editingConfig, installedPartQuantities: updated });
+    showToast('success', `Bulk quantity set to ${qty} for ${categoryOrKeyword}.`);
+  };
+
+  // Inline Part Renaming Handler
+  const handleSavePartNameInline = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!partBeingRenamed.partCode || !partBeingRenamed.partName.trim()) return;
+
+    const existingPart = partMasters.find(p => p.partCode === partBeingRenamed.partCode);
+    const updatedPart: PartMaster = existingPart ? {
+      ...existingPart,
+      partName: partBeingRenamed.partName.trim(),
+      partNameTh: partBeingRenamed.partNameTh.trim()
+    } : {
+      partCode: partBeingRenamed.partCode,
+      partName: partBeingRenamed.partName.trim(),
+      partNameTh: partBeingRenamed.partNameTh.trim(),
+      stageName: 'Piercing Stage',
+      category: 'PUNCH',
+      unitCostThb: 5000,
+      tubeSizeCompat: 'BOTH'
+    };
+
+    storageService.savePartMaster(updatedPart);
+    setShowEditPartNameModal(false);
+    showToast('success', `Updated part name for ${partBeingRenamed.partCode} (${updatedPart.partName})`);
+    reloadData();
+  };
+
+  // Add Custom Tooling Part Handler
+  const handleConfirmAddCustomPart = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPartToAssemble.partCode.trim() || !newPartToAssemble.partName.trim() || !editingConfig) return;
+
+    const code = newPartToAssemble.partCode.trim().toUpperCase();
+    const existingPart = partMasters.find(p => p.partCode === code);
+    if (!existingPart) {
+      storageService.savePartMaster({
+        partCode: code,
+        partName: newPartToAssemble.partName.trim(),
+        partNameTh: newPartToAssemble.partNameTh.trim(),
+        stageName: newPartToAssemble.stageName,
+        category: newPartToAssemble.category as any,
+        drawingNumber: newPartToAssemble.drawingNumber,
+        unit: 'EA',
+        unitCostThb: newPartToAssemble.unitCostThb || 5000,
+        tubeSizeCompat: newPartToAssemble.tubeSizeCompat as any
+      });
+    }
+
+    const updated = { ...editingConfig.installedPartQuantities, [code]: Math.max(1, newPartToAssemble.installQty || 1) };
+    setEditingConfig({ ...editingConfig, installedPartQuantities: updated });
+    setShowAddPartModal(false);
+    showToast('success', `Added ${code} (${newPartToAssemble.partName}) to Line ${editingConfig.lineId} tooling.`);
+    reloadData();
+  };
+
   // Comparison target config
   const compareConfig = useMemo(() => {
     if (!compareTargetId) {
@@ -682,6 +824,40 @@ export const LineConfigurationView: React.FC = () => {
                     <RefreshCw className="w-3.5 h-3.5 text-cyan-400" />
                     <span>Load Standard</span>
                   </button>
+                </div>
+              </div>
+
+              {/* Quick Material & Spec Presets Switcher */}
+              <div className="bg-slate-950/80 p-3.5 rounded-lg border border-cyan-900/40 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-cyan-300">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Quick Material & Foil Preset Switcher (สลับชนิดฟอยล์และสเปกวัสดุ)</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    Current: <strong className="text-amber-300">{editingConfig.material}</strong> ({editingConfig.thicknessMm}mm)
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                  {MATERIAL_PRESETS.map(preset => {
+                    const isCurrent = editingConfig.material === preset.material && Math.abs(editingConfig.thicknessMm - preset.thickness) < 0.001;
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => handleApplyMaterialPreset(preset.material as FinMaterial, preset.thickness, preset.tag)}
+                        className={`px-2.5 py-1.5 rounded text-xs font-mono border text-left transition-all whitespace-nowrap ${preset.color} ${
+                          isCurrent ? 'ring-2 ring-cyan-400 font-bold scale-[1.02]' : 'opacity-80 hover:opacity-100'
+                        }`}
+                      >
+                        <div className="font-bold flex items-center justify-between gap-2">
+                          <span>{preset.label}</span>
+                          {isCurrent && <Check className="w-3 h-3 text-cyan-400" />}
+                        </div>
+                        <div className="text-[9px] opacity-75 font-sans">{preset.tag}</div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -1084,37 +1260,115 @@ export const LineConfigurationView: React.FC = () => {
             {/* Tab 1: Preview Part List */}
             {previewTab === 'parts' && (
               <div className="space-y-3">
-                <div className="max-h-[380px] overflow-y-auto space-y-2 pr-1">
-                  {assemblyAnalysis.items.map(item => (
-                    <div
-                      key={item.partCode}
-                      className="p-2.5 bg-slate-950 rounded border border-slate-800 hover:border-slate-700 flex items-center justify-between gap-3 text-xs"
+                {/* Part Actions Bar */}
+                <div className="flex items-center justify-between gap-2 flex-wrap bg-slate-950 p-2.5 rounded-lg border border-slate-800">
+                  <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                    <select
+                      onChange={e => {
+                        if (e.target.value) {
+                          handleAddPartToAssembly(e.target.value);
+                          e.target.value = '';
+                        }
+                      }}
+                      defaultValue=""
+                      className="bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs text-cyan-300 font-mono focus:border-cyan-500 focus:outline-none flex-1"
                     >
-                      <div className="space-y-0.5 flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-cyan-300">{item.partCode}</span>
-                          <span className="px-1.5 py-0.2 rounded bg-slate-800 text-[10px] text-slate-400 font-mono">
-                            {item.category}
-                          </span>
-                          {item.isMissingStandard && (
-                            <span className="px-1.5 py-0.2 rounded bg-rose-950 text-rose-300 border border-rose-700 text-[10px]">
-                              NO STANDARD
-                            </span>
-                          )}
-                        </div>
-                        <div className="font-semibold text-slate-200 truncate">{item.partName}</div>
-                        <div className="text-[11px] text-slate-400 flex items-center gap-3">
-                          <span>Stage: {item.stageName}</span>
-                          <span>DWG: {item.drawingNumber}</span>
-                        </div>
-                      </div>
+                      <option value="" disabled>+ Add Registered Part to Tooling...</option>
+                      {partMasters.map(pm => (
+                        <option key={pm.partCode} value={pm.partCode}>
+                          {pm.partCode} - {pm.partName} ({pm.category})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                      <div className="text-right font-mono flex-shrink-0">
-                        <div className="text-emerald-400 font-bold">฿{item.unitCostThb.toLocaleString()}</div>
-                        <div className="text-[10px] text-slate-400">Install: {item.installQty} EA</div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewPartToAssemble({
+                        partCode: `PT-${Date.now().toString().slice(-4)}`,
+                        partName: '',
+                        partNameTh: '',
+                        stageName: 'Piercing Stage',
+                        category: 'PUNCH',
+                        installQty: 1,
+                        drawingNumber: '',
+                        unitCostThb: 5000,
+                        tubeSizeCompat: editingConfig?.tubeSize || 'BOTH'
+                      });
+                      setShowAddPartModal(true);
+                    }}
+                    className="px-2.5 py-1 rounded bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold font-mono flex items-center gap-1 shadow-sm transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>New Custom Part</span>
+                  </button>
+                </div>
+
+                <div className="max-h-[380px] overflow-y-auto space-y-2 pr-1">
+                  {assemblyAnalysis.items.map(item => {
+                    const master = partMasters.find(p => p.partCode === item.partCode);
+                    return (
+                      <div
+                        key={item.partCode}
+                        className="p-2.5 bg-slate-950 rounded border border-slate-800 hover:border-slate-700 flex items-center justify-between gap-3 text-xs"
+                      >
+                        <div className="space-y-0.5 flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono font-bold text-cyan-300">{item.partCode}</span>
+                            <span className="px-1.5 py-0.2 rounded bg-slate-800 text-[10px] text-slate-400 font-mono">
+                              {item.category}
+                            </span>
+                            {item.isMissingStandard && (
+                              <span className="px-1.5 py-0.2 rounded bg-rose-950 text-rose-300 border border-rose-700 text-[10px]">
+                                NO STANDARD
+                              </span>
+                            )}
+                          </div>
+                          <div className="font-semibold text-slate-200 truncate">{item.partName}</div>
+                          {master?.partNameTh && (
+                            <div className="text-[11px] text-slate-400 font-thai truncate">{master.partNameTh}</div>
+                          )}
+                          <div className="text-[11px] text-slate-400 flex items-center gap-3">
+                            <span>Stage: {item.stageName}</span>
+                            <span>DWG: {item.drawingNumber || '-'}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <div className="text-right font-mono">
+                            <div className="text-emerald-400 font-bold">฿{item.unitCostThb.toLocaleString()}</div>
+                            <div className="text-[10px] text-slate-400">Install: {item.installQty} EA</div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPartBeingRenamed({
+                                partCode: item.partCode,
+                                partName: item.partName,
+                                partNameTh: master?.partNameTh || ''
+                              });
+                              setShowEditPartNameModal(true);
+                            }}
+                            className="p-1.5 rounded bg-slate-900 hover:bg-cyan-950 text-slate-400 hover:text-cyan-300 border border-slate-800 hover:border-cyan-700 transition-colors"
+                            title="Edit Part Name / Thai Name"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleRemovePartFromAssembly(item.partCode)}
+                            className="p-1.5 rounded bg-slate-900 hover:bg-rose-950 text-slate-400 hover:text-rose-400 border border-slate-800 hover:border-rose-800 transition-colors"
+                            title="Remove part from configuration"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -1122,7 +1376,51 @@ export const LineConfigurationView: React.FC = () => {
             {/* Tab 2: Preview Install Quantities */}
             {previewTab === 'quantities' && (
               <div className="space-y-3">
-                <div className="max-h-[380px] overflow-y-auto space-y-2 pr-1">
+                {/* Bulk Preset Steppers */}
+                <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800 space-y-1.5">
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    Quick Preset Installed Quantities (ตั้งค่าจำนวนติดตั้งด่วน)
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => handleBulkSetCategoryQty('PUNCH', 168)}
+                      className="px-2 py-1 rounded bg-slate-900 hover:bg-cyan-950 text-cyan-300 border border-slate-700 text-[11px] font-mono transition-colors"
+                    >
+                      Punches: 168 EA
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleBulkSetCategoryQty('BLADE', 42)}
+                      className="px-2 py-1 rounded bg-slate-900 hover:bg-cyan-950 text-cyan-300 border border-slate-700 text-[11px] font-mono transition-colors"
+                    >
+                      Slits: 42 EA
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleBulkSetCategoryQty('CUTOFF', 4)}
+                      className="px-2 py-1 rounded bg-slate-900 hover:bg-cyan-950 text-cyan-300 border border-slate-700 text-[11px] font-mono transition-colors"
+                    >
+                      Cut-Off: 4 EA
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleBulkSetCategoryQty('SIDECUT', 8)}
+                      className="px-2 py-1 rounded bg-slate-900 hover:bg-cyan-950 text-cyan-300 border border-slate-700 text-[11px] font-mono transition-colors"
+                    >
+                      Side-Cut: 8 EA
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleBulkSetCategoryQty('ALL', 0)}
+                      className="px-2 py-1 rounded bg-slate-900 hover:bg-rose-950 text-rose-400 border border-slate-700 text-[11px] font-mono transition-colors"
+                    >
+                      Reset (0)
+                    </button>
+                  </div>
+                </div>
+
+                <div className="max-h-[360px] overflow-y-auto space-y-2 pr-1">
                   {assemblyAnalysis.items.map(item => (
                     <div
                       key={item.partCode}
@@ -1133,21 +1431,55 @@ export const LineConfigurationView: React.FC = () => {
                         <div className="text-slate-300 truncate text-[11px]">{item.partName}</div>
                       </div>
 
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className="text-[11px] text-slate-400">Qty:</span>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleBulkStepQty(item.partCode, -10)}
+                          className="px-1.5 py-1 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 font-mono text-[10px]"
+                          title="Decrease by 10"
+                        >
+                          -10
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleBulkStepQty(item.partCode, -1)}
+                          className="px-1.5 py-1 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 font-mono text-[10px]"
+                          title="Decrease by 1"
+                        >
+                          -1
+                        </button>
+
                         <input
                           type="number"
                           min="0"
                           max="999"
                           value={item.installQty}
                           onChange={e => handleUpdateQty(item.partCode, parseInt(e.target.value, 10) || 0)}
-                          className="w-16 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-center font-mono font-bold text-emerald-400 text-xs focus:border-cyan-500 focus:outline-none"
+                          className="w-14 bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-center font-mono font-bold text-emerald-400 text-xs focus:border-cyan-500 focus:outline-none"
                         />
                         <span className="text-[10px] text-slate-400">EA</span>
+
+                        <button
+                          type="button"
+                          onClick={() => handleBulkStepQty(item.partCode, +1)}
+                          className="px-1.5 py-1 rounded bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-slate-700 font-mono text-[10px]"
+                          title="Increase by 1"
+                        >
+                          +1
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleBulkStepQty(item.partCode, +10)}
+                          className="px-1.5 py-1 rounded bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-slate-700 font-mono text-[10px]"
+                          title="Increase by 10"
+                        >
+                          +10
+                        </button>
+
                         <button
                           type="button"
                           onClick={() => handleRemovePartFromAssembly(item.partCode)}
-                          className="p-1 text-slate-500 hover:text-rose-400 rounded"
+                          className="p-1 text-slate-500 hover:text-rose-400 rounded ml-1"
                           title="Remove part from configuration assembly"
                         >
                           <X className="w-3.5 h-3.5" />
@@ -1573,6 +1905,241 @@ export const LineConfigurationView: React.FC = () => {
                 Confirm Deactivate
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: Edit Part Name Inline */}
+      {showEditPartNameModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="p-2 rounded bg-cyan-950 text-cyan-400 border border-cyan-800">
+                  <Edit3 className="w-5 h-5" />
+                </span>
+                <div>
+                  <h3 className="text-base font-bold text-white">
+                    Edit Part Name ({partBeingRenamed.partCode})
+                  </h3>
+                  <p className="text-xs text-slate-400 font-thai">
+                    ตั้งค่าชื่อและรายละเอียดชิ้นส่วนในระบบ
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setShowEditPartNameModal(false)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSavePartNameInline} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  Part Code (รหัสชิ้นส่วน)
+                </label>
+                <input
+                  type="text"
+                  value={partBeingRenamed.partCode}
+                  disabled
+                  className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs font-mono text-cyan-300 opacity-80"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  Part Name (English) <span className="text-rose-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={partBeingRenamed.partName}
+                  onChange={e => setPartBeingRenamed({ ...partBeingRenamed, partName: e.target.value })}
+                  placeholder="e.g. Flare Punch Ø7mm Carbide"
+                  className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-xs text-slate-100 focus:border-cyan-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  Part Name (Thai / ชื่อเรียกภาษาไทย)
+                </label>
+                <input
+                  type="text"
+                  value={partBeingRenamed.partNameTh}
+                  onChange={e => setPartBeingRenamed({ ...partBeingRenamed, partNameTh: e.target.value })}
+                  placeholder="e.g. พันช์บานท่อ Ø7mm คาร์ไบด์"
+                  className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-xs text-slate-100 font-thai focus:border-cyan-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowEditPartNameModal(false)}
+                  className="px-4 py-2 rounded bg-slate-800 text-slate-300 text-xs font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold font-mono shadow-md flex items-center gap-1.5"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>SAVE PART NAME</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 5: Add Custom Part to Tooling Assembly */}
+      {showAddPartModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="p-2 rounded bg-emerald-950 text-emerald-400 border border-emerald-800">
+                  <Plus className="w-5 h-5" />
+                </span>
+                <div>
+                  <h3 className="text-base font-bold text-white">
+                    Add Custom Tooling Part to Assembly
+                  </h3>
+                  <p className="text-xs text-slate-400 font-thai">
+                    เพิ่มชิ้นส่วนใหม่หรือสเปกพิเศษเข้าใน Line {editingConfig?.lineId}
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setShowAddPartModal(false)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmAddCustomPart} className="space-y-3.5">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    Part Code <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newPartToAssemble.partCode}
+                    onChange={e => setNewPartToAssemble({ ...newPartToAssemble, partCode: e.target.value.toUpperCase() })}
+                    placeholder="e.g. PUNCH-EXP-01"
+                    className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-xs font-mono font-bold text-cyan-300 focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    Category <span className="text-rose-400">*</span>
+                  </label>
+                  <select
+                    value={newPartToAssemble.category}
+                    onChange={e => setNewPartToAssemble({ ...newPartToAssemble, category: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-xs font-mono text-slate-100 focus:border-cyan-500 focus:outline-none"
+                  >
+                    <option value="PUNCH">PUNCH (พันช์)</option>
+                    <option value="DIE_BUTTON">DIE BUTTON (ไดบัตตอน)</option>
+                    <option value="BLADE">BLADE (ใบมีดกรีดสลิต)</option>
+                    <option value="STRIPPER">STRIPPER (สตริปเปอร์)</option>
+                    <option value="GUIDE">GUIDE / BUSHING</option>
+                    <option value="CUTTER">CUT-OFF CUTTER (ใบมีดตัด)</option>
+                    <option value="FORMING">FORMING TOOL</option>
+                    <option value="OTHER">OTHER (อื่นๆ)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  Part Name (English) <span className="text-rose-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newPartToAssemble.partName}
+                  onChange={e => setNewPartToAssemble({ ...newPartToAssemble, partName: e.target.value })}
+                  placeholder="e.g. High Performance Piercing Punch"
+                  className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-xs text-slate-100 focus:border-cyan-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  Part Name (Thai)
+                </label>
+                <input
+                  type="text"
+                  value={newPartToAssemble.partNameTh}
+                  onChange={e => setNewPartToAssemble({ ...newPartToAssemble, partNameTh: e.target.value })}
+                  placeholder="e.g. พันช์เจาะรูความเร็วสูง"
+                  className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-xs font-thai text-slate-100 focus:border-cyan-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    Install Quantity <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="999"
+                    value={newPartToAssemble.installQty}
+                    onChange={e => setNewPartToAssemble({ ...newPartToAssemble, installQty: parseInt(e.target.value, 10) || 1 })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-xs font-mono font-bold text-emerald-400 focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    Unit Cost (THB)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="100"
+                    value={newPartToAssemble.unitCostThb}
+                    onChange={e => setNewPartToAssemble({ ...newPartToAssemble, unitCostThb: parseFloat(e.target.value) || 0 })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-xs font-mono text-emerald-400 focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    Drawing #
+                  </label>
+                  <input
+                    type="text"
+                    value={newPartToAssemble.drawingNumber}
+                    onChange={e => setNewPartToAssemble({ ...newPartToAssemble, drawingNumber: e.target.value })}
+                    placeholder="DWG-..."
+                    className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-xs font-mono text-slate-100 focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowAddPartModal(false)}
+                  className="px-4 py-2 rounded bg-slate-800 text-slate-300 text-xs font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold font-mono shadow-md flex items-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>ADD TO ASSEMBLY</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

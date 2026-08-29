@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  LayoutDashboard,
   Tv,
   PlusCircle,
   Wrench,
@@ -13,13 +12,13 @@ import {
   Package,
   History,
   BarChart3,
-  ShieldCheck,
   FileText,
   SlidersHorizontal,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Lock
 } from 'lucide-react';
-import { UserRole } from '../../types';
+import { UserRole, AppTheme } from '../../types';
 
 interface NavItem {
   id: string;
@@ -43,6 +42,7 @@ interface SidebarProps {
   userRole: UserRole;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  theme?: AppTheme;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -50,40 +50,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onNavigate,
   userRole,
   collapsed = false,
-  onToggleCollapse
+  onToggleCollapse,
+  theme = 'hmi'
 }) => {
+  const isHmi = theme === 'hmi' || theme === 'industrial-dark';
+
   const sections: NavSection[] = [
     {
       title: 'OPERATIONAL & MONITORING',
       titleTh: 'การทำงานและมอนิเตอร์สด',
       items: [
         {
-          id: 'line-overview',
-          label: 'Line Overview',
-          labelTh: 'ภาพรวมสาย E1-E6',
-          icon: LayoutDashboard,
-          badge: '8 Lines'
+          id: 'shot-entry',
+          label: 'Shot Entry (Manual/PLC)',
+          labelTh: 'บันทึกยอดช็อตหน้าไลน์',
+          icon: PlusCircle,
+          badge: 'HMI',
+          badgeColor: 'bg-green-950 text-green-300 border-green-500'
         },
         {
           id: 'tv-monitoring',
-          label: 'TV Monitoring',
+          label: 'TV Monitoring Wall',
           labelTh: 'จอ TV มอนิเตอร์ช็อต',
           icon: Tv,
           badge: 'LIVE',
-          badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-        },
-        {
-          id: 'shot-entry',
-          label: 'Shot Entry',
-          labelTh: 'บันทึกยอดช็อต',
-          icon: PlusCircle
+          badgeColor: 'bg-green-950 text-green-300 border-green-500'
         },
         {
           id: 'replacement-entry',
           label: 'Replacement Entry',
           labelTh: 'บันทึกเปลี่ยนอะไหล่',
-          icon: Wrench,
-          badge: 'Actions'
+          icon: Wrench
         },
         {
           id: 'regrinding-entry',
@@ -92,10 +89,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           icon: RotateCcw
         },
         {
-          id: 'condition-inspection',
-          label: 'Condition Inspection',
-          labelTh: 'ตรวจสอบสภาพ/ครีบฟิน',
-          icon: ClipboardCheck
+          id: 'lock-position',
+          label: 'Lock Position Matrix',
+          labelTh: 'ล็อคตำแหน่งแม่พิมพ์',
+          icon: Lock,
+          badge: 'Lock',
+          badgeColor: 'bg-red-950 text-red-300 border-red-500'
         }
       ]
     },
@@ -111,7 +110,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         },
         {
           id: 'part-master',
-          label: 'Part Master',
+          label: 'Part Master Catalog',
           labelTh: 'ฐานข้อมูลชิ้นส่วนแม่พิมพ์',
           icon: Box
         },
@@ -119,29 +118,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
           id: 'life-standard-setup',
           label: 'Life Standard Setup',
           labelTh: 'เกณฑ์อายุช็อต (10 Keys)',
-          icon: Sliders,
-          badge: 'Excel 31.01',
-          badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+          icon: Sliders
         },
         {
           id: 'install-quantity-setup',
           label: 'Install Quantity Setup',
           labelTh: 'จำนวนติดตั้งในแม่พิมพ์',
-          icon: Layers,
-          badge: '11,281 EA'
+          icon: Layers
         }
       ]
     },
     {
-      title: 'STOCK & AUDIT TRAIL',
-      titleTh: 'คลังอะไหล่และประวัติการทำงาน',
+      title: 'STOCK & SPARE PARTS',
+      titleTh: 'คลังอะไหล่และรายงาน',
       items: [
         {
           id: 'spare-stock',
-          label: 'Spare Stock & PR/PO',
+          label: 'Spare Stock & PO Risk',
           labelTh: 'สต็อกอะไหล่และการสั่งซื้อ',
-          icon: Package,
-          badge: 'PO Risk'
+          icon: Package
         },
         {
           id: 'replacement-history',
@@ -151,32 +146,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
         },
         {
           id: 'reports',
-          label: 'Reports & MTBF',
+          label: 'Reports & Analytics',
           labelTh: 'รายงานและการวิเคราะห์',
           icon: BarChart3
         }
       ]
     },
     {
-      title: 'GOVERNANCE & SYSTEM',
-      titleTh: 'การกำกับดูแลและระบบ',
+      title: 'SYSTEM CONFIGURATION',
+      titleTh: 'การตั้งค่าและระบบ',
       items: [
         {
-          id: 'user-approval',
-          label: 'User & Approvals',
-          labelTh: 'ผู้ใช้งานและการอนุมัติ',
-          icon: ShieldCheck
-        },
-        {
-          id: 'audit-log',
-          label: 'Audit Log',
-          labelTh: 'บันทึกประวัติการเปลี่ยนแปลง',
-          icon: FileText
-        },
-        {
           id: 'system-settings',
-          label: 'System Settings',
-          labelTh: 'ตั้งค่าระบบ & Seed Data',
+          label: 'System Settings & Apps Script',
+          labelTh: 'ตั้งค่าระบบ & ซิงค์ข้อมูล',
           icon: SlidersHorizontal
         }
       ]
@@ -185,50 +168,59 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside
-      className={`bg-[#0B1120] border-r border-slate-800/80 text-slate-200 flex flex-col flex-shrink-0 transition-all duration-300 relative select-none shadow-lg ${
-        collapsed ? 'w-16' : 'w-64 lg:w-72'
-      }`}
+      className={`flex flex-col flex-shrink-0 transition-all duration-200 relative select-none shadow-xl h-full min-h-0 sticky top-0 z-30 ${
+        isHmi 
+          ? 'bg-black border-r-2 border-green-500/80 text-green-400 font-mono' 
+          : 'bg-[#0B1120] border-r border-slate-800/80 text-slate-200 font-sans'
+      } ${collapsed ? 'w-14' : 'w-56 lg:w-60'}`}
     >
       {/* Top Toggle Button Inside Sidebar */}
       {onToggleCollapse && (
-        <div className="p-2 border-b border-slate-800/60 flex items-center justify-between">
+        <div className={`p-1.5 border-b flex items-center justify-between ${
+          isHmi ? 'border-green-900/60 bg-zinc-950' : 'border-slate-800/60 bg-slate-950/40'
+        }`}>
           {!collapsed && (
-            <span className="text-[11px] font-mono font-medium text-slate-400 px-2 tracking-wide">
-              NAVIGATION MENU
+            <span className={`text-[10px] font-bold px-2 tracking-wider uppercase ${
+              isHmi ? 'font-mono text-green-400' : 'font-mono text-slate-400'
+            }`}>
+              {isHmi ? 'HMI MENU' : 'NAVIGATION'}
             </span>
           )}
           <button
             onClick={onToggleCollapse}
-            className={`p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-cyan-300 transition-colors ${
-              collapsed ? 'w-full flex justify-center' : 'ml-auto'
-            }`}
-            title={collapsed ? "ขยายเมนูด้านข้าง (Expand Sidebar)" : "ย่อเมนูด้านข้าง (Collapse Sidebar)"}
+            className={`p-1 rounded transition-colors border ${
+              isHmi
+                ? 'hover:bg-green-950 text-green-400 hover:text-green-200 border-green-900/50'
+                : 'hover:bg-slate-800 text-slate-400 hover:text-cyan-300 border-slate-800'
+            } ${collapsed ? 'w-full flex justify-center' : 'ml-auto'}`}
+            title={collapsed ? "ขยายเมนู (Expand Sidebar)" : "ย่อเมนู (Collapse Sidebar)"}
             aria-label="Toggle Sidebar Collapse"
           >
             {collapsed ? (
-              <ChevronRight className="w-4 h-4 text-cyan-400" />
+              <ChevronRight className={`w-3.5 h-3.5 ${isHmi ? 'text-green-400' : 'text-cyan-400'}`} />
             ) : (
-              <ChevronLeft className="w-4 h-4 text-slate-400" />
+              <ChevronLeft className={`w-3.5 h-3.5 ${isHmi ? 'text-green-400' : 'text-slate-400'}`} />
             )}
           </button>
         </div>
       )}
 
       {/* Navigation Links */}
-      <div className="flex-1 overflow-y-auto py-3 px-2 space-y-4 custom-scrollbar">
+      <div className={`flex-1 overflow-y-auto py-2 px-1.5 space-y-2.5 custom-scrollbar ${
+        isHmi ? 'bg-black' : 'bg-[#0B1120]'
+      }`}>
         {sections.map((section, sIdx) => (
-          <div key={sIdx} className="space-y-1">
+          <div key={sIdx} className="space-y-0.5">
             {!collapsed && (
-              <div className="px-3 pb-1">
-                <div className="text-[10px] font-bold font-mono tracking-wider text-slate-400/90 uppercase">
+              <div className={`px-2 pb-0.5 border-b ${isHmi ? 'border-green-950' : 'border-slate-800/60'}`}>
+                <div className={`text-[9px] font-bold font-mono tracking-wider uppercase ${
+                  isHmi ? 'text-green-500' : 'text-slate-400'
+                }`}>
                   {section.title}
-                </div>
-                <div className="text-[9px] text-slate-500 font-thai">
-                  {section.titleTh}
                 </div>
               </div>
             )}
-            <div className="space-y-0.5">
+            <div className="space-y-0.5 pt-0.5">
               {section.items.map(item => {
                 const Icon = item.icon;
                 const isActive = activeRoute === item.id;
@@ -236,32 +228,52 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <button
                     key={item.id}
                     onClick={() => onNavigate(item.id)}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-all group ${
-                      isActive
-                        ? 'bg-cyan-500/15 text-cyan-200 border-l-4 border-cyan-400 font-semibold shadow-sm'
-                        : 'text-slate-300 hover:bg-slate-800/70 hover:text-white'
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-left transition-all group ${
+                      isHmi
+                        ? isActive
+                          ? 'bg-green-500 text-black border border-green-400 font-extrabold shadow-sm'
+                          : 'bg-zinc-950/80 text-green-400 border border-zinc-900 hover:border-green-500/50 hover:bg-green-950/60'
+                        : isActive
+                          ? 'bg-cyan-500/15 text-cyan-200 border-l-2 border-cyan-400 font-medium shadow-sm'
+                          : 'text-slate-300 hover:bg-slate-800/70 hover:text-white border border-transparent'
                     } ${collapsed ? 'justify-center px-0' : ''}`}
                     title={`${item.label} (${item.labelTh})`}
                   >
                     <Icon
-                      className={`w-4 h-4 flex-shrink-0 transition-colors ${
-                        isActive ? 'text-cyan-400' : 'text-slate-400 group-hover:text-cyan-300'
+                      className={`w-3.5 h-3.5 flex-shrink-0 transition-colors ${
+                        isHmi
+                          ? isActive ? 'text-black font-bold' : 'text-green-400 group-hover:text-green-300'
+                          : isActive ? 'text-cyan-400' : 'text-slate-400 group-hover:text-cyan-300'
                       }`}
                     />
                     {!collapsed && (
                       <div className="flex-1 min-w-0 flex items-center justify-between">
                         <div className="truncate">
-                          <div className="text-xs font-normal tracking-normal truncate leading-tight text-slate-200 group-hover:text-white">
+                          <div className={`text-[11px] tracking-tight truncate leading-tight ${
+                            isHmi
+                              ? isActive ? 'text-black font-bold' : 'text-green-300 group-hover:text-green-200'
+                              : isActive ? 'text-white font-medium' : 'text-slate-200 group-hover:text-white'
+                          }`}>
                             {item.label}
                           </div>
-                          <div className="text-[10px] text-slate-400 truncate leading-tight font-thai mt-0.5">
+                          <div className={`text-[9px] truncate leading-tight font-thai mt-0.5 ${
+                            isHmi
+                              ? isActive ? 'text-zinc-900 font-medium' : 'text-green-500/80'
+                              : isActive ? 'text-cyan-300/80' : 'text-slate-400'
+                          }`}>
                             {item.labelTh}
                           </div>
                         </div>
                         {item.badge && (
                           <span
-                            className={`ml-2 text-[9px] font-mono px-1.5 py-0.5 rounded border ${
-                              item.badgeColor || 'bg-slate-800/90 text-slate-400 border-slate-700/80'
+                            className={`ml-1 text-[8px] font-mono px-1 py-0.2 rounded border font-bold ${
+                              isHmi
+                                ? isActive
+                                  ? 'bg-black text-green-400 border-black'
+                                  : item.badgeColor || 'bg-green-950 text-green-400 border-green-600'
+                                : isActive
+                                  ? 'bg-cyan-950 text-cyan-300 border-cyan-600'
+                                  : item.badgeColor || 'bg-slate-800/90 text-slate-400 border-slate-700/80'
                             }`}
                           >
                             {item.badge}
@@ -279,13 +291,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Footer Info */}
       {!collapsed && (
-        <div className="p-3 border-t border-slate-800/80 bg-slate-950/40 text-[11px] text-slate-400 space-y-1">
-          <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
+        <div className={`p-1.5 border-t text-[9px] space-y-0.5 ${
+          isHmi 
+            ? 'border-green-900/80 bg-zinc-950 text-green-500/80' 
+            : 'border-slate-800/80 bg-slate-950/40 text-slate-400'
+        }`}>
+          <div className="flex items-center justify-between font-mono">
             <span>DATA SOURCE</span>
-            <span className="text-emerald-400 font-semibold">EXCEL REV 31.01.2025</span>
+            <span className={isHmi ? 'text-green-400 font-bold' : 'text-emerald-400 font-semibold'}>
+              EXCEL 31.01.2025
+            </span>
           </div>
-          <div className="text-[10px] text-slate-500 truncate">
-            0. Control shot Spare Parts FIN DIES
+          <div className={`text-[8px] truncate font-mono ${isHmi ? 'text-green-600' : 'text-slate-500'}`}>
+            HE FIN DIE SHOT CONTROL SYSTEM
           </div>
         </div>
       )}

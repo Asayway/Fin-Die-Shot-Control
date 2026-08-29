@@ -158,6 +158,9 @@ export interface RegrindStandard {
   oneTimeRegrindMm: string; // e.g. "0.25-0.35", "0.10", "0.15-0.20"
   totalRegrindMm: number; // e.g. 1.00, 1.50, 1.40
   maxRegrindCount: number; // e.g. 4, 15, 8, 0 (0 = Dispose after 1 use)
+  maxTotalGrindingLimit?: number; // unit: mm (Max depth allowable e.g. 3.00, 1.50)
+  regrindDepthPerTime?: number; // unit: mm (Grind depth per cycle e.g. 0.20)
+  standardShimThickness?: number; // unit: mm (Standard shim compensation e.g. 0.20)
   regrindIntervalNote?: string; // e.g. "Change every 10-15 Day (เปลี่ยนทุกๆ 10-15 วัน)"
   disposeAfterUse?: boolean;
 }
@@ -170,6 +173,9 @@ export interface PartLifeStandard {
   stagePunchDie: string;
   lifeLimitShots: number; // e.g. 18,000,000, 40,000,000, 100,000,000
   regrindStandard: RegrindStandard;
+  maxTotalGrindingLimit?: number; // unit: mm (Direct parameter on part standard)
+  regrindDepthPerTime?: number; // unit: mm (Direct parameter on part standard)
+  standardShimThickness?: number; // unit: mm (Direct parameter on part standard)
   estimatedCostThb?: number;
   changeIntervalNotes?: string;
   notes?: string;
@@ -179,13 +185,15 @@ export interface PartLifeStandard {
   isImportedSeed?: boolean;
 }
 
+export type TubeSizeCompat = 'Ø5' | 'Ø7' | 'BOTH';
+
 export interface PartMaster {
   partCode: string;
   partName: string;
   partNameTh: string;
   category: 'PUNCH' | 'DIE' | 'BLADE' | 'PIN' | 'CORNER_CUT' | 'CENTER_PUNCH' | 'OTHER';
   stageName: string; // e.g. Bucking, Ironing, Louver, Reflaire, Row Slit, Cut Off, Side Cut, Corner Cut, Feed Pin
-  tubeSizeCompat: 'Ø5' | 'Ø7' | 'BOTH';
+  tubeSizeCompat: TubeSizeCompat;
   drawingNumber: string;
   unit: string;
   unitCostThb: number;
@@ -623,6 +631,8 @@ export interface AuditLogEntry {
   actionCategory?: 'CONFIGURATION' | 'STANDARD_CHANGE' | 'SHOT_ADJUSTMENT' | 'REPLACEMENT' | 'REGRIND' | 'APPROVAL' | 'SYSTEM' | 'STOCK' | 'PROCUREMENT';
 }
 
+export type AppTheme = 'dark' | 'hmi' | 'industrial-dark';
+
 export interface SystemSettings {
   language: 'EN' | 'TH' | 'DUAL';
   warningThresholdPercent: number; // 70
@@ -634,7 +644,36 @@ export interface SystemSettings {
   allowMultiEntryPerShift: boolean; // default false
   shift1Start: string; // "08:00"
   shift2Start: string; // "20:00"
-  theme: 'dark' | 'industrial-dark';
+  theme: AppTheme;
   enableSoundAlerts: boolean;
   tvAutoCycleIntervalSec: number; // 15
 }
+
+export type PositionLockStatus = 
+  | 'UNLOCKED' 
+  | 'LOCKED_MAINTENANCE' 
+  | 'LOCKED_BYPASS' 
+  | 'LOCKED_TRIAL' 
+  | 'LOCKED_CALIBRATION' 
+  | 'LOCKED_HOLD';
+
+export interface PositionLockRecord {
+  id: string;
+  lineId: ProductionLineId;
+  dieCode: string;
+  stageCode: string;
+  stageName: string;
+  partCode: string;
+  partName: string;
+  positionId: string; // e.g. "P-01", "ROW-1", "LEFT-04", etc.
+  positionIndex: number;
+  isLocked: boolean;
+  lockType: PositionLockStatus;
+  lockReason: string;
+  freezeShotCount: boolean; // whether counter is frozen for this position
+  frozenAtShot?: number;
+  lockedBy?: string;
+  lockedAt?: string;
+  notes?: string;
+}
+

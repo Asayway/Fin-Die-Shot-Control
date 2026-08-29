@@ -21,7 +21,9 @@ import {
   User,
   SystemSettings,
   ProductionLineId,
-  UserRole
+  UserRole,
+  PositionLockRecord,
+  PositionLockStatus
 } from '../types';
 
 import {
@@ -61,6 +63,7 @@ const STORAGE_KEYS = {
   SHOT_DRAFTS: 'fin_press_shot_drafts',
   AUDIT_LOGS: 'fin_press_audit_logs',
   SETTINGS: 'fin_press_settings',
+  POSITION_LOCKS: 'fin_press_position_locks',
   SEED_INITIALIZED: 'fin_press_seed_init_v5'
 };
 
@@ -198,6 +201,25 @@ class StorageService {
 
   public getPartMasters(): PartMaster[] {
     return JSON.parse(localStorage.getItem(STORAGE_KEYS.PART_MASTERS) || '[]');
+  }
+
+  public savePartMaster(part: PartMaster): void {
+    const list = this.getPartMasters();
+    const idx = list.findIndex(p => p.partCode === part.partCode);
+    if (idx >= 0) {
+      list[idx] = part;
+    } else {
+      list.push(part);
+    }
+    localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(list));
+    this.addAuditLog('SYSTEM', `Updated Part Master: ${part.partCode} (${part.partName})`, `อัปเดตข้อมูลชิ้นส่วนหลัก ${part.partName}`);
+    this.notify();
+  }
+
+  public savePartMasters(parts: PartMaster[]): void {
+    localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(parts));
+    this.addAuditLog('SYSTEM', `Bulk updated ${parts.length} Part Master catalog records`);
+    this.notify();
   }
 
   public getLineConfigs(): LineActiveConfiguration[] {
@@ -1974,19 +1996,6 @@ class StorageService {
     return { success: true, message: `Configuration ${configId} removed.` };
   }
 
-  public savePartMaster(part: PartMaster) {
-    const parts = this.getPartMasters();
-    const idx = parts.findIndex(p => p.partCode === part.partCode);
-    if (idx >= 0) {
-      parts[idx] = part;
-    } else {
-      parts.push(part);
-    }
-    localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(parts));
-    this.addAuditLog('SYSTEM', `Saved Part Master: ${part.partCode} (${part.partName})`);
-    this.notify();
-  }
-
   public saveSpareStock(stock: Partial<SpareStockItem> & { id?: string; partCode: string; partName: string }): SpareStockItem {
     const stocks = this.getSpareStocks();
     const existingIdx = stocks.findIndex(s => (stock.id && s.id === stock.id) || s.partCode === stock.partCode);
@@ -2116,6 +2125,198 @@ class StorageService {
 
     this.notify();
     return item;
+  }
+
+  // ==========================================
+  // POSITION LOCK (ล็อคตำแหน่ง) MANAGEMENT
+  // ==========================================
+
+  public getPositionLocks(lineId?: ProductionLineId): PositionLockRecord[] {
+    const raw = localStorage.getItem(STORAGE_KEYS.POSITION_LOCKS);
+    let locks: PositionLockRecord[] = raw ? JSON.parse(raw) : [];
+    
+    if (locks.length === 0) {
+      locks = this.initializeDefaultPositionLocks();
+      localStorage.setItem(STORAGE_KEYS.POSITION_LOCKS, JSON.stringify(locks));
+    }
+
+    if (lineId) {
+      return locks.filter(l => l.lineId === lineId);
+    }
+    return locks;
+  }
+
+  private initializeDefaultPositionLocks(): PositionLockRecord[] {
+    const lines: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5', 'E6'];
+    const stages = [
+      { stageCode: 'STG-01-DRW1', stageName: '1st Draw Stage', partCode: 'P-DRW1-001', partName: '1st Draw Punch Pin', positions: 24 },
+      { stageCode: 'STG-02-DRW2', stageName: '2nd Draw Stage', partCode: 'P-DRW2-001', partName: '2nd Draw Punch Pin', positions: 24 },
+      { stageCode: 'STG-03-PRC', stageName: 'Piercing Stage', partCode: 'P-PRC-001', partName: 'Piercing Punch', positions: 24 },
+      { stageCode: 'STG-04-SLT', stageName: 'Slit Station', partCode: 'P-SLT-001', partName: 'Slit Knife Punch', positions: 24 },
+      { stageCode: 'STG-05-LOUV', stageName: 'Louver Stage', partCode: 'P-LOUV-001', partName: 'Louver Blade Punch', positions: 24 },
+      { stageCode: 'STG-06-FORM', stageName: 'Forming Stage', partCode: 'P-FORM-001', partName: 'Forming Die Block', positions: 16 },
+      { stageCode: 'STG-07-CUT', stageName: 'Cut-off Station', partCode: 'P-CUT-001', partName: 'Cut-off Shear Blade', positions: 16 },
+      { stageCode: 'STG-08-TRIM', stageName: 'Edge Trim Stage', partCode: 'P-TRIM-001', partName: 'Edge Trim Punch', positions: 16 }
+    ];
+
+    const result: PositionLockRecord[] = [];
+
+    lines.forEach(lineId => {
+      const dieCode = `FD-${lineId}-07`;
+      stages.forEach(stg => {
+        for (let i = 1; i <= stg.positions; i++) {
+          const posStr = i < 10 ? `0${i}` : `${i}`;
+          const isSampleLocked = (lineId === 'E6' && stg.stageCode === 'STG-03-PRC' && (i === 4 || i === 12)) ||
+                                 (lineId === 'E6' && stg.stageCode === 'STG-05-LOUV' && i === 18);
+          
+          let lockType: PositionLockStatus = 'UNLOCKED';
+          let lockReason = '';
+          let lockedBy = '';
+          let lockedAt = '';
+          let notes = '';
+
+          if (isSampleLocked) {
+            if (i === 4) {
+              lockType = 'LOCKED_MAINTENANCE';
+              lockReason = 'Punch tip chipped - Bypassed for regrinding shift 2';
+              lockedBy = 'Somchai M. (Tooling Lead)';
+              lockedAt = '2026-08-28T14:30:00.000Z';
+              notes = 'Slot isolated with dummy blanking pin.';
+            } else if (i === 12) {
+              lockType = 'LOCKED_TRIAL';
+              lockReason = 'Trial PCM 0.10mm coating test position';
+              lockedBy = 'Anan K. (Die Specialist)';
+              lockedAt = '2026-08-29T08:00:00.000Z';
+              notes = 'Counter frozen during sample coil run.';
+            } else if (i === 18) {
+              lockType = 'LOCKED_BYPASS';
+              lockReason = 'Louver blade wear inspection hold';
+              lockedBy = 'Kitti S. (Maintenance Tech)';
+              lockedAt = '2026-08-29T09:15:00.000Z';
+              notes = 'Clearance measured 0.012mm - Needs micro-grind.';
+            }
+          }
+
+          result.push({
+            id: `POS-${lineId}-${stg.stageCode}-P${posStr}`,
+            lineId,
+            dieCode,
+            stageCode: stg.stageCode,
+            stageName: stg.stageName,
+            partCode: stg.partCode,
+            partName: stg.partName,
+            positionId: `P-${posStr}`,
+            positionIndex: i,
+            isLocked: isSampleLocked,
+            lockType,
+            lockReason,
+            freezeShotCount: isSampleLocked,
+            frozenAtShot: isSampleLocked ? 14200500 + i * 1000 : undefined,
+            lockedBy: lockedBy || undefined,
+            lockedAt: lockedAt || undefined,
+            notes: notes || undefined
+          });
+        }
+      });
+    });
+
+    return result;
+  }
+
+  public savePositionLock(
+    id: string,
+    isLocked: boolean,
+    lockType: PositionLockStatus,
+    lockReason: string,
+    notes?: string,
+    freezeShotCount: boolean = true
+  ): PositionLockRecord {
+    const raw = localStorage.getItem(STORAGE_KEYS.POSITION_LOCKS);
+    let locks: PositionLockRecord[] = raw ? JSON.parse(raw) : this.initializeDefaultPositionLocks();
+    const idx = locks.findIndex(l => l.id === id);
+    const currentUser = this.getCurrentUser();
+
+    if (idx < 0) {
+      throw new Error(`Position record ${id} not found.`);
+    }
+
+    const previous = locks[idx];
+    const updated: PositionLockRecord = {
+      ...previous,
+      isLocked,
+      lockType: isLocked ? lockType : 'UNLOCKED',
+      lockReason: isLocked ? lockReason : '',
+      freezeShotCount: isLocked ? freezeShotCount : false,
+      frozenAtShot: isLocked ? (previous.frozenAtShot || 14200500) : undefined,
+      lockedBy: isLocked ? currentUser.name : undefined,
+      lockedAt: isLocked ? new Date().toISOString() : undefined,
+      notes: notes || ''
+    };
+
+    locks[idx] = updated;
+    localStorage.setItem(STORAGE_KEYS.POSITION_LOCKS, JSON.stringify(locks));
+
+    this.logStructuredAudit({
+      module: 'SECURITY',
+      recordId: id,
+      action: isLocked ? 'LOCK_POSITION' : 'UNLOCK_POSITION',
+      fieldChanged: 'isLocked / lockType',
+      oldValue: previous.isLocked ? `${previous.lockType} (${previous.lockReason})` : 'UNLOCKED',
+      newValue: isLocked ? `${lockType} (${lockReason})` : 'UNLOCKED',
+      reason: lockReason || (isLocked ? 'Position locked by technician' : 'Position unlocked & returned to production'),
+      details: `${isLocked ? 'Locked' : 'Unlocked'} position ${updated.positionId} (${updated.stageName}, Die: ${updated.dieCode}, Line: ${updated.lineId}). Type: ${lockType}. Notes: ${notes || 'None'}`,
+      detailsTh: `${isLocked ? 'ล็อคตำแหน่ง' : 'ปลดล็อคตำแหน่ง'} ${updated.positionId} ในสถานี ${updated.stageName} (Line ${updated.lineId})`,
+      actionCategory: 'CONFIGURATION'
+    });
+
+    this.notify();
+    return updated;
+  }
+
+  public batchUpdatePositionLocks(
+    ids: string[],
+    isLocked: boolean,
+    lockType: PositionLockStatus,
+    lockReason: string,
+    notes?: string
+  ): void {
+    const raw = localStorage.getItem(STORAGE_KEYS.POSITION_LOCKS);
+    let locks: PositionLockRecord[] = raw ? JSON.parse(raw) : this.initializeDefaultPositionLocks();
+    const currentUser = this.getCurrentUser();
+
+    locks = locks.map(item => {
+      if (ids.includes(item.id)) {
+        return {
+          ...item,
+          isLocked,
+          lockType: isLocked ? lockType : 'UNLOCKED',
+          lockReason: isLocked ? lockReason : '',
+          freezeShotCount: isLocked,
+          frozenAtShot: isLocked ? (item.frozenAtShot || 14200500) : undefined,
+          lockedBy: isLocked ? currentUser.name : undefined,
+          lockedAt: isLocked ? new Date().toISOString() : undefined,
+          notes: notes || ''
+        };
+      }
+      return item;
+    });
+
+    localStorage.setItem(STORAGE_KEYS.POSITION_LOCKS, JSON.stringify(locks));
+
+    this.logStructuredAudit({
+      module: 'SECURITY',
+      recordId: `BATCH-${ids.length}-POSITIONS`,
+      action: isLocked ? 'BATCH_LOCK_POSITION' : 'BATCH_UNLOCK_POSITION',
+      fieldChanged: 'isLocked / lockType',
+      oldValue: 'MULTI',
+      newValue: isLocked ? `${lockType} (${ids.length} positions)` : `UNLOCKED (${ids.length} positions)`,
+      reason: lockReason || `Batch ${isLocked ? 'lock' : 'unlock'} of ${ids.length} die positions`,
+      details: `Batch ${isLocked ? 'locked' : 'unlocked'} ${ids.length} positions with type: ${lockType}. Reason: ${lockReason}`,
+      detailsTh: `ดำเนินการ${isLocked ? 'ล็อค' : 'ปลดล็อค'}กลุ่มตำแหน่งแม่พิมพ์จำนวน ${ids.length} จุดพร้อมกัน`,
+      actionCategory: 'CONFIGURATION'
+    });
+
+    this.notify();
   }
 }
 

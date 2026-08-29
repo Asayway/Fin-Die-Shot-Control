@@ -112,6 +112,70 @@ export const SystemSettingsView: React.FC = () => {
               </div>
             </div>
 
+            <div className="pt-2 border-t border-slate-800/80">
+              <label className="block text-slate-200 font-bold mb-2 flex items-center gap-1.5">
+                <SlidersHorizontal className="w-4 h-4 text-cyan-400" />
+                <span>Visual Display Theme (เลือกธีมการแสดงผล)</span>
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Dark Theme Card */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const updated = { ...settings, theme: 'dark' as const };
+                    setSettings(updated);
+                    storageService.updateSettings(updated);
+                  }}
+                  className={`p-3 rounded-lg border text-left transition-all ${
+                    settings.theme === 'dark'
+                      ? 'bg-slate-900 border-cyan-400 ring-2 ring-cyan-500/40 shadow-lg shadow-cyan-950/50'
+                      : 'bg-slate-950 border-slate-800 hover:border-slate-700 opacity-70 hover:opacity-100'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3.5 h-3.5 rounded-full bg-cyan-400" />
+                      <span className="font-bold text-slate-100 text-sm">Theme มืด (Dark Slate)</span>
+                    </div>
+                    {settings.theme === 'dark' && (
+                      <CheckCircle2 className="w-4 h-4 text-cyan-400" />
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-400 font-sans leading-relaxed">
+                    ดีไซน์ Dark Slate & Cyan ทันสมัย อ่านง่าย เหมาะสำหรับการดูรายงานและวิเคราะห์ข้อมูล
+                  </p>
+                </button>
+
+                {/* Industrial HMI Theme Card */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const updated = { ...settings, theme: 'hmi' as const };
+                    setSettings(updated);
+                    storageService.updateSettings(updated);
+                  }}
+                  className={`p-3 rounded-lg border text-left transition-all font-mono ${
+                    settings.theme === 'hmi' || settings.theme === 'industrial-dark'
+                      ? 'bg-black border-green-500 ring-2 ring-green-500/40 shadow-lg shadow-green-950/50'
+                      : 'bg-zinc-950 border-zinc-800 hover:border-zinc-700 opacity-70 hover:opacity-100'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3.5 h-3.5 rounded-full bg-green-400 animate-pulse" />
+                      <span className="font-bold text-green-400 text-sm">Theme HMI (Neon Green)</span>
+                    </div>
+                    {(settings.theme === 'hmi' || settings.theme === 'industrial-dark') && (
+                      <CheckCircle2 className="w-4 h-4 text-green-400" />
+                    )}
+                  </div>
+                  <p className="text-[11px] text-green-500/80 font-mono leading-relaxed">
+                    Solid Black & Matrix Green ตัวหนังสือสีเขียวสว่าง ออกแบบมาสำหรับจอทัชสกรีนหน้าไลน์ผลิต
+                  </p>
+                </button>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
               <div>
                 <label className="block text-slate-300 font-bold mb-1">Display Language Mode</label>
