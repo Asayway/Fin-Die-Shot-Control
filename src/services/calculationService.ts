@@ -115,6 +115,109 @@ export function determineAlertSeverity(
 }
 
 /**
+ * Calculate Available Quantity:
+ * availableQuantity = onHandQuantity - reservedQuantity - quarantineQuantity
+ */
+export function calculateAvailableQuantity(
+  onHandQuantity: number,
+  reservedQuantity: number = 0,
+  quarantineQuantity: number = 0
+): number {
+  return Math.max(0, (onHandQuantity || 0) - (reservedQuantity || 0) - (quarantineQuantity || 0));
+}
+
+/**
+ * Calculate Replacement Coverage:
+ * replacementCoverage = availableQuantity / requiredQuantityPerFullReplacement
+ */
+export function calculateReplacementCoverage(
+  availableQuantity: number,
+  requiredQuantityPerFullReplacement: number
+): number {
+  if (!requiredQuantityPerFullReplacement || requiredQuantityPerFullReplacement <= 0) return 0;
+  return Number((availableQuantity / requiredQuantityPerFullReplacement).toFixed(2));
+}
+
+/**
+ * Calculate Delivery Risk:
+ * forecastReplacementDate compared with expectedDeliveryDate.
+ * If expected delivery is later than forecast replacement:
+ * show DELIVERY RISK and the number of days late.
+ */
+export function calculateDeliveryRisk(
+  forecastReplacementDate?: string,
+  expectedDeliveryDate?: string
+): { hasDeliveryRisk: boolean; daysLate: number } {
+  if (!forecastReplacementDate || !expectedDeliveryDate) {
+    return { hasDeliveryRisk: false, daysLate: 0 };
+  }
+
+  const forecast = new Date(forecastReplacementDate);
+  const delivery = new Date(expectedDeliveryDate);
+
+  if (isNaN(forecast.getTime()) || isNaN(delivery.getTime())) {
+    return { hasDeliveryRisk: false, daysLate: 0 };
+  }
+
+  const msDiff = delivery.getTime() - forecast.getTime();
+  const daysDiff = Math.ceil(msDiff / (1000 * 60 * 60 * 24));
+
+  if (daysDiff > 0) {
+    return { hasDeliveryRisk: true, daysLate: daysDiff };
+  }
+
+  return { hasDeliveryRisk: false, daysLate: 0 };
+}
+
+/**
+ * Combine Life and Stock Risk Matrix:
+ * - Life normal + Stock normal = NORMAL
+ * - Life warning + Stock sufficient = WARNING
+ * - Life prepare + Stock insufficient = CRITICAL SUPPLY
+ * - Life critical + Stock zero = STOP RISK
+ * - PO ETA later than forecast = DELIVERY RISK
+ * 
+ * Note: Keeps technical part-life calculation and procurement status separate.
+ */
+export function calculateCombinedRisk(
+  lifeStatus: LifeStatus,
+  stockStatus: StockStatus,
+  hasDeliveryRisk: boolean,
+  availableQty: number = 0,
+  requiredPerChange: number = 1
+): 'NORMAL' | 'WARNING' | 'CRITICAL SUPPLY' | 'STOP RISK' | 'DELIVERY RISK' {
+  if (hasDeliveryRisk) {
+    return 'DELIVERY RISK';
+  }
+
+  const isStockZero = stockStatus === 'NO_STOCK' || availableQty <= 0;
+  const isStockInsufficient = isStockZero || stockStatus === 'LOW_STOCK' || availableQty < requiredPerChange;
+  const isStockSufficient = !isStockInsufficient;
+
+  if ((lifeStatus === 'CRITICAL' || lifeStatus === 'OVER_LIFE') && isStockZero) {
+    return 'STOP RISK';
+  }
+
+  if (lifeStatus === 'PREPARE' && isStockInsufficient) {
+    return 'CRITICAL SUPPLY';
+  }
+
+  if (lifeStatus === 'CRITICAL' || lifeStatus === 'OVER_LIFE') {
+    return isStockZero ? 'STOP RISK' : 'CRITICAL SUPPLY';
+  }
+
+  if (lifeStatus === 'WARNING') {
+    return isStockSufficient ? 'WARNING' : 'CRITICAL SUPPLY';
+  }
+
+  if (lifeStatus === 'NORMAL') {
+    return isStockSufficient ? 'NORMAL' : 'WARNING';
+  }
+
+  return 'NORMAL';
+}
+
+/**
  * Determine Spare Stock readiness status:
  * - NO STOCK: availableQty === 0
  * - LOW STOCK: availableQty > 0 && availableQty < requiredQtyPerReplacement (or installQty)
@@ -127,12 +230,15 @@ export function determineStockStatus(
   installQty: number
 ): StockStatus {
   if (!stockItem) return 'STOCK_DATA_MISSING';
-  const available = stockItem.currentStockQty;
-  const minStock = stockItem.safetyStockMin ?? installQty;
+  const available = stockItem.availableQuantity !== undefined 
+    ? stockItem.availableQuantity 
+    : (stockItem.currentStockQty ?? 0);
+  const minStock = stockItem.minimumStock ?? stockItem.safetyStockMin ?? installQty;
+  const requiredQty = stockItem.requiredQuantityPerFullReplacement ?? installQty;
 
   if (available === 0) return 'NO_STOCK';
-  if (available > 0 && available < installQty) return 'LOW_STOCK';
-  if (available >= installQty && available <= minStock) return 'MINIMUM';
+  if (available > 0 && available < requiredQty) return 'LOW_STOCK';
+  if (available >= requiredQty && available <= minStock) return 'MINIMUM';
   return 'AVAILABLE';
 }
 
@@ -275,7 +381,7 @@ export function calculatePartMetrics(
 
   const regrindSpec = standard.regrindStandard?.disposeAfterUse
     ? 'Dispose after 1 use'
-    : `${standard.regrindStandard?.oneTimeRegrindMm || '0.10'} mm (Max ${(standard.regrindStandard?.totalRegrindMm || 1.5).toFixed(2)} mm)`;
+    : `${standard.regrindStandard?.oneTimeRegrindMm || '0.10'} mm (Max ${(Number(standard.regrindStandard?.totalRegrindMm) || 1.5).toFixed(2)} mm)`;
 
   return {
     slotId: part.slotId,

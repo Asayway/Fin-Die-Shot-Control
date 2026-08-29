@@ -24,19 +24,105 @@ export type StockStatus = 'AVAILABLE' | 'MINIMUM' | 'LOW_STOCK' | 'NO_STOCK' | '
 export type OrderStatus = 'NOT REQUIRED' | 'PR PREPARING' | 'PO OPEN' | 'ORDERED' | 'ARRIVED';
 
 export type ReplacementType = 
+  | 'NEW PART'
+  | 'RE-GROUND PART'
+  | 'PARTIAL REPLACEMENT'
+  | 'FULL SET REPLACEMENT'
+  | 'EMERGENCY REPLACEMENT'
+  | 'SCRAP'
+  | 'INSPECTION REPLACEMENT'
   | 'FULL_SET'
   | 'PARTIAL'
   | 'RE_GROUND'
   | 'EMERGENCY'
-  | 'SCRAP'
   | 'PREVENTIVE';
 
+export type ReplacementScope = 'FULL_SET' | 'PARTIAL';
+
+export type ReplacementApprovalStatus = 
+  | 'DRAFT' 
+  | 'SUBMITTED' 
+  | 'APPROVED' 
+  | 'REJECTED' 
+  | 'COMPLETED' 
+  | 'CANCELLED'
+  | 'PENDING'; // Backward compatibility
+
+export interface PositionReplacementDetail {
+  positionName: string;
+  isReplaced: boolean;
+  previousUsedShot: number;
+  newStartingShot: number;
+  partSerialOrLot?: string;
+  notes?: string;
+}
+
+export type RegrindPartStatus = 
+  | 'NEW'
+  | 'IN USE'
+  | 'WAITING REGRIND'
+  | 'REGRINDING'
+  | 'READY TO USE'
+  | 'HOLD'
+  | 'MAXIMUM REGRIND'
+  | 'SCRAP';
+
+export interface RegrindMasterStandard {
+  id?: string;
+  partCode: string;
+  partName: string;
+  stagePunchDie?: string;
+  nominalLengthMm: number; // e.g. 45.00 mm
+  grindingAmountPerTimeMm: number; // e.g. 0.10 or 0.25 mm
+  totalGrindingAllowanceMm: number; // e.g. 1.00 or 1.50 mm
+  minAllowedLengthMm: number; // nominalLengthMm - totalGrindingAllowanceMm
+  maxRegrindCount: number; // e.g. 4, 8, 15
+  regrindAllowed: boolean; // true/false
+  disposeAfterOneUse: boolean; // true/false
+  inspectionRequirements: string;
+  notes?: string;
+}
+
 export type UserRole = 
+  | 'VIEWER'
   | 'OPERATOR'
-  | 'MAINTENANCE_TECH'
-  | 'DIE_SPECIALIST'
+  | 'LINE_LEADER'
+  | 'MAINTENANCE'
+  | 'TOOLING_ADMIN'
+  | 'WAREHOUSE'
+  | 'PURCHASING'
+  | 'ENGINEERING'
+  | 'APPROVER'
+  | 'SYSTEM_ADMIN'
+  | 'ADMIN'
   | 'SUPERVISOR'
-  | 'ADMIN';
+  | 'DIE_SPECIALIST'
+  | 'MAINTENANCE_TECH';
+
+export interface RolePermissions {
+  canViewTvAndReports: boolean;
+  canAddShotEntries: boolean;
+  canSubmitConditionChecks: boolean;
+  canReviewShotEntries: boolean;
+  canSubmitShotCorrections: boolean;
+  canConfirmLineConfig: boolean;
+  canCreateReplacements: boolean;
+  canCreateInspections: boolean;
+  canViewLifeStandards: boolean;
+  canMaintainPartMaster: boolean;
+  canMaintainRegrindStandards: boolean;
+  canManagePartPositionAndDieConfig: boolean;
+  canManageStockAndMovements: boolean;
+  canManageProcurement: boolean;
+  canCreateLifeStandardRevisions: boolean;
+  canAnalyzeLifeTrends: boolean;
+  canApproveStandardChanges: boolean;
+  canApproveCounterResets: boolean;
+  canApproveOverLifeUsage: boolean;
+  canApproveReplacementCorrections: boolean;
+  canManageUsersAndRoles: boolean;
+  canAdministerSystem: boolean;
+}
 
 export interface User {
   id: string;
@@ -46,6 +132,9 @@ export interface User {
   role: UserRole;
   department: string;
   employeeId: string;
+  password?: string;
+  lastLogin?: string;
+  isActive?: boolean;
 }
 
 /**
@@ -115,19 +204,41 @@ export interface InstalledQuantityRule {
   isImportedSeed?: boolean;
 }
 
+export type ConfigurationStatus = 
+  | 'DRAFT' 
+  | 'PENDING APPROVAL' 
+  | 'ACTIVE' 
+  | 'INACTIVE' 
+  | 'EXPIRED' 
+  | 'CONFIGURATION ERROR';
+
 export interface LineActiveConfiguration {
   id: string;
   lineId: ProductionLineId;
   lineName: string;
+  configurationSlot?: string; // e.g. "SLOT-01", "Slot 1 - Primary Production"
+  machineId?: string; // Machine identifier e.g. "PRESS-E6 (OAK FP-100)"
+  mainFinDie?: string; // Main Fin Die name
   dieCode: string;
   dieName: string;
   tubeSize: TubeSize;
+  rowsCount?: number; // Number of Rows
+  columnsCount?: number; // Columns
+  pathsCount?: number | string; // Number of Paths e.g. 4 or "4P"
   finType: FinType;
   material: AluminumMaterial;
   thicknessMm: number; // default 0.10
-  effectiveFrom: string;
+  effectiveFrom: string; // Effective Date and Time
   effectiveTo?: string;
+  status?: ConfigurationStatus;
   isActive: boolean;
+  reasonForChange?: string;
+  revision?: string; // e.g. "Rev 1.0", "Rev 1.1", "Rev 2.0"
+  versionNumber?: number;
+  approvedBy?: string;
+  approvedAt?: string;
+  createdBy?: string;
+  createdAt?: string;
   notes?: string;
   installedPartQuantities: Record<string, number>; // partCode -> qty
 }
@@ -163,6 +274,11 @@ export interface PartLiveTrackingItem {
   isConfigMissing?: boolean;
   isStandardMissing?: boolean;
   isDataError?: boolean;
+  controlType?: 'CONTROLLED_BY_SHOT' | 'NOT_CONTROLLED_BY_SHOT' | 'TIME_BASED';
+  isPaused?: boolean;
+  isRemoved?: boolean;
+  isActive?: boolean;
+  installationStatus?: 'ACTIVE' | 'PAUSED' | 'REMOVED' | 'STANDBY';
 }
 
 export interface LineLiveMonitoringData {
@@ -180,38 +296,98 @@ export interface LineLiveMonitoringData {
   alertBanner?: string;
 }
 
+export type ShotInputMethod = 'METER_READING' | 'DIRECT_INCREMENT';
+export type ShotEntryStatus = 'SUBMITTED' | 'DRAFT' | 'REVERSED' | 'CORRECTION' | 'COUNTER_RESET';
+
+export interface ShotSplitPeriod {
+  configId: string;
+  dieCode: string;
+  configurationSlot?: string;
+  shotsAdded: number;
+  timeInterval?: string;
+  reason?: string;
+}
+
 export interface ShotEntryRecord {
   id: string;
   lineId: ProductionLineId;
-  entryType: 'AUTOMATIC_PLC' | 'MANUAL_SHIFT';
+  configurationId?: string;
+  configurationSlot?: string;
+  dieCode?: string;
+  productionDate?: string; // YYYY-MM-DD
+  shift: 'Shift 1 (Day)' | 'Shift 2 (Night)' | 'Shift 3 (Overtime)';
+  inputMethod?: ShotInputMethod;
+  entryType: 'AUTOMATIC_PLC' | 'MANUAL_SHIFT' | 'COUNTER_RESET' | 'CORRECTION';
   shotsAdded: number;
   previousTotal: number;
   newTotal: number;
-  shift: 'Shift 1 (Day)' | 'Shift 2 (Night)' | 'Shift 3 (Overtime)';
+  entryReason?: string;
+  notes?: string;
   operatorName: string;
   operatorId: string;
-  notes?: string;
   timestamp: string;
+  status?: ShotEntryStatus;
+  isCounterReset?: boolean;
+  resetApprovalId?: string;
+  resetApprovedBy?: string;
+  resetReason?: string;
+  isCorrection?: boolean;
+  correctedFromId?: string;
+  correctionReason?: string;
+  reversalOfId?: string;
+  splitPeriods?: ShotSplitPeriod[];
+  affectedPartsCount?: number;
+  excludedPartsCount?: number;
+  allowMultiEntry?: boolean;
   isImportedSeed?: boolean;
 }
 
 export interface ReplacementRecord {
   id: string;
   lineId: ProductionLineId;
+  configurationId?: string;
+  configurationSlot?: string;
   dieCode?: string;
   partCode: string;
   partName: string;
-  stageName: string;
-  position?: string;
+  stageName?: string;
+  position: string; // Position numbers / description e.g. "Row 1-4, Pos #1-24" or "ALL"
   replacementType: ReplacementType;
-  replacedQty: number;
+  fullSetOrPartial?: ReplacementScope;
+  installedQuantity: number;
+  changedQuantity: number;
+  machineShotAtReplacement: number;
+  removedPartUsedShot: number;
+  removedPartRegrindCount: number;
+  newPartLotNumber: string;
+  newPartSerialNumber?: string;
+  replacementDateTime: string;
+  replacementReason: string;
+  workOrderNumber: string;
+  changedBy: string;
+  changedById?: string;
+  verifiedBy: string;
+  verifiedById?: string;
+  evidenceAttachment?: string;
+  note?: string;
+  approvalStatus: ReplacementApprovalStatus;
+  quantityMismatchReason?: string;
+  quantityMismatchApprovedBy?: string;
+  positionDetails?: PositionReplacementDetail[];
+  recalculatedLifeLimit?: number;
+  stockUpdated?: boolean;
+  completedAt?: string;
+  timestamp: string;
+
+  // Backward compatibility aliases
+  replacedQty?: number;
   installQtyTotal?: number;
   shotAtChange?: number;
   shotAtReplacement?: number;
   partAccumulatedShots?: number;
   lifeLimitShots?: number;
   lifeLimitAtReplacement?: number;
-  reason: string;
+  reason?: string;
   reasonTh?: string;
   oldPartAction?: 'SEND_TO_REGRIND' | 'SCRAP' | 'INSPECT' | 'STANDBY';
   technicianName?: string;
@@ -220,9 +396,7 @@ export interface ReplacementRecord {
   operatorId?: string;
   approverName?: string;
   approverId?: string;
-  approvalStatus: 'APPROVED' | 'PENDING' | 'REJECTED';
   replacementDate?: string;
-  timestamp?: string;
   burrHeightAtChange?: number;
   positionNotes?: string;
   regrindCycleCount?: number;
@@ -233,11 +407,36 @@ export interface ReplacementRecord {
 export interface RegrindingRecord {
   id: string;
   jobCode: string;
+  partInstanceOrLot?: string;
   partCode: string;
   partName: string;
   serialNumber?: string;
   lineId: ProductionLineId;
+  lineLastUsed?: ProductionLineId;
   dieCode?: string;
+  finDie?: string;
+  previousLength?: number; // in mm
+  currentLength?: number; // in mm
+  actualGrindingRemovedMm?: number;
+  regrindCountBefore?: number;
+  regrindCountAfter?: number;
+  remainingRegrindCount?: number;
+  inspectionResult?: 'PENDING' | 'PASSED' | 'FAILED' | 'CONDITIONAL';
+  regrindDate?: string;
+  supplierOrInternalProcess?: 'INTERNAL_TOOL_ROOM' | 'EXTERNAL_VENDOR' | string;
+  vendorName?: string;
+  workOrder?: string;
+  cost?: number; // THB
+  performedBy?: string;
+  verifiedBy?: string;
+  evidence?: string;
+  note?: string;
+  status?: RegrindPartStatus;
+  isInspectionApproved?: boolean;
+  inspectionApprovedBy?: string;
+  inspectionApprovedAt?: string;
+
+  // Measurement fields
   sentDate?: string;
   returnedDate?: string;
   grinderVendor?: string;
@@ -259,6 +458,8 @@ export interface RegrindingRecord {
   isScrappedAfterRegrind?: boolean;
   notes?: string;
   remarks?: string;
+  timestamp?: string;
+  isImportedSeed?: boolean;
 }
 
 export interface ConditionInspectionRecord {
@@ -284,41 +485,142 @@ export interface ConditionInspectionRecord {
   notes?: string;
 }
 
+export type ProcurementStatus = 
+  | 'NOT REQUIRED'
+  | 'REQUIREMENT IDENTIFIED'
+  | 'PR PREPARING'
+  | 'PR SUBMITTED'
+  | 'PR APPROVED'
+  | 'PO PROCESS'
+  | 'PO ISSUED'
+  | 'SUPPLIER CONFIRMED'
+  | 'IN PRODUCTION'
+  | 'IN TRANSIT'
+  | 'PARTIAL DELIVERY'
+  | 'DELIVERED'
+  | 'OVERDUE'
+  | 'CANCELLED';
+
+export type CombinedRiskLevel = 
+  | 'NORMAL'
+  | 'WARNING'
+  | 'CRITICAL SUPPLY'
+  | 'STOP RISK'
+  | 'DELIVERY RISK';
+
 export interface SpareStockItem {
   id: string;
   partCode: string;
   partName: string;
+  specification: string;
+  warehouseLocation: string; // e.g. "RACK-B-04"
+  onHandQuantity: number;
+  reservedQuantity: number;
+  quarantineQuantity: number;
+  availableQuantity: number; // onHand - reserved - quarantine
+  minimumStock: number;
+  maximumStock: number;
+  requiredQuantityPerFullReplacement: number; // requiredQtyPerFullReplacement
+  replacementCoverage: number; // availableQuantity / requiredQuantityPerFullReplacement
+  stockStatus: StockStatus;
+
+  // Required Procurement fields
+  purchaseRequirementStatus: string;
+  prNumber?: string;
+  prDate?: string;
+  prApprovalStatus?: 'PENDING' | 'APPROVED' | 'REJECTED' | 'N/A' | string;
+  poNumber?: string;
+  poDate?: string;
+  supplier: string;
+  orderedQuantity: number;
+  confirmedQuantity: number;
+  expectedDeliveryDate?: string;
+  actualDeliveryDate?: string;
+  procurementStatus: ProcurementStatus;
+  buyer: string;
+  note?: string;
+
+  // Calculations and Risk Analysis
+  forecastReplacementDate?: string;
+  deliveryRiskDays?: number; // Days late if expectedDeliveryDate > forecastReplacementDate
+  hasDeliveryRisk?: boolean;
+  combinedRisk?: CombinedRiskLevel;
+
+  // Technical Compatibility & Legacy Aliases
   stageName?: string;
   tubeSize?: TubeSize;
-  currentStockQty: number; // e.g. 50
-  backupTargetQty: number; // e.g. 168
-  safetyStockMin?: number; // e.g. 30
-  safetyStockQty?: number;
-  onOrderQty?: number; // e.g. 118
-  prNumber?: string;
-  poNumber?: string;
-  orderStatus: OrderStatus;
-  supplier?: string;
-  supplierName?: string;
-  leadTimeDays?: number;
-  poEtaDate?: string;
+  unitCostThb?: number;
   unitPriceThb?: number;
-  storageLocation?: string;
+  currentStockQty?: number; // legacy alias for onHandQuantity/availableQuantity
+  backupTargetQty?: number; // legacy alias for maximumStock
+  safetyStockMin?: number; // legacy alias for minimumStock
+  safetyStockQty?: number; // legacy alias
+  onOrderQty?: number; // legacy alias for orderedQuantity
+  orderStatus?: OrderStatus; // legacy alias
+  supplierName?: string; // legacy alias for supplier
+  leadTimeDays?: number;
+  poEtaDate?: string; // legacy alias for expectedDeliveryDate
+  storageLocation?: string; // legacy alias for warehouseLocation
   isImportedSeed?: boolean;
 }
 
+export type AuditActionType =
+  | 'SHOT_CORRECTION'
+  | 'COUNTER_RESET'
+  | 'STANDARD_LIFE_CHANGE'
+  | 'INSTALL_QUANTITY_CHANGE'
+  | 'MATERIAL_CHANGE'
+  | 'FIN_DIE_CHANGE'
+  | 'CONFIGURATION_ACTIVATION'
+  | 'REPLACEMENT_CANCELLATION'
+  | 'REGRIND_MODIFICATION'
+  | 'STOCK_ADJUSTMENT'
+  | 'PR_PO_STATUS_CHANGE'
+  | 'USER_ROLE_CHANGE'
+  | 'CREATE'
+  | 'UPDATE'
+  | 'APPROVE'
+  | 'REJECT'
+  | 'REVERSAL'
+  | 'ACCESS_DENIED';
+
+export type AuditModuleType =
+  | 'SHOT_ENTRY'
+  | 'REPLACEMENT'
+  | 'REGRINDING'
+  | 'SPARE_STOCK'
+  | 'PROCUREMENT'
+  | 'LIFE_STANDARD'
+  | 'LINE_CONFIG'
+  | 'PART_MASTER'
+  | 'USER_MANAGEMENT'
+  | 'SECURITY'
+  | 'SYSTEM';
+
 export interface AuditLogEntry {
   id: string;
-  timestamp: string;
-  userId: string;
-  userName: string;
-  userRole: UserRole;
-  actionCategory: 'CONFIGURATION' | 'STANDARD_CHANGE' | 'SHOT_ADJUSTMENT' | 'REPLACEMENT' | 'REGRIND' | 'APPROVAL' | 'SYSTEM';
-  details: string;
+  auditId?: string; // e.g. "AUD-2026-001"
+  module: AuditModuleType;
+  recordId: string;
+  action: AuditActionType | string;
+  fieldChanged: string; // e.g. "onHandQuantity", "lifeLimitShots", "procurementStatus", "role"
+  oldValue: string | number | boolean | null | undefined;
+  newValue: string | number | boolean | null | undefined;
+  reason: string; // Mandatory for all sensitive changes
+  user: string; // User Name e.g. "Somchai Prasert (EMP-1001)"
+  userId?: string;
+  userName?: string;
+  role: UserRole;
+  userRole?: UserRole;
+  dateTime: string; // ISO 8601 String
+  timestamp: string; // ISO 8601 String
+  approvalRequestId?: string;
+  ipReference?: string; // IP or session reference e.g. "192.168.1.104"
+  sessionReference?: string; // e.g. "SES-49102"
+  details?: string;
   detailsTh?: string;
   lineId?: ProductionLineId;
-  oldValue?: string;
-  newValue?: string;
+  actionCategory?: 'CONFIGURATION' | 'STANDARD_CHANGE' | 'SHOT_ADJUSTMENT' | 'REPLACEMENT' | 'REGRIND' | 'APPROVAL' | 'SYSTEM' | 'STOCK' | 'PROCUREMENT';
 }
 
 export interface SystemSettings {
@@ -328,6 +630,8 @@ export interface SystemSettings {
   criticalThresholdPercent: number; // 95
   autoShotPulseIntervalSec: number; // 3
   autoPulseIncrement: number; // 25
+  maxShotsPerShift: number; // 150000 (Abnormal detection threshold)
+  allowMultiEntryPerShift: boolean; // default false
   shift1Start: string; // "08:00"
   shift2Start: string; // "20:00"
   theme: 'dark' | 'industrial-dark';

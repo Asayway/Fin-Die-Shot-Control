@@ -324,8 +324,8 @@ export const ConditionInspectionView: React.FC = () => {
                   <td className="py-2 px-3 text-slate-400">{i.timestamp}</td>
                   <td className="py-2 px-3 font-bold text-cyan-300">Line {i.lineId}</td>
                   <td className="py-2 px-3 font-medium text-slate-200">{i.stageName}</td>
-                  <td className={`py-2 px-3 text-right font-bold ${i.burrHeightMm > 0.035 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                    {i.burrHeightMm.toFixed(3)} mm
+                  <td className={`py-2 px-3 text-right font-bold ${(i.burrHeightMm || 0) > 0.035 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                    {(i.burrHeightMm !== undefined && i.burrHeightMm !== null ? Number(i.burrHeightMm) : 0).toFixed(3)} mm
                   </td>
                   <td className="py-2 px-3 text-center text-amber-400">{i.visualWearRating}★</td>
                   <td className="py-2 px-3 text-slate-300">{i.lubricationStatus}</td>
