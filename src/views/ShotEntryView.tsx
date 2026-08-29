@@ -371,29 +371,29 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
   const isHmi = systemSettings?.theme === 'hmi' || systemSettings?.theme === 'industrial-dark';
 
   return (
-    <div className={`space-y-2.5 select-none ${isHmi ? 'font-mono' : 'font-sans'}`}>
+    <div className={`space-y-4 select-none ${isHmi ? 'font-mono' : 'font-sans'}`}>
       {/* Top Industrial Bar */}
-      <div className={`rounded-lg p-2.5 sm:p-3 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-2 border ${
+      <div className={`rounded-xl p-3 sm:p-4 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-3 border ${
         isHmi 
-          ? 'bg-black border border-green-500 text-green-400' 
-          : 'bg-[#0E172A] border-slate-800 text-slate-100'
+          ? 'bg-black border-2 border-green-500 text-green-400' 
+          : 'bg-[#0E172A] border-slate-800/90 text-slate-100'
       }`}>
-        <div className="flex items-center gap-2">
-          <div className={`p-1.5 rounded border ${
+        <div className="flex items-center gap-2.5">
+          <div className={`p-2.5 rounded-lg border ${
             isHmi 
               ? 'bg-green-950 border-green-500 text-green-400' 
               : 'bg-cyan-950/60 border-cyan-500/50 text-cyan-300'
           }`}>
-            <Zap className="w-4 h-4 sm:w-5 sm:h-5" />
+            <Zap className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
           <div>
-            <div className="flex items-center gap-1.5">
-              <h2 className={`text-sm sm:text-base font-bold uppercase tracking-wider ${
-                isHmi ? 'text-green-400 text-matrix-glow font-mono font-extrabold' : 'text-white'
+            <div className="flex items-center gap-2">
+              <h2 className={`text-base sm:text-lg md:text-xl font-bold uppercase tracking-wider ${
+                isHmi ? 'text-green-400 text-matrix-glow font-mono font-extrabold' : 'text-white font-["Plus_Jakarta_Sans"]'
               }`}>
                 MANUAL SHOT ENTRY TERMINAL
               </h2>
-              <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold border font-mono ${
+              <span className={`px-2 py-0.5 rounded text-[10px] font-bold border font-mono ${
                 isHmi 
                   ? 'bg-green-950 text-green-300 border-green-500' 
                   : 'bg-cyan-950/80 text-cyan-300 border-cyan-600/70'
@@ -401,23 +401,23 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                 LINE HMI
               </span>
             </div>
-            <p className={`text-[10px] sm:text-[11px] leading-tight ${isHmi ? 'text-green-500/80 font-mono' : 'text-slate-400'}`}>
+            <p className={`text-xs ${isHmi ? 'text-green-500/80 font-mono' : 'text-slate-400'}`}>
               FIN DIE SHOT COUNTER RECORDING & PLC ACCUMULATION | <span className="font-thai">บันทึกยอดช็อตและคำนวณสะสม</span>
             </p>
           </div>
         </div>
 
         {/* Action Tabs */}
-        <div className={`flex items-center gap-1 p-0.5 rounded border self-start md:self-center ${
+        <div className={`flex items-center gap-1.5 p-1 rounded-lg border self-start md:self-center ${
           isHmi ? 'bg-zinc-950 border-green-900' : 'bg-slate-950 border-slate-800'
         }`}>
           <button
             onClick={() => setActiveTab('entry')}
-            className={`px-2.5 py-1 rounded text-xs font-bold transition-all flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
               activeTab === 'entry'
                 ? isHmi
-                  ? 'bg-green-500 text-black shadow font-extrabold'
-                  : 'bg-cyan-500 text-slate-950 shadow font-bold'
+                  ? 'bg-green-500 text-black shadow-md font-extrabold'
+                  : 'bg-cyan-500 text-slate-950 shadow-md font-bold'
                 : isHmi
                   ? 'text-green-400 hover:bg-green-950/80'
                   : 'text-slate-400 hover:text-white hover:bg-slate-900'
@@ -429,11 +429,11 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
 
           <button
             onClick={() => setActiveTab('history')}
-            className={`px-2.5 py-1 rounded text-xs font-bold transition-all flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
               activeTab === 'history'
                 ? isHmi
-                  ? 'bg-green-500 text-black shadow font-extrabold'
-                  : 'bg-cyan-500 text-slate-950 shadow font-bold'
+                  ? 'bg-green-500 text-black shadow-md font-extrabold'
+                  : 'bg-cyan-500 text-slate-950 shadow-md font-bold'
                 : isHmi
                   ? 'text-green-400 hover:bg-green-950/80'
                   : 'text-slate-400 hover:text-white hover:bg-slate-900'
@@ -445,14 +445,14 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
 
           <button
             onClick={() => setCounterResetModalOpen(true)}
-            className={`px-2 py-1 rounded text-xs font-bold border transition-colors flex items-center gap-1 ${
+            className={`px-2.5 py-1.5 rounded-md text-xs font-bold border transition-colors flex items-center gap-1 ${
               isHmi
                 ? 'bg-zinc-900 hover:bg-amber-950 text-amber-400 border-amber-600/70'
                 : 'bg-slate-900 hover:bg-amber-950/60 text-amber-300 border-amber-600/60'
             }`}
             title="รีเซ็ตมิเตอร์หน้าเครื่องเมื่อเปลี่ยนเกจใหม่"
           >
-            <RotateCcw className="w-3 h-3 text-amber-400" />
+            <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
             <span className="hidden sm:inline">RESET METER</span>
           </button>
         </div>
@@ -460,7 +460,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
 
       {/* Notifications Toast */}
       {notification && (
-        <div className={`p-2 rounded border text-xs flex items-center justify-between shadow ${
+        <div className={`p-3 rounded-lg border text-xs flex items-center justify-between shadow-lg ${
           notification.type === 'success' 
             ? 'bg-emerald-950/90 border-emerald-500 text-emerald-200' 
             : notification.type === 'error' 
@@ -471,79 +471,79 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
             ? 'bg-zinc-950 border-green-500 text-green-300'
             : 'bg-slate-900 border-cyan-500 text-cyan-200'
         }`}>
-          <div className="flex items-center gap-1.5">
-            {notification.type === 'success' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />}
-            {notification.type === 'error' && <AlertOctagon className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />}
-            {notification.type === 'warning' && <AlertTriangle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />}
-            {notification.type === 'info' && <Info className={`w-3.5 h-3.5 flex-shrink-0 ${isHmi ? 'text-green-400' : 'text-cyan-400'}`} />}
+          <div className="flex items-center gap-2">
+            {notification.type === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />}
+            {notification.type === 'error' && <AlertOctagon className="w-4 h-4 text-rose-400 flex-shrink-0" />}
+            {notification.type === 'warning' && <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />}
+            {notification.type === 'info' && <Info className={`w-4 h-4 flex-shrink-0 ${isHmi ? 'text-green-400' : 'text-cyan-400'}`} />}
             <span className="font-bold">{notification.message}</span>
           </div>
-          <button onClick={() => setNotification(null)} className="text-slate-400 hover:text-white p-0.5">
-            <X className="w-3.5 h-3.5" />
+          <button onClick={() => setNotification(null)} className="text-slate-400 hover:text-white p-1">
+            <X className="w-4 h-4" />
           </button>
         </div>
       )}
 
       {/* TAB 1: MAIN ENTRY FORM (STREAMLINED MINIMALIST OPERATOR INTERFACE) */}
       {activeTab === 'entry' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
           
           {/* Main Operator Form Column (Col 8) */}
-          <div className={`lg:col-span-8 rounded-lg p-3 sm:p-3.5 space-y-3 shadow-md border ${
+          <div className={`lg:col-span-8 rounded-xl p-4 sm:p-6 space-y-5 shadow-xl border ${
             isHmi 
-              ? 'bg-black border border-green-500/90' 
-              : 'bg-[#0E172A] border-slate-800'
+              ? 'bg-black border-2 border-green-500/90' 
+              : 'bg-[#0E172A] border-slate-800/90'
           }`}>
             
             {/* Mode Selector: Method A (Manual Meter Reading) vs Method B (Direct PLC Increment) */}
-            <div className={`flex items-center justify-between gap-1.5 p-1 rounded border ${
+            <div className={`flex items-center justify-between gap-2 p-1.5 rounded-lg border ${
               isHmi ? 'bg-zinc-950 border-green-800' : 'bg-slate-950 border-slate-800'
             }`}>
               <button
                 type="button"
                 onClick={() => setInputMethod('METER_READING')}
-                className={`flex-1 py-1.5 px-2.5 rounded text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                className={`flex-1 py-2.5 px-3 rounded-md text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 ${
                   inputMethod === 'METER_READING'
                     ? isHmi
-                      ? 'bg-green-500 text-black font-bold shadow-sm'
-                      : 'bg-cyan-500 text-slate-950 font-bold shadow-sm'
+                      ? 'bg-green-500 text-black font-black shadow-lg shadow-green-500/20'
+                      : 'bg-cyan-500 text-slate-950 font-bold shadow-lg shadow-cyan-500/20'
                     : isHmi
                       ? 'text-green-400 hover:text-green-200'
                       : 'text-slate-400 hover:text-white'
                 }`}
               >
-                <Gauge className="w-3.5 h-3.5" />
+                <Gauge className="w-4 h-4" />
                 <span>MODE 1: MANUAL METER READING (ยอดอ่านมิเตอร์)</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setInputMethod('DIRECT_INCREMENT')}
-                className={`flex-1 py-1.5 px-2.5 rounded text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                className={`flex-1 py-2.5 px-3 rounded-md text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 ${
                   inputMethod === 'DIRECT_INCREMENT'
                     ? isHmi
-                      ? 'bg-green-500 text-black font-bold shadow-sm'
-                      : 'bg-cyan-500 text-slate-950 font-bold shadow-sm'
+                      ? 'bg-green-500 text-black font-black shadow-lg shadow-green-500/20'
+                      : 'bg-cyan-500 text-slate-950 font-bold shadow-lg shadow-cyan-500/20'
                     : isHmi
                       ? 'text-green-400 hover:text-green-200'
                       : 'text-slate-400 hover:text-white'
                 }`}
               >
-                <Cpu className="w-3.5 h-3.5" />
+                <Cpu className="w-4 h-4" />
                 <span>MODE 2: DIRECT / PLC INCREMENT (ยอดช็อตเพิ่ม)</span>
               </button>
             </div>
 
             {/* Core Operator Dropdowns: Production Line & Shift */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               
               {/* 1. Production Line Dropdown */}
-              <div className="space-y-1">
-                <label className={`block text-[11px] font-bold uppercase tracking-wider flex items-center justify-between ${
+              <div className="space-y-1.5">
+                <label className={`block text-xs font-bold uppercase tracking-wider flex items-center justify-between ${
                   isHmi ? 'text-green-400' : 'text-slate-300'
                 }`}>
-                  <span className="flex items-center gap-1">
-                    <Gauge className={`w-3.5 h-3.5 ${isHmi ? 'text-green-400' : 'text-cyan-400'}`} />
+                  <span className="flex items-center gap-1.5">
+                    <Gauge className={`w-4 h-4 ${isHmi ? 'text-green-400' : 'text-cyan-400'}`} />
                     1. PRODUCTION LINE (สายการผลิต)
                   </span>
                   <span className="text-rose-400">*</span>
@@ -551,10 +551,10 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                 <select
                   value={selectedLineId}
                   onChange={e => setSelectedLineId(e.target.value as ProductionLineId)}
-                  className={`w-full rounded px-3 py-1.5 text-xs sm:text-sm font-bold font-mono focus:outline-none border transition-colors ${
+                  className={`w-full rounded-lg px-4 py-3 text-base sm:text-lg font-bold font-mono focus:outline-none focus:ring-1 border transition-colors ${
                     isHmi
-                      ? 'bg-zinc-950 border border-green-500/80 text-green-300 focus:border-green-400'
-                      : 'bg-slate-950 border-slate-700 text-white focus:border-cyan-400'
+                      ? 'bg-zinc-950 border-2 border-green-500/80 text-green-300 focus:border-green-400 focus:ring-green-400'
+                      : 'bg-slate-950 border-slate-700/90 text-white focus:border-cyan-400 focus:ring-cyan-400'
                   }`}
                 >
                   {linesList.map(line => (
@@ -566,12 +566,12 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
               </div>
 
               {/* 2. Shift Dropdown */}
-              <div className="space-y-1">
-                <label className={`block text-[11px] font-bold uppercase tracking-wider flex items-center justify-between ${
+              <div className="space-y-1.5">
+                <label className={`block text-xs font-bold uppercase tracking-wider flex items-center justify-between ${
                   isHmi ? 'text-green-400' : 'text-slate-300'
                 }`}>
-                  <span className="flex items-center gap-1">
-                    <Clock className={`w-3.5 h-3.5 ${isHmi ? 'text-green-400' : 'text-cyan-400'}`} />
+                  <span className="flex items-center gap-1.5">
+                    <Clock className={`w-4 h-4 ${isHmi ? 'text-green-400' : 'text-cyan-400'}`} />
                     2. SHIFT (กะการทำงาน)
                   </span>
                   <span className="text-rose-400">*</span>
@@ -579,10 +579,10 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                 <select
                   value={shift}
                   onChange={e => setShift(e.target.value as any)}
-                  className={`w-full rounded px-3 py-1.5 text-xs sm:text-sm font-bold font-mono focus:outline-none border transition-colors ${
+                  className={`w-full rounded-lg px-4 py-3 text-base sm:text-lg font-bold font-mono focus:outline-none focus:ring-1 border transition-colors ${
                     isHmi
-                      ? 'bg-zinc-950 border border-green-500/80 text-green-300 focus:border-green-400'
-                      : 'bg-slate-950 border-slate-700 text-white focus:border-cyan-400'
+                      ? 'bg-zinc-950 border-2 border-green-500/80 text-green-300 focus:border-green-400 focus:ring-green-400'
+                      : 'bg-slate-950 border-slate-700/90 text-white focus:border-cyan-400 focus:ring-cyan-400'
                   }`}
                 >
                   <option value="Shift 1 (Day)" className={isHmi ? 'bg-black text-green-400' : 'bg-slate-900 text-slate-100'}>กะ 1 (DAY: 08:00 - 20:00)</option>
@@ -592,39 +592,39 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
               </div>
             </div>
 
-            {/* Readouts & Numeric Input */}
-            <div className={`rounded-lg p-2.5 sm:p-3 space-y-2.5 shadow-inner border ${
-              isHmi ? 'bg-zinc-950 border border-green-500/80' : 'bg-slate-950 border border-slate-800'
+            {/* Readouts & Extra Large Numeric Input */}
+            <div className={`rounded-xl p-4 sm:p-5 space-y-4 shadow-inner border ${
+              isHmi ? 'bg-zinc-950 border-2 border-green-500/80' : 'bg-slate-950 border border-slate-800/90'
             }`}>
               
               {/* Previous Reading & Calculated Result Header */}
-              <div className={`grid grid-cols-1 sm:grid-cols-2 gap-2 pb-2 border-b ${
+              <div className={`grid grid-cols-1 sm:grid-cols-2 gap-3 pb-3 border-b ${
                 isHmi ? 'border-green-900/80' : 'border-slate-800'
               }`}>
-                <div className={`p-2 rounded border ${
+                <div className={`p-3 rounded-lg border ${
                   isHmi ? 'bg-black border-green-900' : 'bg-slate-900/90 border-slate-800'
                 }`}>
-                  <div className={`text-[10px] font-bold uppercase tracking-wider ${
+                  <div className={`text-[11px] font-bold uppercase tracking-wider ${
                     isHmi ? 'text-green-500' : 'text-slate-400'
                   }`}>
                     PREVIOUS READING (ยอดอ่านเดิม)
                   </div>
-                  <div className={`text-lg sm:text-xl font-bold font-mono mt-0.5 ${
+                  <div className={`text-2xl sm:text-3xl font-extrabold font-mono mt-0.5 ${
                     isHmi ? 'text-green-300' : 'text-slate-100'
                   }`}>
-                    {formatShots(prevShotsVal)} <span className="text-[10px] font-normal text-slate-500">shots</span>
+                    {formatShots(prevShotsVal)} <span className="text-xs font-normal text-slate-500">shots</span>
                   </div>
                 </div>
 
-                <div className={`p-2 rounded border ${
+                <div className={`p-3 rounded-lg border ${
                   isHmi ? 'bg-black border-green-900' : 'bg-slate-900/90 border-slate-800'
                 }`}>
-                  <div className={`text-[10px] font-bold uppercase tracking-wider ${
+                  <div className={`text-[11px] font-bold uppercase tracking-wider ${
                     isHmi ? 'text-green-500' : 'text-slate-400'
                   }`}>
                     {inputMethod === 'METER_READING' ? 'CALCULATED INCREMENT (ยอดช็อตเพิ่ม)' : 'RESULTING METER (ยอดมิเตอร์สะสม)'}
                   </div>
-                  <div className={`text-lg sm:text-xl font-bold font-mono mt-0.5 flex items-center justify-between ${
+                  <div className={`text-2xl sm:text-3xl font-extrabold font-mono mt-0.5 flex items-center justify-between ${
                     isHmi ? 'text-green-400' : 'text-emerald-400'
                   }`}>
                     <span>
@@ -632,18 +632,18 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                         ? `+${formatShots(incrementVal)}`
                         : formatShots(resultingTotal)}
                     </span>
-                    <span className="text-[10px] font-normal text-slate-500">shots</span>
+                    <span className="text-xs font-normal text-slate-500">shots</span>
                   </div>
                 </div>
               </div>
 
-              {/* 3. Numeric Input */}
-              <div className="space-y-1.5">
+              {/* 3. Extra-Large Numeric Input */}
+              <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className={`text-xs font-bold uppercase tracking-wide flex items-center gap-1 ${
+                  <label className={`text-xs sm:text-sm font-extrabold uppercase tracking-widest flex items-center gap-1.5 ${
                     isHmi ? 'text-green-400 text-matrix-glow font-mono' : 'text-cyan-300'
                   }`}>
-                    <Hash className="w-3.5 h-3.5" />
+                    <Hash className="w-4 h-4" />
                     {inputMethod === 'METER_READING'
                       ? '3. NEW READING (กรอกเลขมิเตอร์หน้าเครื่อง)'
                       : '3. SHOT INCREMENT (กรอกจำนวนช็อตที่ปั๊มเพิ่ม)'}
@@ -651,7 +651,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                   <button
                     type="button"
                     onClick={() => setShowTouchKeypad(!showTouchKeypad)}
-                    className={`text-[10px] px-2 py-0.5 rounded border font-bold transition-colors ${
+                    className={`text-[11px] px-2.5 py-1 rounded-md border font-bold transition-colors ${
                       isHmi 
                         ? 'bg-green-950 text-green-300 border-green-600 hover:bg-green-900'
                         : 'bg-slate-900 text-cyan-300 border-slate-700 hover:bg-slate-800'
@@ -668,7 +668,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                       inputMode="numeric"
                       value={newReadingInput}
                       onChange={e => handleNewReadingChange(e.target.value)}
-                      className={`w-full text-2xl sm:text-3xl font-bold font-mono py-2 px-3 text-center rounded-lg tracking-wider focus:outline-none border transition-all ${
+                      className={`w-full text-4xl sm:text-6xl font-black font-mono py-4 px-4 text-center rounded-xl tracking-wider focus:outline-none border-2 transition-all ${
                         isHmi
                           ? 'bg-black border-green-500 focus:border-green-300 text-green-400 box-matrix-glow selection:bg-green-500 selection:text-black'
                           : 'bg-slate-900 border-cyan-500/80 focus:border-cyan-300 text-cyan-400 selection:bg-cyan-500 selection:text-slate-950 shadow-inner'
@@ -676,7 +676,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                       placeholder="0"
                       required
                     />
-                    <div className={`text-center text-[11px] mt-0.5 font-mono ${isHmi ? 'text-green-500/80' : 'text-slate-400'}`}>
+                    <div className={`text-center text-xs mt-1 font-mono ${isHmi ? 'text-green-500/80' : 'text-slate-400'}`}>
                       Delta: <strong className={isHmi ? 'text-green-300' : 'text-emerald-400'}>+{formatShots(incrementVal)} shots</strong> ({newShotsVal.toLocaleString()} - {prevShotsVal.toLocaleString()})
                     </div>
                   </div>
@@ -687,7 +687,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                       inputMode="numeric"
                       value={shotIncrementInput}
                       onChange={e => handleIncrementChange(e.target.value)}
-                      className={`w-full text-2xl sm:text-3xl font-bold font-mono py-2 px-3 text-center rounded-lg tracking-wider focus:outline-none border transition-all ${
+                      className={`w-full text-4xl sm:text-6xl font-black font-mono py-4 px-4 text-center rounded-xl tracking-wider focus:outline-none border-2 transition-all ${
                         isHmi
                           ? 'bg-black border-green-500 focus:border-green-300 text-green-400 box-matrix-glow selection:bg-green-500 selection:text-black'
                           : 'bg-slate-900 border-cyan-500/80 focus:border-cyan-300 text-cyan-400 selection:bg-cyan-500 selection:text-slate-950 shadow-inner'
@@ -695,15 +695,15 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                       placeholder="50000"
                       required
                     />
-                    <div className={`text-center text-[11px] mt-0.5 font-mono ${isHmi ? 'text-green-500/80' : 'text-slate-400'}`}>
+                    <div className={`text-center text-xs mt-1 font-mono ${isHmi ? 'text-green-500/80' : 'text-slate-400'}`}>
                       Cumulative Total: <strong className={isHmi ? 'text-green-300' : 'text-emerald-400'}>{formatShots(resultingTotal)} shots</strong> ({prevShotsVal.toLocaleString()} + {incrementVal.toLocaleString()})
                     </div>
                   </div>
                 )}
 
                 {/* Quick Add Step Buttons (Touchscreen Friendly) */}
-                <div className="flex items-center justify-between gap-1 flex-wrap pt-1">
-                  <span className={`text-[9px] font-bold uppercase tracking-wider ${isHmi ? 'text-green-500' : 'text-slate-400'}`}>
+                <div className="flex items-center justify-between gap-1.5 flex-wrap pt-2">
+                  <span className={`text-[10px] font-bold uppercase tracking-wider ${isHmi ? 'text-green-500' : 'text-slate-400'}`}>
                     QUICK ADD:
                   </span>
                   {[5000, 10000, 25000, 50000, 100000].map(addQty => (
@@ -711,10 +711,10 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                       key={addQty}
                       type="button"
                       onClick={() => handleQuickAddIncrement(addQty)}
-                      className={`flex-1 min-w-[50px] py-1 px-1 rounded text-xs font-bold font-mono transition-colors active:scale-95 border ${
+                      className={`flex-1 min-w-[60px] py-2 px-1 rounded-md text-xs font-bold font-mono transition-colors active:scale-95 border ${
                         isHmi
                           ? 'bg-black hover:bg-green-950 text-green-300 border-green-600'
-                          : 'bg-slate-900 hover:bg-cyan-500 hover:text-slate-950 text-cyan-300 border-slate-700'
+                          : 'bg-slate-900 hover:bg-cyan-500 hover:text-slate-950 text-cyan-300 border-slate-700/90'
                       }`}
                     >
                       +{addQty >= 1000 ? `${addQty / 1000}k` : addQty}
@@ -724,7 +724,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
 
                 {/* Optional On-Screen Touch Keypad for Shopfloor Gloves */}
                 {showTouchKeypad && (
-                  <div className={`p-2 rounded grid grid-cols-3 gap-1.5 text-base font-bold font-mono animate-fadeIn mt-1.5 border ${
+                  <div className={`p-3 rounded-lg grid grid-cols-3 gap-2 text-xl font-bold font-mono animate-fadeIn mt-2 border ${
                     isHmi ? 'bg-black border-green-500' : 'bg-slate-900 border-slate-700'
                   }`}>
                     {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'CLEAR', '0', 'BACKSPACE'].map(key => (
@@ -732,19 +732,19 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                         key={key}
                         type="button"
                         onClick={() => handleKeypadPress(key)}
-                        className={`py-2 rounded border font-mono font-bold transition-colors active:scale-95 flex items-center justify-center ${
+                        className={`py-3 rounded-md border font-mono font-bold transition-colors active:scale-95 flex items-center justify-center ${
                           key === 'CLEAR'
-                            ? 'bg-rose-950/80 border-rose-500 text-rose-300 hover:bg-rose-900 text-xs'
+                            ? 'bg-rose-950/80 border-rose-500 text-rose-300 hover:bg-rose-900 text-sm'
                             : key === 'BACKSPACE'
                             ? isHmi
-                              ? 'bg-zinc-900 border-green-700 text-green-300 hover:bg-zinc-800 text-xs'
-                              : 'bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700 text-xs'
+                              ? 'bg-zinc-900 border-green-700 text-green-300 hover:bg-zinc-800 text-sm'
+                              : 'bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700 text-sm'
                             : isHmi
-                              ? 'bg-zinc-950 border-green-500/80 text-green-400 hover:bg-green-950 text-lg'
-                              : 'bg-slate-950 border-slate-700 text-slate-100 hover:bg-cyan-950/40 text-lg'
+                              ? 'bg-zinc-950 border-green-500/80 text-green-400 hover:bg-green-950 text-2xl'
+                              : 'bg-slate-950 border-slate-700 text-slate-100 hover:bg-cyan-950/40 text-2xl'
                         }`}
                       >
-                        {key === 'BACKSPACE' ? <Delete className="w-4 h-4" /> : key}
+                        {key === 'BACKSPACE' ? <Delete className="w-5 h-5" /> : key}
                       </button>
                     ))}
                   </div>
@@ -753,12 +753,13 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
 
               {/* Lower Reading Alert / Warning */}
               {isLowerReadingDetected && (
-                <div className="p-2 bg-amber-950/90 border border-amber-500 rounded text-xs text-amber-200 flex items-start gap-1.5">
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />
-                  <div className="space-y-0.5">
+                <div className="p-3 bg-amber-950/90 border border-amber-500 rounded-lg text-xs text-amber-200 flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                  <div className="space-y-1">
                     <div className="font-bold">METER READING LOWER THAN PREVIOUS (ตรวจพบเลขมิเตอร์ต่ำกว่าเดิม)</div>
-                    <div className="text-[11px]">
+                    <div>
                       New Reading ({newShotsVal.toLocaleString()}) cannot be less than Previous Reading ({prevShotsVal.toLocaleString()}).
+                      If gauge was reset or replaced, please use the Reset Meter button.
                     </div>
                   </div>
                 </div>
@@ -766,48 +767,48 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
 
               {/* Abnormal Increase Alert */}
               {isAbnormalIncrease && (
-                <div className="p-2 bg-rose-950/90 border border-rose-500 rounded text-xs text-rose-200 flex items-start gap-1.5">
-                  <AlertOctagon className="w-3.5 h-3.5 text-rose-400 flex-shrink-0 mt-0.5" />
-                  <div className="space-y-0.5">
+                <div className="p-3 bg-rose-950/90 border border-rose-500 rounded-lg text-xs text-rose-200 flex items-start gap-2">
+                  <AlertOctagon className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
+                  <div>
                     <div className="font-bold">HIGH INCREMENT WARNING (+{incrementVal.toLocaleString()} shots)</div>
-                    <div className="text-[11px]">Increment exceeds standard single-shift limit of {maxShiftLimit.toLocaleString()} shots.</div>
+                    <div>Increment exceeds standard single-shift limit of {maxShiftLimit.toLocaleString()} shots. Please verify before submitting.</div>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* 4. Primary Submit Button */}
-            <div className="space-y-2 pt-1">
+            {/* 4. Large Primary Submit Button */}
+            <div className="space-y-3 pt-2">
               <button
                 type="button"
                 onClick={handleOpenSubmissionPreview}
                 disabled={!isIncrementPositive || isLowerReadingDetected}
-                className={`w-full py-2.5 sm:py-3 px-4 rounded-lg text-sm sm:text-base font-bold transition-all flex items-center justify-center gap-2 uppercase tracking-wide shadow-md ${
+                className={`w-full py-4 sm:py-5 px-6 rounded-xl text-lg sm:text-xl font-bold transition-all flex items-center justify-center gap-3 uppercase tracking-wider shadow-xl ${
                   !isIncrementPositive || isLowerReadingDetected
                     ? isHmi 
                       ? 'bg-zinc-900 text-zinc-600 border border-zinc-800 cursor-not-allowed'
                       : 'bg-slate-900 text-slate-600 border border-slate-800 cursor-not-allowed'
                     : isHmi
-                      ? 'bg-green-500 hover:bg-green-400 active:scale-[0.99] text-black font-extrabold shadow-green-500/30 ring-1 ring-green-300 font-mono'
-                      : 'bg-cyan-500 hover:bg-cyan-400 active:scale-[0.99] text-slate-950 font-bold shadow-cyan-500/25 ring-1 ring-cyan-400'
+                      ? 'bg-green-500 hover:bg-green-400 active:scale-[0.99] text-black font-black shadow-green-500/30 ring-2 ring-green-300 font-mono'
+                      : 'bg-cyan-500 hover:bg-cyan-400 active:scale-[0.99] text-slate-950 font-bold shadow-cyan-500/25 ring-2 ring-cyan-400'
                 }`}
               >
-                <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5]" />
+                <CheckCircle2 className="w-6 h-6 sm:w-7 sm:h-7 stroke-[2.5]" />
                 <span>บันทึกข้อมูล (SUBMIT SHOTS +{formatShots(incrementVal)})</span>
               </button>
 
               {/* Secondary Options (Date, Note, Save Draft) */}
-              <div className={`flex items-center justify-between gap-2 flex-wrap text-xs ${
+              <div className={`flex items-center justify-between gap-3 flex-wrap text-xs ${
                 isHmi ? 'text-green-500/80' : 'text-slate-400'
               }`}>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2">
                   <Calendar className={`w-3.5 h-3.5 ${isHmi ? 'text-green-400' : 'text-cyan-400'}`} />
-                  <span className="text-[11px]">Date:</span>
+                  <span>Date:</span>
                   <input
                     type="date"
                     value={productionDate}
                     onChange={e => setProductionDate(e.target.value)}
-                    className={`rounded px-2 py-0.5 text-xs font-mono border ${
+                    className={`rounded px-2 py-1 text-xs font-mono border ${
                       isHmi 
                         ? 'bg-black border-green-800 text-green-300' 
                         : 'bg-slate-950 border-slate-700 text-slate-200'
@@ -815,11 +816,11 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                   />
                 </div>
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={handleSaveDraft}
-                    className={`px-2.5 py-0.5 rounded text-xs font-bold border transition-colors ${
+                    className={`px-3 py-1 rounded text-xs font-bold border transition-colors ${
                       isHmi
                         ? 'bg-zinc-950 hover:bg-zinc-900 text-green-400 border-green-800'
                         : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700'
@@ -830,7 +831,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                   <button
                     type="button"
                     onClick={reloadData}
-                    className={`px-2.5 py-0.5 rounded text-xs font-bold border transition-colors ${
+                    className={`px-3 py-1 rounded text-xs font-bold border transition-colors ${
                       isHmi
                         ? 'bg-zinc-950 hover:bg-zinc-900 text-green-400 border-green-800'
                         : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700'
@@ -843,22 +844,22 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
             </div>
 
             {/* Quick Optical PLC Pulse Simulator */}
-            <div className={`pt-2 border-t flex items-center justify-between gap-1.5 flex-wrap ${
+            <div className={`pt-3 border-t flex items-center justify-between gap-2 flex-wrap ${
               isHmi ? 'border-green-950' : 'border-slate-800'
             }`}>
-              <span className={`text-[9px] uppercase font-bold flex items-center gap-1 ${
+              <span className={`text-[10px] uppercase font-bold flex items-center gap-1 ${
                 isHmi ? 'text-green-600' : 'text-slate-400'
               }`}>
                 <Cpu className={`w-3 h-3 ${isHmi ? 'text-green-500' : 'text-cyan-400'}`} />
                 PLC / SENSOR PULSE SIMULATOR:
               </span>
-              <div className="flex gap-1">
+              <div className="flex gap-1.5">
                 {[1000, 5000, 20000, 50000].map(qty => (
                   <button
                     key={qty}
                     type="button"
                     onClick={() => handleQuickPulse(qty)}
-                    className={`px-1.5 py-0.5 rounded text-[9px] font-mono border transition-colors ${
+                    className={`px-2 py-1 rounded text-[10px] font-mono border transition-colors ${
                       isHmi
                         ? 'bg-black hover:bg-green-950 text-green-400 border-green-900'
                         : 'bg-slate-900 hover:bg-slate-800 text-cyan-300 border-slate-700'
@@ -873,25 +874,25 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
           </div>
 
           {/* Right Column: Line Status Telemetry & Die Overview (Col 4) */}
-          <div className={`lg:col-span-4 rounded-lg p-3 sm:p-3.5 space-y-2.5 shadow-md border ${
+          <div className={`lg:col-span-4 rounded-xl p-4 sm:p-5 space-y-4 shadow-xl border ${
             isHmi 
-              ? 'bg-black border border-green-500/80' 
-              : 'bg-[#0E172A] border-slate-800'
+              ? 'bg-black border-2 border-green-500/80' 
+              : 'bg-[#0E172A] border-slate-800/90'
           }`}>
-            <div className={`flex items-center justify-between border-b pb-2 ${
+            <div className={`flex items-center justify-between border-b pb-3 ${
               isHmi ? 'border-green-900' : 'border-slate-800'
             }`}>
               <div>
-                <h3 className={`font-bold text-sm uppercase tracking-wider ${
+                <h3 className={`font-bold text-base uppercase tracking-wider ${
                   isHmi ? 'text-green-400 font-extrabold font-mono' : 'text-white'
                 }`}>
                   LINE {selectedLineId} TELEMETRY
                 </h3>
-                <span className={`text-[9px] font-mono ${isHmi ? 'text-green-600' : 'text-slate-400'}`}>
+                <span className={`text-[10px] font-mono ${isHmi ? 'text-green-600' : 'text-slate-400'}`}>
                   ACTIVE DIE & SHOT WEAR
                 </span>
               </div>
-              <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border animate-pulse font-mono ${
+              <span className={`text-xs font-bold px-2 py-0.5 rounded border animate-pulse font-mono ${
                 isHmi 
                   ? 'bg-green-950 text-green-300 border-green-500' 
                   : 'bg-emerald-950/80 text-emerald-400 border-emerald-600/70'
@@ -901,50 +902,50 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
             </div>
 
             {/* Line Overview Metrics */}
-            <div className="space-y-2 font-mono">
-              <div className={`p-2 rounded border space-y-0.5 ${
+            <div className="space-y-3 font-mono">
+              <div className={`p-3 rounded-lg border space-y-1 ${
                 isHmi ? 'bg-zinc-950 border-green-900' : 'bg-slate-950 border-slate-800'
               }`}>
-                <div className={`text-[9px] uppercase ${isHmi ? 'text-green-500' : 'text-slate-400'}`}>
+                <div className={`text-[10px] uppercase ${isHmi ? 'text-green-500' : 'text-slate-400'}`}>
                   ACTIVE DIE CODE
                 </div>
-                <div className={`text-sm font-bold truncate ${isHmi ? 'text-green-300' : 'text-cyan-300'}`}>
+                <div className={`text-lg font-bold truncate ${isHmi ? 'text-green-300' : 'text-cyan-300'}`}>
                   {currentLine?.activeConfig?.dieCode || `DIE-L${selectedLineId}-01`}
                 </div>
-                <div className={`text-[9px] ${isHmi ? 'text-green-600' : 'text-slate-400'}`}>
+                <div className={`text-[10px] ${isHmi ? 'text-green-600' : 'text-slate-400'}`}>
                   Model: {currentLine?.activeConfig?.modelName || 'Air Conditioner Evaporator'}
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-1.5">
-                <div className={`p-2 rounded border ${
+              <div className="grid grid-cols-2 gap-2">
+                <div className={`p-2.5 rounded-lg border ${
                   isHmi ? 'bg-zinc-950 border-green-900' : 'bg-slate-950 border-slate-800'
                 }`}>
-                  <div className={`text-[9px] ${isHmi ? 'text-green-600' : 'text-slate-400'}`}>CURRENT SHIFT</div>
-                  <div className={`text-sm font-bold mt-0.5 ${isHmi ? 'text-green-300' : 'text-slate-100'}`}>
+                  <div className={`text-[10px] ${isHmi ? 'text-green-600' : 'text-slate-400'}`}>CURRENT SHIFT</div>
+                  <div className={`text-base font-bold mt-0.5 ${isHmi ? 'text-green-300' : 'text-slate-100'}`}>
                     {formatShots(currentLine?.shiftShot || 0)}
                   </div>
                 </div>
 
-                <div className={`p-2 rounded border ${
+                <div className={`p-2.5 rounded-lg border ${
                   isHmi ? 'bg-zinc-950 border-green-900' : 'bg-slate-950 border-slate-800'
                 }`}>
-                  <div className={`text-[9px] ${isHmi ? 'text-green-600' : 'text-slate-400'}`}>TODAY TOTAL</div>
-                  <div className={`text-sm font-bold mt-0.5 ${isHmi ? 'text-green-300' : 'text-slate-100'}`}>
+                  <div className={`text-[10px] ${isHmi ? 'text-green-600' : 'text-slate-400'}`}>TODAY TOTAL</div>
+                  <div className={`text-base font-bold mt-0.5 ${isHmi ? 'text-green-300' : 'text-slate-100'}`}>
                     {formatShots(currentLine?.dailyShot || 0)}
                   </div>
                 </div>
               </div>
 
               {/* Operator Info */}
-              <div className={`p-2 rounded border text-xs space-y-0.5 ${
+              <div className={`p-3 rounded-lg border text-xs space-y-1 ${
                 isHmi ? 'bg-zinc-950 border-green-900' : 'bg-slate-950 border-slate-800'
               }`}>
-                <div className={`flex items-center gap-1 font-bold text-[11px] ${isHmi ? 'text-green-400' : 'text-cyan-300'}`}>
-                  <UserCheck className="w-3 h-3" />
+                <div className={`flex items-center gap-1.5 font-bold ${isHmi ? 'text-green-400' : 'text-cyan-300'}`}>
+                  <UserCheck className="w-3.5 h-3.5" />
                   <span>LOGGED OPERATOR:</span>
                 </div>
-                <div className={`font-mono text-xs ${isHmi ? 'text-green-300' : 'text-slate-200'}`}>
+                <div className={`font-mono ${isHmi ? 'text-green-300' : 'text-slate-200'}`}>
                   {currentUser.name} ({currentUser.role})
                 </div>
               </div>
@@ -956,29 +957,29 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
 
       {/* TAB 2: SHOT LOG HISTORY TABLE */}
       {activeTab === 'history' && (
-        <div className={`rounded-lg p-3 sm:p-3.5 space-y-2.5 shadow-md border ${
-          isHmi ? 'bg-black border border-green-500' : 'bg-[#0E172A] border-slate-800'
+        <div className={`rounded-xl p-4 sm:p-5 space-y-4 shadow-xl border ${
+          isHmi ? 'bg-black border-2 border-green-500' : 'bg-[#0E172A] border-slate-800/90'
         }`}>
-          <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b pb-2 ${
+          <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b pb-3 ${
             isHmi ? 'border-green-900' : 'border-slate-800'
           }`}>
             <div>
-              <h3 className={`font-bold text-sm uppercase tracking-wider ${
+              <h3 className={`font-bold text-base uppercase tracking-wider ${
                 isHmi ? 'text-green-400 font-extrabold font-mono' : 'text-white'
               }`}>
                 HISTORICAL SHOT LOGS ({filteredShotLogs.length} RECORDS)
               </h3>
-              <p className={`text-[10px] ${isHmi ? 'text-green-600' : 'text-slate-400'}`}>
+              <p className={`text-xs ${isHmi ? 'text-green-600' : 'text-slate-400'}`}>
                 ประวัติการบันทึกช็อตรายกะและข้อมูลซิงค์ PLC
               </p>
             </div>
 
             {/* Filter Bar */}
-            <div className="flex items-center gap-1.5 flex-wrap text-xs">
+            <div className="flex items-center gap-2 flex-wrap text-xs">
               <select
                 value={historyLineFilter}
                 onChange={e => setHistoryLineFilter(e.target.value)}
-                className={`rounded px-2 py-0.5 text-xs font-mono border ${
+                className={`rounded px-2.5 py-1 font-mono border ${
                   isHmi 
                     ? 'bg-zinc-950 border-green-700 text-green-300' 
                     : 'bg-slate-950 border-slate-700 text-slate-200'
@@ -995,7 +996,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                 value={historySearch}
                 onChange={e => setHistorySearch(e.target.value)}
                 placeholder="Search logs..."
-                className={`rounded px-2 py-0.5 text-xs font-mono border ${
+                className={`rounded px-2.5 py-1 font-mono border ${
                   isHmi
                     ? 'bg-zinc-950 border-green-700 text-green-300 placeholder:text-green-800'
                     : 'bg-slate-950 border-slate-700 text-slate-200 placeholder:text-slate-500'
@@ -1004,22 +1005,22 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
             </div>
           </div>
 
-          <div className={`overflow-x-auto custom-scrollbar border rounded ${
+          <div className={`overflow-x-auto custom-scrollbar border rounded-lg ${
             isHmi ? 'border-green-900' : 'border-slate-800'
           }`}>
-            <table className="w-full text-left text-[11px] font-mono">
-              <thead className={`uppercase border-b text-[10px] ${
+            <table className="w-full text-left text-xs font-mono">
+              <thead className={`uppercase border-b ${
                 isHmi ? 'bg-zinc-950 text-green-400 border-green-800' : 'bg-slate-950 text-slate-300 border-slate-800'
               }`}>
                 <tr>
-                  <th className="py-1.5 px-2.5">RECORD ID</th>
-                  <th className="py-1.5 px-2.5">LINE</th>
-                  <th className="py-1.5 px-2.5">DATE / SHIFT</th>
-                  <th className="py-1.5 px-2.5">METHOD</th>
-                  <th className="py-1.5 px-2.5 text-right">PREVIOUS</th>
-                  <th className="py-1.5 px-2.5 text-right">INCREMENT</th>
-                  <th className="py-1.5 px-2.5 text-right">NEW TOTAL</th>
-                  <th className="py-1.5 px-2.5">OPERATOR</th>
+                  <th className="py-2.5 px-3">RECORD ID</th>
+                  <th className="py-2.5 px-3">LINE</th>
+                  <th className="py-2.5 px-3">DATE / SHIFT</th>
+                  <th className="py-2.5 px-3">METHOD</th>
+                  <th className="py-2.5 px-3 text-right">PREVIOUS</th>
+                  <th className="py-2.5 px-3 text-right">INCREMENT</th>
+                  <th className="py-2.5 px-3 text-right">NEW TOTAL</th>
+                  <th className="py-2.5 px-3">OPERATOR</th>
                 </tr>
               </thead>
               <tbody className={`divide-y ${
@@ -1029,11 +1030,11 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                   <tr key={log.id} className={`transition-colors ${
                     isHmi ? 'hover:bg-green-950/40' : 'hover:bg-slate-900/60'
                   }`}>
-                    <td className={`py-1.5 px-2.5 font-bold ${isHmi ? 'text-green-400' : 'text-cyan-400'}`}>{log.id}</td>
-                    <td className="py-1.5 px-2.5">LINE {log.lineId}</td>
-                    <td className="py-1.5 px-2.5">{log.productionDate} ({log.shift})</td>
-                    <td className="py-1.5 px-2.5">
-                      <span className={`px-1 py-0.2 rounded text-[9px] font-bold ${
+                    <td className={`py-2 px-3 font-bold ${isHmi ? 'text-green-400' : 'text-cyan-400'}`}>{log.id}</td>
+                    <td className="py-2 px-3">LINE {log.lineId}</td>
+                    <td className="py-2 px-3">{log.productionDate} ({log.shift})</td>
+                    <td className="py-2 px-3">
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                         log.inputMethod === 'AUTOMATIC_PLC'
                           ? 'bg-blue-950 text-blue-300 border border-blue-700'
                           : isHmi
@@ -1043,17 +1044,10 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                         {log.inputMethod || 'MANUAL'}
                       </span>
                     </td>
-                    <td className="py-1.5 px-2.5 text-right text-slate-400">{formatShots(log.previousTotal)}</td>
-                    <td className={`py-1.5 px-2.5 text-right font-bold ${isHmi ? 'text-green-400' : 'text-emerald-400'}`}>+{formatShots(log.shotsAdded)}</td>
-                    <td className={`py-1.5 px-2.5 text-right font-extrabold ${isHmi ? 'text-green-300' : 'text-slate-100'}`}>{formatShots(log.newTotal)}</td>
-                    <td className="py-1.5 px-2.5 text-slate-400 truncate max-w-[120px]">{log.operatorName || 'System'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+                    <td className="py-2 px-3 text-right text-slate-400">{formatShots(log.previousTotal)}</td>
+                    <td className={`py-2 px-3 text-right font-bold ${isHmi ? 'text-green-400' : 'text-emerald-400'}`}>+{formatShots(log.shotsAdded)}</td>
+                    <td className={`py-2 px-3 text-right font-extrabold ${isHmi ? 'text-green-300' : 'text-slate-100'}`}>{formatShots(log.newTotal)}</td>
+                    <td className="py-2 px-3 text-slate-400 truncate max-w-[120px]">{log.operatorName || 'System'}</td>
                   </tr>
                 ))}
               </tbody>

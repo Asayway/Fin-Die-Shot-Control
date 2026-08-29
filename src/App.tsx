@@ -174,11 +174,11 @@ export default function App() {
           theme={settings.theme}
         />
 
-        {/* Content Body - High-Density desktop view container */}
-        <main className={`flex-1 min-h-0 overflow-y-auto p-2 sm:p-3 md:p-3.5 custom-scrollbar transition-all duration-300 ${
+        {/* Content Body - Independent scrollable view container */}
+        <main className={`flex-1 min-h-0 overflow-y-auto p-3 sm:p-5 lg:p-6 custom-scrollbar transition-all duration-300 ${
           isHmi ? 'bg-black' : 'bg-[#080E1B]'
         }`}>
-          <div className="max-w-[1600px] mx-auto pb-4">
+          <div className="max-w-[1440px] mx-auto pb-10">
             {renderActiveView()}
           </div>
         </main>
