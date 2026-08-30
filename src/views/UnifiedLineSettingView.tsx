@@ -22,7 +22,8 @@ import {
   Activity,
   Check,
   RefreshCw,
-  Info
+  Info,
+  Power
 } from 'lucide-react';
 import { 
   ProductionLineId, 
@@ -34,10 +35,14 @@ import {
   ReplacementRecord, 
   RegrindingRecord,
   TubeSize,
-  FinType
+  FinType,
+  LINE_INFO_MAP,
+  MachineStatus,
+  LineLiveMonitoringData
 } from '../types';
 import { storageService } from '../services/storageService';
 import { formatShots, formatThb } from '../services/calculationService';
+import { LineFilterSelector } from '../components/common/LineFilterSelector';
 
 export const UnifiedLineSettingView: React.FC = () => {
   // Production Line Selection
@@ -51,6 +56,7 @@ export const UnifiedLineSettingView: React.FC = () => {
   const [spareStocks, setSpareStocks] = useState<SpareStockItem[]>([]);
   const [replacements, setReplacements] = useState<ReplacementRecord[]>([]);
   const [regrindRecords, setRegrindRecords] = useState<RegrindingRecord[]>([]);
+  const [linesMonitoring, setLinesMonitoring] = useState<Record<ProductionLineId, LineLiveMonitoringData>>({} as any);
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -80,13 +86,14 @@ export const UnifiedLineSettingView: React.FC = () => {
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const loadAllData = () => {
-    setLineConfigs(storageService.getLineConfigs().filter(c => c.isActive));
+    setLineConfigs(storageService.getLineConfigs());
     setPartMasters(storageService.getPartMasters());
     setLifeStandards(storageService.getLifeStandards());
     setRegrindStandards(storageService.getRegrindMasterStandards());
     setSpareStocks(storageService.getSpareStocks());
     setReplacements(storageService.getReplacements());
     setRegrindRecords(storageService.getRegrindRecords());
+    setLinesMonitoring(storageService.getLinesMonitoring());
   };
 
   useEffect(() => {
@@ -98,6 +105,15 @@ export const UnifiedLineSettingView: React.FC = () => {
   const showNotification = (type: 'success' | 'error', message: string) => {
     setToast({ type, message });
     setTimeout(() => setToast(null), 4000);
+  };
+
+  const handleUpdateLineMachineStatus = (lineId: ProductionLineId, status: MachineStatus, isActive: boolean = true) => {
+    storageService.updateLineMachineStatus(lineId, status, true);
+    setLinesMonitoring(storageService.getLinesMonitoring());
+    const statusLabel = status === 'RUNNING' ? '🟢 RUNNING (เปิดผลิตปกติ)' :
+                        status === 'IDLE' ? '🟡 IDLE (พักสายการผลิต)' :
+                        status === 'MAINTENANCE' ? '🔧 MAINTENANCE (ซ่อมบำรุง)' : '🔴 STOPPED (ปิดไลน์ผลิต)';
+    showNotification('success', `อัปเดตสถานะการผลิต LINE ${lineId} เป็น ${statusLabel} เรียบร้อยแล้ว`);
   };
 
   // Get current active line config
@@ -367,31 +383,41 @@ export const UnifiedLineSettingView: React.FC = () => {
   return (
     <div className="space-y-3 font-sans text-slate-100 pb-8">
       
-      {/* PAGE HEADER */}
-      <div className="bg-[#0B1528] border border-cyan-800/80 rounded-xl p-3.5 sm:p-4 shadow-xl flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
+      {/* PAGE HEADER & INTEGRATED COMPACT LINE SELECTOR (Sticky Locked at Top) */}
+      <div className="sticky top-0 z-30 bg-[#0B1528]/95 backdrop-blur-md border border-cyan-800/80 rounded-xl p-3 sm:p-3.5 shadow-2xl space-y-2.5">
+        {/* ROW 1: TOP LINE SELECTOR & ACTION BAR */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-cyan-900/60 pb-2.5">
+          <div className="overflow-x-auto custom-scrollbar">
+            <LineFilterSelector
+              selectedLine={selectedLineId}
+              onSelectLine={(l) => setSelectedLineId(l)}
+              allowAll={true}
+              allLabel="ALL LINES (E1-E6)"
+              label="LINE:"
+            />
+          </div>
+
+          <button
+            onClick={() => setShowAddPartModal(true)}
+            className="px-3.5 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-lg shadow-cyan-950/60 transition-all font-mono whitespace-nowrap ml-auto"
+          >
+            <Plus className="w-4 h-4 stroke-[3]" />
+            <span>เพิ่มชิ้นส่วนใหม่ (ADD NEW PART)</span>
+          </button>
+        </div>
+
+        {/* ROW 2: TITLE & DESCRIPTION SUB-ROW */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
             <span className="px-2.5 py-0.5 rounded text-[11px] font-bold tracking-wider uppercase bg-cyan-950 text-cyan-300 border border-cyan-600 font-mono">
               UNIFIED LINE & DIE SETTING
             </span>
-            <span className="text-slate-400 text-xs font-mono">| ตั้งค่าระบบแม่พิมพ์และสเปกสายการผลิต</span>
+            <span className="text-slate-400 text-xs font-mono">| ตั้งค่าสเปกไลน์ผลิตและสถานะเปิด/ปิดการทำงาน</span>
           </div>
-          <h1 className="text-lg sm:text-xl font-black text-white tracking-tight flex items-center gap-2">
-            <Settings2 className="w-5 h-5 text-cyan-400" />
-            <span>ศูนย์ตั้งค่ามาตรฐานอะไหล่และสเปกไลน์ (Unified Tooling Master)</span>
-          </h1>
-          <p className="text-xs text-slate-400 font-thai mt-0.5">
-            ตั้งค่าขนาดท่อ, ลายฟิน, แม่พิมพ์, ชนิดวัสดุ, แก้ไขชื่ออะไหล่, ล็อกตำแหน่ง, กำหนดเกณฑ์อายุช็อต, และเชื่อมโยงข้อมูลกับหน้าหลักอัตโนมัติ
-          </p>
+          <span className="text-xs text-slate-400 font-thai">
+            {selectedLineId === 'ALL' ? 'แสดงข้อมูลรวมทุกไลน์การผลิต (E1-E6)' : `กำลังตั้งค่า: LINE ${selectedLineId}`}
+          </span>
         </div>
-
-        <button
-          onClick={() => setShowAddPartModal(true)}
-          className="px-3.5 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-lg shadow-cyan-950/60 transition-all font-mono whitespace-nowrap"
-        >
-          <Plus className="w-4 h-4 stroke-[3]" />
-          <span>เพิ่มชิ้นส่วนใหม่ (ADD NEW PART)</span>
-        </button>
       </div>
 
       {/* TOAST NOTIFICATION */}
@@ -411,81 +437,37 @@ export const UnifiedLineSettingView: React.FC = () => {
         </div>
       )}
 
-      {/* STEP 1: PRODUCTION LINE SELECTOR BAR */}
-      <div className="bg-[#0E172A] border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
-        <div className="flex items-center justify-between flex-wrap gap-2 border-b border-slate-800/80 pb-2">
-          <div className="flex items-center gap-2">
-            <Layers className="w-4 h-4 text-cyan-400" />
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider font-mono">
-              เลือกสายการผลิตเพื่อตั้งค่า (SELECT PRODUCTION LINE)
-            </h2>
-          </div>
-          <span className="text-xs text-slate-400 font-mono">
-            {selectedLineId === 'ALL' ? 'แสดงข้อมูลภาพรวมทุกไลน์ (All Lines Overview)' : `กำลังตั้งค่าสำหรับ LINE ${selectedLineId}`}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap pb-1">
-          <button
-            onClick={() => setSelectedLineId('ALL')}
-            className={`px-4 py-2 sm:px-5 sm:py-2.5 rounded-lg text-xs sm:text-sm font-bold font-mono transition-all flex items-center gap-2 border whitespace-nowrap ${
-              selectedLineId === 'ALL'
-                ? 'bg-cyan-400 text-slate-950 border-cyan-300 shadow-lg font-black scale-105'
-                : 'bg-slate-900 text-slate-300 hover:text-white border-slate-700'
-            }`}
-          >
-            <Activity className="w-4 h-4" />
-            <span>ALL LINES (E1-E6)</span>
-          </button>
-
-          {lineList.map(lineId => {
-            const isSelected = selectedLineId === lineId;
-            const cfg = lineConfigs.find(c => c.lineId === lineId);
-            return (
-              <button
-                key={lineId}
-                onClick={() => setSelectedLineId(lineId)}
-                className={`px-3.5 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-lg text-sm sm:text-base md:text-lg font-mono font-black transition-all flex items-center gap-2 border whitespace-nowrap ${
-                  isSelected
-                    ? 'bg-cyan-400 text-slate-950 border-cyan-300 shadow-lg shadow-cyan-400/30 scale-105'
-                    : 'bg-slate-900 text-slate-200 hover:bg-slate-800 border-slate-700/80'
-                }`}
-              >
-                <span>{lineId}</span>
-                {cfg && (
-                  <span className={`text-[11px] px-1.5 py-0.5 rounded font-mono ${
-                    isSelected ? 'bg-slate-950 text-cyan-300 font-bold' : 'bg-slate-800 text-slate-400'
-                  }`}>
-                    {cfg.tubeSize || 'Ø7'}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* STEP 2: LINE & DIE SPECIFICATIONS (If specific line selected) */}
+      {/* STEP 2: LINE & DIE SPECIFICATIONS & OPERATIONAL STATUS (If specific line selected) */}
       {selectedLineId !== 'ALL' && currentLineConfig && (
         <div className="bg-[#0E1B33] border border-cyan-800/80 rounded-2xl p-5 shadow-2xl space-y-4">
-          <div className="flex items-center justify-between border-b border-cyan-900/60 pb-3">
+          <div className="flex items-center justify-between border-b border-cyan-900/60 pb-3 flex-wrap gap-2">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-cyan-950 border border-cyan-500 flex items-center justify-center font-black text-cyan-300 font-mono text-lg shadow">
                 {selectedLineId}
               </div>
               <div>
-                <h2 className="text-base font-bold text-white font-mono flex items-center gap-2">
-                  <span>สเปกแม่พิมพ์และวัสดุ (LINE SPECIFICATION) - LINE {selectedLineId}</span>
-                  <span className="text-xs px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-700">ACTIVE</span>
+                <h2 className="text-base font-bold text-white font-mono flex items-center gap-2 flex-wrap">
+                  <span>สเปกและสถานะสายการผลิต (LINE SPEC & STATUS) - {LINE_INFO_MAP[selectedLineId]?.nameTh || selectedLineId}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded font-mono font-bold border ${
+                    (linesMonitoring[selectedLineId]?.machineStatus || 'RUNNING') === 'RUNNING'
+                      ? 'bg-emerald-950 text-emerald-400 border-emerald-600'
+                      : (linesMonitoring[selectedLineId]?.machineStatus) === 'IDLE'
+                      ? 'bg-amber-950 text-amber-300 border-amber-600'
+                      : (linesMonitoring[selectedLineId]?.machineStatus) === 'MAINTENANCE'
+                      ? 'bg-cyan-950 text-cyan-300 border-cyan-600'
+                      : 'bg-rose-950 text-rose-300 border-rose-600'
+                  }`}>
+                    {linesMonitoring[selectedLineId]?.machineStatus || 'RUNNING'}
+                  </span>
                 </h2>
                 <p className="text-xs text-slate-400 font-thai mt-0.5">
-                  ปรับสเปกขนาดท่อ, ลายฟิน, Pitch, และชนิดวัสดุ ระบบจะปรับเกณฑ์อายุช็อตของอะไหล่ให้อัตโนมัติ
+                  ปรับสเปกขนาดท่อ, ลายฟิน, Pitch, ชนิดวัสดุ และกำหนดสถานะเปิด/ปิดการทำงานของไลน์ผลิต
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 text-xs font-mono">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 text-xs font-mono">
             {/* Tube Size */}
             <div className="space-y-1 bg-slate-950/80 p-3 rounded-xl border border-slate-800">
               <label className="text-slate-400 font-bold block">1. TUBE SIZE (ขนาดท่อ)</label>
@@ -558,6 +540,108 @@ export const UnifiedLineSettingView: React.FC = () => {
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-200 font-mono font-bold focus:border-cyan-400 focus:outline-none"
               />
             </div>
+
+            {/* Default SPM */}
+            <div className="space-y-1 bg-slate-950/80 p-3 rounded-xl border border-slate-800 relative group">
+              <label className="text-cyan-400 font-bold block flex items-center gap-1.5">
+                6. DEFAULT SPM
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={currentLineConfig.defaultSpm || ''}
+                onChange={e => handleUpdateLineSpec('defaultSpm', parseInt(e.target.value) || 0)}
+                placeholder="e.g. 100"
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-cyan-300 font-mono font-bold focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-500/50"
+              />
+              <div className="absolute top-full left-0 mt-1 w-[280px] z-10 hidden group-hover:block bg-slate-900 text-slate-400 text-[10px] p-2 border border-slate-700 rounded shadow-lg font-thai whitespace-normal">
+                ค่าความเร็วมาตรฐานของแม่พิมพ์ไลน์นี้ ใช้สำหรับโหมดจำลอง SPM และคำนวณ Loss Time อัตโนมัติ
+              </div>
+            </div>
+          </div>
+
+          {/* Line Operational Status & Shutdown Control */}
+          <div className="bg-slate-950/90 p-4 rounded-xl border border-slate-800 space-y-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <label className="text-white font-bold flex items-center gap-2 font-mono text-sm">
+                  <Power className="w-4 h-4 text-cyan-400" />
+                  <span>กำหนดสถานะการเปิด/ปิดไลน์ผลิต (LINE OPERATIONAL & PRODUCTION STATUS)</span>
+                </label>
+                <p className="text-xs text-slate-400 font-thai mt-0.5">
+                  เลือกสถานะไลน์ผลิต หากไลน์ไม่มีแผนผลิต ให้ตั้งค่าเป็น IDLE หรือ STOPPED (ปิดไลน์) ระบบจะแสดงสัญลักษณ์และแจ้งเตือนพนักงาน
+                </p>
+              </div>
+
+              <span className={`px-2.5 py-1 rounded text-xs font-mono font-bold border flex items-center gap-1.5 ${
+                (linesMonitoring[selectedLineId]?.machineStatus || 'RUNNING') === 'RUNNING'
+                  ? 'bg-emerald-950 text-emerald-400 border-emerald-600'
+                  : (linesMonitoring[selectedLineId]?.machineStatus) === 'IDLE'
+                  ? 'bg-amber-950 text-amber-300 border-amber-600'
+                  : (linesMonitoring[selectedLineId]?.machineStatus) === 'MAINTENANCE'
+                  ? 'bg-cyan-950 text-cyan-300 border-cyan-600'
+                  : 'bg-rose-950 text-rose-300 border-rose-600'
+              }`}>
+                STATUS: {(linesMonitoring[selectedLineId]?.machineStatus || 'RUNNING') === 'RUNNING' && '🟢 RUNNING'}
+                {(linesMonitoring[selectedLineId]?.machineStatus) === 'IDLE' && '🟡 IDLE'}
+                {(linesMonitoring[selectedLineId]?.machineStatus) === 'MAINTENANCE' && '🔧 MAINTENANCE'}
+                {(linesMonitoring[selectedLineId]?.machineStatus) === 'STOPPED' && '🔴 STOPPED'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 font-mono">
+              <button
+                type="button"
+                onClick={() => handleUpdateLineMachineStatus(selectedLineId, 'RUNNING', true)}
+                className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 border ${
+                  (linesMonitoring[selectedLineId]?.machineStatus || 'RUNNING') === 'RUNNING'
+                    ? 'bg-emerald-500 text-slate-950 border-emerald-300 font-black shadow-lg shadow-emerald-500/20 scale-[1.02]'
+                    : 'bg-slate-900 text-slate-300 border-slate-700 hover:text-white hover:border-slate-600'
+                }`}
+              >
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>🟢 RUNNING (เปิดผลิตปกติ)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleUpdateLineMachineStatus(selectedLineId, 'IDLE', true)}
+                className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 border ${
+                  (linesMonitoring[selectedLineId]?.machineStatus) === 'IDLE'
+                    ? 'bg-amber-400 text-slate-950 border-amber-300 font-black shadow-lg shadow-amber-400/20 scale-[1.02]'
+                    : 'bg-slate-900 text-slate-300 border-slate-700 hover:text-white hover:border-slate-600'
+                }`}
+              >
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+                <span>🟡 IDLE (พักสาย/ไม่มีแผน)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleUpdateLineMachineStatus(selectedLineId, 'MAINTENANCE', true)}
+                className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 border ${
+                  (linesMonitoring[selectedLineId]?.machineStatus) === 'MAINTENANCE'
+                    ? 'bg-cyan-500 text-slate-950 border-cyan-300 font-black shadow-lg shadow-cyan-500/20 scale-[1.02]'
+                    : 'bg-slate-900 text-slate-300 border-slate-700 hover:text-white hover:border-slate-600'
+                }`}
+              >
+                <Wrench className="w-3.5 h-3.5" />
+                <span>🔧 MAINTENANCE (ซ่อมบำรุง)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleUpdateLineMachineStatus(selectedLineId, 'STOPPED', true)}
+                className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 border ${
+                  (linesMonitoring[selectedLineId]?.machineStatus) === 'STOPPED'
+                    ? 'bg-rose-600 text-white border-rose-300 font-black shadow-lg shadow-rose-600/20 scale-[1.02]'
+                    : 'bg-slate-900 text-slate-300 border-slate-700 hover:text-white hover:border-slate-600'
+                }`}
+              >
+                <Power className="w-3.5 h-3.5" />
+                <span>🔴 STOPPED (ปิดไลน์ผลิต)</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -593,22 +677,22 @@ export const UnifiedLineSettingView: React.FC = () => {
 
         {/* Master Table */}
         <div className="overflow-x-auto custom-scrollbar border border-slate-800 rounded-xl">
-          <table className="w-full text-left text-xs font-mono border-collapse min-w-[1200px]">
+          <table className="w-full text-left text-sm sm:text-base font-mono border-collapse min-w-[1200px]">
             <thead>
-              <tr className="bg-[#080F1E] text-slate-400 uppercase text-[11px] border-b border-slate-800">
-                <th className="py-3 px-2 text-center w-12">POS</th>
-                <th className="py-3 px-3 w-44">PART CODE & NAME (แก้ไขได้)</th>
-                <th className="py-3 px-3 w-36">STAGE / FUNCTION</th>
-                <th className="py-3 px-3 text-center w-36">
+              <tr className="bg-[#080F1E] text-slate-300 uppercase text-xs sm:text-sm font-black border-b border-slate-800">
+                <th className="py-3.5 px-2 text-center w-12">POS</th>
+                <th className="py-3.5 px-3 w-44">PART CODE & NAME (แก้ไขได้)</th>
+                <th className="py-3.5 px-3 w-36">STAGE / FUNCTION</th>
+                <th className="py-3.5 px-3 text-center w-36">
                   {selectedLineId === 'ALL' ? 'จำนวนติดตั้งรวม' : `ติดตั้งใน LINE ${selectedLineId}`}
                 </th>
-                <th className="py-3 px-3 text-right w-40">PCM LIFE (SHOTS)</th>
-                <th className="py-3 px-3 text-right w-40">GOLD LIFE (SHOTS)</th>
-                <th className="py-3 px-3 text-right w-40">BARE LIFE (SHOTS)</th>
-                <th className="py-3 px-3 text-center w-36">การซ่อม (MAX REGRIND)</th>
-                <th className="py-3 px-3 text-right w-28">ราคา UNIT PRICE</th>
-                <th className="py-3 px-3 text-center w-32">สต็อก & PO STATUS</th>
-                <th className="py-3 px-2 text-center w-24">ดู LOG / ประวัติ</th>
+                <th className="py-3.5 px-3 text-right w-40">PCM LIFE (SHOTS)</th>
+                <th className="py-3.5 px-3 text-right w-40">GOLD LIFE (SHOTS)</th>
+                <th className="py-3.5 px-3 text-right w-40">BARE LIFE (SHOTS)</th>
+                <th className="py-3.5 px-3 text-center w-36">การซ่อม (MAX REGRIND)</th>
+                <th className="py-3.5 px-3 text-right w-28">ราคา UNIT PRICE</th>
+                <th className="py-3.5 px-3 text-center w-32">สต็อก & PO STATUS</th>
+                <th className="py-3.5 px-2 text-center w-24">ดู LOG / ประวัติ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/80 bg-slate-950/60">

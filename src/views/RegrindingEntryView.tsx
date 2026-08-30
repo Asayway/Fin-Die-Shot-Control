@@ -29,7 +29,8 @@ import {
   RegrindingRecord, 
   RegrindMasterStandard, 
   RegrindPartStatus,
-  LineLiveMonitoringData 
+  LineLiveMonitoringData,
+  LINE_INFO_MAP 
 } from '../types';
 import { storageService } from '../services/storageService';
 import { formatShots } from '../services/calculationService';
@@ -318,63 +319,65 @@ export const RegrindingEntryView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Top Header Card */}
-      <div id="regrind-header" className="bg-slate-900 border border-slate-800 rounded-lg p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="p-2 bg-indigo-500/10 text-indigo-400 rounded-lg border border-indigo-500/20">
-              <RotateCcw className="w-5 h-5" />
-            </span>
-            <h1 className="text-xl font-bold text-white tracking-tight">
-              Re-grinding & Sharpening Control Module
-            </h1>
+    <div className="space-y-4">
+      {/* Top Header Card & Tabs Navigation (Sticky Locked at Top) */}
+      <div id="regrind-header" className="sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-xl p-4 shadow-2xl space-y-3">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="p-2 bg-indigo-500/10 text-indigo-400 rounded-lg border border-indigo-500/20">
+                <RotateCcw className="w-5 h-5" />
+              </span>
+              <h1 className="text-xl font-bold text-white tracking-tight">
+                Re-grinding & Sharpening Control Module
+              </h1>
+            </div>
+            <p className="text-sm text-slate-400 mt-1 font-thai">
+              ระบบควบคุมและบันทึกประวัติการเจียระไนลับคมชิ้นส่วนแม่พิมพ์ (ตามมาตรฐาน Excel: อัตราเจียร, ระยะเผื่อรวม, และรอบสูงสุด)
+            </p>
           </div>
-          <p className="text-sm text-slate-400 mt-1 font-thai">
-            ระบบควบคุมและบันทึกประวัติการเจียระไนลับคมชิ้นส่วนแม่พิมพ์ (ตามมาตรฐาน Excel: อัตราเจียร, ระยะเผื่อรวม, และรอบสูงสุด)
-          </p>
         </div>
-      </div>
 
-      {/* Tabs */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-        <div className="flex items-center gap-2">
-          <button
-            id="tab-regrind-entry"
-            onClick={() => setActiveTab('entry')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all ${
-              activeTab === 'entry'
-                ? 'bg-indigo-600 text-white font-bold shadow'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-            }`}
-          >
-            <RotateCcw className="w-4 h-4" />
-            New Re-grinding Job Entry
-          </button>
-          <button
-            id="tab-regrind-history"
-            onClick={() => setActiveTab('history')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all ${
-              activeTab === 'history'
-                ? 'bg-indigo-600 text-white font-bold shadow'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-            }`}
-          >
-            <History className="w-4 h-4" />
-            Re-grind Transaction Ledger ({historyRecords.length})
-          </button>
-          <button
-            id="tab-regrind-standards"
-            onClick={() => setActiveTab('standards')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all ${
-              activeTab === 'standards'
-                ? 'bg-indigo-600 text-white font-bold shadow'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-            }`}
-          >
-            <Sliders className="w-4 h-4" />
-            Master Standard Criteria
-          </button>
+        {/* Tabs */}
+        <div className="flex items-center justify-between border-t border-slate-800/80 pt-2">
+          <div className="flex items-center gap-2">
+            <button
+              id="tab-regrind-entry"
+              onClick={() => setActiveTab('entry')}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all ${
+                activeTab === 'entry'
+                  ? 'bg-indigo-600 text-white font-bold shadow'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+              }`}
+            >
+              <RotateCcw className="w-4 h-4" />
+              New Re-grinding Job Entry
+            </button>
+            <button
+              id="tab-regrind-history"
+              onClick={() => setActiveTab('history')}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all ${
+                activeTab === 'history'
+                  ? 'bg-indigo-600 text-white font-bold shadow'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+              }`}
+            >
+              <History className="w-4 h-4" />
+              Re-grind Transaction Ledger ({historyRecords.length})
+            </button>
+            <button
+              id="tab-regrind-standards"
+              onClick={() => setActiveTab('standards')}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all ${
+                activeTab === 'standards'
+                  ? 'bg-indigo-600 text-white font-bold shadow'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+              }`}
+            >
+              <Sliders className="w-4 h-4" />
+              Master Standard Criteria
+            </button>
+          </div>
         </div>
       </div>
 
@@ -495,9 +498,13 @@ export const RegrindingEntryView: React.FC = () => {
                         onChange={e => setSelectedLineId(e.target.value as ProductionLineId)}
                         className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-2 text-xs text-slate-100 font-mono"
                       >
-                        {linesList.map(l => (
-                          <option key={l} value={l}>{l}</option>
-                        ))}
+                        {linesList.map(l => {
+                          const displayLine = l.startsWith('E3-') ? 'E3' : l;
+                          const tag = LINE_INFO_MAP[l]?.shortTag || l;
+                          return (
+                            <option key={l} value={l}>LINE {displayLine} ({tag})</option>
+                          );
+                        })}
                       </select>
                       <input
                         type="text"

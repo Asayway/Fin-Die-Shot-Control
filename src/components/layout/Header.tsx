@@ -80,26 +80,8 @@ export const Header: React.FC<HeaderProps> = ({
       }`}
     >
       <div className="px-3 sm:px-4 py-2 flex items-center justify-between gap-3">
-        {/* Left: Sidebar Toggle Button + Brand Title */}
+        {/* Left: Brand Title & Logo */}
         <div className="flex items-center gap-2.5 sm:gap-3.5">
-          {/* Sidebar Hide/Show Toggle */}
-          <button
-            onClick={onToggleSidebar}
-            className={`p-1.5 sm:p-2 rounded border transition-colors flex items-center justify-center shadow-sm ${
-              isHmi
-                ? 'bg-black hover:bg-green-950/60 text-green-400 hover:text-green-300 border-green-500/70'
-                : 'bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border-slate-700'
-            }`}
-            title={sidebarCollapsed ? "เปิดแท็บเมนู (Open Sidebar)" : "ซ่อนแท็บเมนู (Hide Sidebar)"}
-            aria-label="Toggle Sidebar"
-          >
-            {sidebarCollapsed ? (
-              <PanelLeftOpen className={`w-5 h-5 ${isHmi ? 'text-green-400' : 'text-cyan-400'}`} />
-            ) : (
-              <PanelLeftClose className={`w-5 h-5 ${isHmi ? 'text-green-400/80' : 'text-slate-400'}`} />
-            )}
-          </button>
-
           {/* Logo Icon */}
           <div 
             className={`p-1.5 rounded flex items-center justify-center shadow-sm border ${

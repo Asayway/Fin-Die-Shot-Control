@@ -13,7 +13,7 @@ import {
   Plus,
   Info
 } from 'lucide-react';
-import { PartLifeStandard, FinMaterial, TubeDiameter, FinType, ProductionLineId } from '../types';
+import { PartLifeStandard, FinMaterial, TubeDiameter, FinType, ProductionLineId, LINE_INFO_MAP } from '../types';
 import { storageService } from '../services/storageService';
 import { formatShots, formatThb, generateCompositeKey } from '../services/calculationService';
 import { ResizableReorderableTable } from '../components/common/ResizableReorderableTable';
@@ -845,8 +845,8 @@ export const InstallQuantitySetupView: React.FC = () => {
             },
             ...lineIds.map(lId => ({
               id: lId,
-              label: lId,
-              width: 70,
+              label: lId.startsWith('E3-') ? `E3 (${LINE_INFO_MAP[lId]?.shortTag || lId})` : lId,
+              width: 85,
               align: 'center' as const,
               render: (row: any) => (
                 isEditing ? (

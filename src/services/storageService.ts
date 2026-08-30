@@ -1,3 +1,4 @@
+import { getMoldTypeForLine, getStagesForMoldType } from "../utils/moldMatrixUtils";
 import {
   LineLiveMonitoringData,
   LineActiveConfiguration,
@@ -23,7 +24,8 @@ import {
   ProductionLineId,
   UserRole,
   PositionLockRecord,
-  PositionLockStatus
+  PositionLockStatus,
+  MachineStatus
 } from '../types';
 
 import {
@@ -491,6 +493,9 @@ class StorageService {
   }
 
   public saveShotDraft(draft: Partial<ShotEntryRecord>): ShotEntryRecord {
+    if (!draft.operatorName || !draft.operatorName.trim()) {
+      throw new Error('กรุณาระบุชื่อพนักงานผู้บันทึกก่อนบันทึกแบบร่าง (Operator Name is mandatory)');
+    }
     const drafts = this.getShotDrafts();
     const user = this.getCurrentUser();
     const existingIdx = draft.id ? drafts.findIndex(d => d.id === draft.id) : -1;
@@ -510,7 +515,7 @@ class StorageService {
       newTotal: Number(draft.newTotal) || 0,
       entryReason: draft.entryReason || 'Daily Shift Production',
       notes: draft.notes || '',
-      operatorName: user.name,
+      operatorName: draft.operatorName.trim(),
       operatorId: user.employeeId,
       timestamp: new Date().toISOString(),
       status: 'DRAFT',
@@ -673,11 +678,15 @@ class StorageService {
     shotsAdded: number;
     entryReason?: string;
     notes?: string;
+    operatorName?: string;
     draftId?: string;
     allowMultiEntry?: boolean;
     splitPeriods?: { configId: string; dieCode: string; configurationSlot?: string; shotsAdded: number; timeInterval?: string; reason?: string }[];
   }): { success: boolean; record?: ShotEntryRecord; error?: string } {
-    // 1. Validation: Whole numbers
+    // 1. Validation: Whole numbers & Mandatory Operator
+    if (!params.operatorName || !params.operatorName.trim()) {
+      return { success: false, error: 'กรุณาระบุชื่อพนักงานผู้บันทึก (Operator Name is strictly required - บังคับลงชื่อพนักงานทุกครั้ง)' };
+    }
     if (!Number.isInteger(params.shotsAdded) || !Number.isInteger(params.previousTotal) || !Number.isInteger(params.newTotal)) {
       return { success: false, error: 'Shot counts must be strictly whole numbers (จำนวนช็อตต้องเป็นเลขจำนวนเต็มเท่านั้น)' };
     }
@@ -773,7 +782,7 @@ class StorageService {
       newTotal: params.newTotal,
       entryReason: params.entryReason || 'Daily Shift Production',
       notes: params.notes,
-      operatorName: user.name,
+      operatorName: params.operatorName || user.name,
       operatorId: user.employeeId,
       timestamp: new Date().toISOString(),
       status: 'SUBMITTED',
@@ -851,77 +860,161 @@ class StorageService {
   }
 
   public executeCounterReset(params: {
-    lineId: ProductionLineId;
-    previousTotal: number;
+    lineId?: ProductionLineId;
+    targetLine?: 'ALL' | ProductionLineId;
+    previousTotal?: number;
     newResetTotal: number;
     approvalId: string;
     approvedBy: string;
     resetReason: string;
-    shift: 'Shift 1 (Day)' | 'Shift 2 (Night)' | 'Shift 3 (Overtime)';
-    productionDate: string;
+    shift?: 'Shift 1 (Day)' | 'Shift 2 (Night)' | 'Shift 3 (Overtime)';
+    productionDate?: string;
+    resetPartWear?: boolean;
+    resetShiftCounters?: boolean;
     notes?: string;
-  }): { success: boolean; record?: ShotEntryRecord; error?: string } {
+  }): { success: boolean; records?: ShotEntryRecord[]; record?: ShotEntryRecord; affectedLines?: ProductionLineId[]; error?: string } {
     if (!params.approvalId || !params.approvedBy || !params.resetReason) {
-      return { success: false, error: 'Approval ID, Approver Name, and Reset Reason are required for Counter Reset' };
+      return { success: false, error: 'Approval ID, Approver Name, and Reset Reason are required for Counter Reset (ต้องระบุรหัสอนุมัติ, ผู้อนุมัติ และเหตุผล)' };
     }
     if (!Number.isInteger(params.newResetTotal) || params.newResetTotal < 0) {
-      return { success: false, error: 'Reset counter base reading must be a non-negative whole number' };
+      return { success: false, error: 'Reset counter base reading must be a non-negative whole number (เลขมิเตอร์ต้องเป็นจำนวนเต็มบวกหรือศูนย์)' };
     }
 
     const all = this.getLinesMonitoring();
-    const line = all[params.lineId];
-    if (!line) {
-      return { success: false, error: `Production Line ${params.lineId} not found` };
-    }
-
-    const oldTotal = line.machineShotTotal;
-    line.machineShotTotal = params.newResetTotal;
-    line.shiftShot = 0; // Reset shift tally
-    line.lastUpdate = new Date().toISOString().replace('T', ' ').substring(0, 19);
-
-    all[params.lineId] = line;
-    localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(all));
-
+    const standards = this.getLifeStandards();
+    const stocks = this.getSpareStocks();
     const user = this.getCurrentUser();
     const logs = this.getShotLogs();
-    const recordId = `SHOT-RST-${Date.now()}`;
-    const resetRecord: ShotEntryRecord = {
-      id: recordId,
-      lineId: params.lineId,
-      configurationId: line.activeConfig?.id,
-      configurationSlot: line.activeConfig?.configurationSlot || 'SLOT-01',
-      dieCode: line.activeConfig?.dieCode,
-      productionDate: params.productionDate,
-      shift: params.shift,
-      inputMethod: 'METER_READING',
-      entryType: 'COUNTER_RESET',
-      shotsAdded: 0,
-      previousTotal: oldTotal,
-      newTotal: params.newResetTotal,
-      entryReason: `Machine Counter Reset: ${params.resetReason}`,
-      notes: params.notes,
-      operatorName: user.name,
-      operatorId: user.employeeId,
-      timestamp: new Date().toISOString(),
-      status: 'COUNTER_RESET',
-      isCounterReset: true,
-      resetApprovalId: params.approvalId,
-      resetApprovedBy: params.approvedBy,
-      resetReason: params.resetReason
-    };
+    const isAllLines = params.targetLine === 'ALL' || (!params.lineId && !params.targetLine);
+    const targetLineIds: ProductionLineId[] = isAllLines
+      ? (['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5', 'E6'] as ProductionLineId[])
+      : [params.lineId || (params.targetLine as ProductionLineId)];
 
-    logs.unshift(resetRecord);
+    const createdRecords: ShotEntryRecord[] = [];
+    const resetDate = params.productionDate || new Date().toISOString().substring(0, 10);
+    const resetShift = params.shift || 'Shift 1 (Day)';
+    const resetParts = params.resetPartWear !== false; // default true
+    const resetTallies = params.resetShiftCounters !== false; // default true
+
+    targetLineIds.forEach(lId => {
+      const line = all[lId];
+      if (!line) return;
+
+      const oldTotal = line.machineShotTotal || 0;
+      line.machineShotTotal = params.newResetTotal;
+      if (resetTallies) {
+        line.shiftShot = 0;
+        line.dailyShot = 0;
+        line.monthlyShot = 0;
+      } else {
+        line.shiftShot = 0;
+      }
+      line.lastUpdate = new Date().toISOString().replace('T', ' ').substring(0, 19);
+
+      if (resetParts && line.items) {
+        line.items = line.items.map(item => {
+          return calculatePartMetrics(
+            {
+              ...item,
+              usedShot: 0,
+              currentShot: 0,
+              shotAtLastChange: params.newResetTotal,
+              lastChangeShot: params.newResetTotal
+            },
+            line.activeConfig,
+            standards,
+            stocks
+          );
+        });
+      }
+
+      all[lId] = line;
+
+      const recordId = `SHOT-RST-${lId}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const resetRecord: ShotEntryRecord = {
+        id: recordId,
+        lineId: lId,
+        configurationId: line.activeConfig?.id,
+        configurationSlot: line.activeConfig?.configurationSlot || 'SLOT-01',
+        dieCode: line.activeConfig?.dieCode || `FD-${lId}-07`,
+        productionDate: resetDate,
+        shift: resetShift,
+        inputMethod: 'METER_READING',
+        entryType: 'COUNTER_RESET',
+        shotsAdded: 0,
+        previousTotal: oldTotal,
+        newTotal: params.newResetTotal,
+        entryReason: `Machine Counter Reset: ${params.resetReason}`,
+        notes: params.notes || `Counter & Part wear reset from ${oldTotal.toLocaleString()} -> ${params.newResetTotal.toLocaleString()} shots`,
+        operatorName: user.name,
+        operatorId: user.employeeId,
+        timestamp: new Date().toISOString(),
+        status: 'COUNTER_RESET',
+        isCounterReset: true,
+        resetApprovalId: params.approvalId,
+        resetApprovedBy: params.approvedBy,
+        resetReason: params.resetReason
+      };
+
+      createdRecords.push(resetRecord);
+      logs.unshift(resetRecord);
+    });
+
+    localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(all));
     localStorage.setItem(STORAGE_KEYS.SHOT_LOGS, JSON.stringify(logs.slice(0, 500)));
 
+    const linesDesc = isAllLines ? 'ALL LINES (E1-E6)' : `Line ${targetLineIds.join(', ')}`;
     this.addAuditLog(
       'SHOT_ADJUSTMENT',
-      `EXECUTED COUNTER RESET on Line ${params.lineId}: Meter calibrated from ${oldTotal.toLocaleString()} -> ${params.newResetTotal.toLocaleString()} (Approval: ${params.approvalId} by ${params.approvedBy})`,
-      `รีเซ็ตมิเตอร์เครื่อง Fin Press สาย ${params.lineId} จาก ${oldTotal.toLocaleString()} -> ${params.newResetTotal.toLocaleString()} (รหัสอนุมัติ: ${params.approvalId})`,
-      params.lineId
+      `EXECUTED SHOT RESET on ${linesDesc}: Base meter -> ${params.newResetTotal.toLocaleString()} shots (Parts reset: ${resetParts ? 'YES' : 'NO'}, Shift tallies reset: ${resetTallies ? 'YES' : 'NO'}) [Approval: ${params.approvalId} by ${params.approvedBy}]`,
+      `รีเซ็ตยอดช็อตและมิเตอร์ ${linesDesc}: ค่าฐานใหม่ ${params.newResetTotal.toLocaleString()} ช็อต (รีเซ็ตชิ้นส่วน: ${resetParts ? 'ใช่' : 'ไม่'}, รีเซ็ตกะ: ${resetTallies ? 'ใช่' : 'ไม่'}) [รหัสอนุมัติ: ${params.approvalId}]`,
+      isAllLines ? undefined : targetLineIds[0]
     );
 
+    try {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('findie-shot-reset', {
+          detail: {
+            affectedLines: targetLineIds,
+            isAllLines,
+            newResetTotal: params.newResetTotal,
+            resetParts,
+            resetTallies,
+            timestamp: new Date().toISOString()
+          }
+        }));
+      }
+    } catch (_) {}
+
     this.notify();
-    return { success: true, record: resetRecord };
+    return {
+      success: true,
+      records: createdRecords,
+      record: createdRecords[0],
+      affectedLines: targetLineIds
+    };
+  }
+
+  public resetAllLinesShots(options?: {
+    newResetTotal?: number;
+    resetPartWear?: boolean;
+    resetShiftCounters?: boolean;
+    approvalId?: string;
+    approvedBy?: string;
+    resetReason?: string;
+    notes?: string;
+  }) {
+    const user = this.getCurrentUser();
+    return this.executeCounterReset({
+      targetLine: 'ALL',
+      newResetTotal: options?.newResetTotal ?? 0,
+      resetPartWear: options?.resetPartWear ?? true,
+      resetShiftCounters: options?.resetShiftCounters ?? true,
+      approvalId: options?.approvalId || `RST-ALL-${Date.now().toString().slice(-6)}`,
+      approvedBy: options?.approvedBy || user.name || 'System Admin',
+      resetReason: options?.resetReason || 'Factory-wide Tooling & Meter Full Calibration (รีเซ็ตยอดช็อตและมิเตอร์ทุกสาย)',
+      notes: options?.notes || 'Full synchronized reset across all 8 lines and TV monitors'
+    });
   }
 
   public correctShotEntry(
@@ -1774,6 +1867,31 @@ class StorageService {
     this.notify();
   }
 
+  public updateLineMachineStatus(lineId: ProductionLineId, machineStatus: MachineStatus, isActive?: boolean): void {
+    const monitoring = this.getLinesMonitoring();
+    if (monitoring[lineId]) {
+      monitoring[lineId].machineStatus = machineStatus;
+      localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(monitoring));
+    }
+
+    const configs = this.getLineConfigs();
+    const configIdx = configs.findIndex(c => c.lineId === lineId);
+    if (configIdx >= 0) {
+      configs[configIdx].isActive = true;
+      configs[configIdx].status = machineStatus === 'RUNNING' ? 'ACTIVE' : 'INACTIVE';
+      localStorage.setItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
+    }
+
+    this.addAuditLog(
+      'CONFIGURATION',
+      `Updated Line ${lineId} operational status to ${machineStatus}`,
+      `อัปเดตสถานะการผลิตของสาย ${lineId} เป็น ${machineStatus}`,
+      lineId
+    );
+
+    this.notify();
+  }
+
   /**
    * Activates a configuration following strict production workflow:
    * 1. Closes previous active configuration installation period at current machine shot.
@@ -2253,36 +2371,33 @@ class StorageService {
     return locks;
   }
 
+
   private initializeDefaultPositionLocks(): PositionLockRecord[] {
     const lines: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5', 'E6'];
-    const stages = [
-      { stageCode: 'STG-01-DRW1', stageName: '1st Draw Stage', partCode: 'P-DRW1-001', partName: '1st Draw Punch Pin', positions: 24 },
-      { stageCode: 'STG-02-DRW2', stageName: '2nd Draw Stage', partCode: 'P-DRW2-001', partName: '2nd Draw Punch Pin', positions: 24 },
-      { stageCode: 'STG-03-PRC', stageName: 'Piercing Stage', partCode: 'P-PRC-001', partName: 'Piercing Punch', positions: 24 },
-      { stageCode: 'STG-04-SLT', stageName: 'Slit Station', partCode: 'P-SLT-001', partName: 'Slit Knife Punch', positions: 24 },
-      { stageCode: 'STG-05-LOUV', stageName: 'Louver Stage', partCode: 'P-LOUV-001', partName: 'Louver Blade Punch', positions: 24 },
-      { stageCode: 'STG-06-FORM', stageName: 'Forming Stage', partCode: 'P-FORM-001', partName: 'Forming Die Block', positions: 16 },
-      { stageCode: 'STG-07-CUT', stageName: 'Cut-off Station', partCode: 'P-CUT-001', partName: 'Cut-off Shear Blade', positions: 16 },
-      { stageCode: 'STG-08-TRIM', stageName: 'Edge Trim Stage', partCode: 'P-TRIM-001', partName: 'Edge Trim Punch', positions: 16 }
-    ];
-
     const result: PositionLockRecord[] = [];
 
     lines.forEach(lineId => {
-      const dieCode = `FD-${lineId}-07`;
+      let dieCode = `FD-${lineId}-07`;
+      if (lineId === 'E2' || lineId === 'E4' || lineId === 'E5') {
+        dieCode = `FD-${lineId}-05`;
+      }
+      const moldType = getMoldTypeForLine(lineId);
+      const stages = getStagesForMoldType(moldType);
+
       stages.forEach(stg => {
         for (let i = 1; i <= stg.positions; i++) {
           const posStr = i < 10 ? `0${i}` : `${i}`;
-          const isSampleLocked = (lineId === 'E6' && stg.stageCode === 'STG-03-PRC' && (i === 4 || i === 12)) ||
-                                 (lineId === 'E6' && stg.stageCode === 'STG-05-LOUV' && i === 18);
           
           let lockType: PositionLockStatus = 'UNLOCKED';
           let lockReason = '';
           let lockedBy = '';
           let lockedAt = '';
           let notes = '';
+          let isSampleLocked = false;
 
-          if (isSampleLocked) {
+          // Keep some dummy locked data for testing as before
+          if (lineId === 'E6' && stg.stageCode.includes('PRC') && (i === 4 || i === 12)) {
+            isSampleLocked = true;
             if (i === 4) {
               lockType = 'LOCKED_MAINTENANCE';
               lockReason = 'Punch tip chipped - Bypassed for regrinding shift 2';
@@ -2295,17 +2410,18 @@ class StorageService {
               lockedBy = 'Anan K. (Die Specialist)';
               lockedAt = '2026-08-29T08:00:00.000Z';
               notes = 'Counter frozen during sample coil run.';
-            } else if (i === 18) {
-              lockType = 'LOCKED_BYPASS';
-              lockReason = 'Louver blade wear inspection hold';
-              lockedBy = 'Kitti S. (Maintenance Tech)';
-              lockedAt = '2026-08-29T09:15:00.000Z';
-              notes = 'Clearance measured 0.012mm - Needs micro-grind.';
             }
+          } else if (lineId === 'E6' && stg.stageCode.includes('LOUV') && i === 18) {
+            isSampleLocked = true;
+            lockType = 'LOCKED_BYPASS';
+            lockReason = 'Louver blade wear inspection hold';
+            lockedBy = 'Kitti S. (Maintenance Tech)';
+            lockedAt = '2026-08-29T09:15:00.000Z';
+            notes = 'Clearance measured 0.012mm - Needs micro-grind.';
           }
 
           result.push({
-            id: `POS-${lineId}-${stg.stageCode}-P${posStr}`,
+            id: `POS-${lineId}-${stg.stageCode}-${posStr}`,
             lineId,
             dieCode,
             stageCode: stg.stageCode,

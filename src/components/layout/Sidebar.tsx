@@ -105,8 +105,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         {
           id: 'unified-tooling-setup',
-          label: 'Unified Tooling Master Hub',
-          labelTh: 'ศูนย์รวมตั้งค่ามาตรฐานอะไหล่',
+          label: 'Fin Die & Spare Master Hub',
+          labelTh: 'ศูนย์จัดการแม่พิมพ์และอะไหล่',
           icon: SlidersHorizontal,
           badge: 'HUB',
           badgeColor: 'bg-cyan-950 text-cyan-300 border-cyan-500'
@@ -146,15 +146,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   return (
-    <aside
-      className={`flex flex-col flex-shrink-0 transition-all duration-300 relative select-none shadow-2xl h-full min-h-0 sticky top-0 z-30 ${
-        isHmi 
-          ? 'bg-black border-r-2 border-green-500/80 text-green-400 font-mono' 
-          : isLight
-          ? 'bg-slate-50 border-r border-slate-300 text-slate-800 font-sans'
-          : 'bg-[#0B1120] border-r border-slate-800/80 text-slate-200 font-sans'
-      } ${collapsed ? 'w-16' : 'w-64 lg:w-72'}`}
-    >
+    <>
+      {/* Mobile Drawer Backdrop (Mobile only) */}
+      {!collapsed && (
+        <div 
+          onClick={onToggleCollapse}
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 md:hidden transition-opacity"
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Main Sidebar Container */}
+      <aside
+        className={`flex flex-col flex-shrink-0 transition-all duration-300 select-none shadow-2xl h-full min-h-0 z-40 ${
+          isHmi 
+            ? 'bg-black border-r-2 border-green-500/80 text-green-400 font-mono' 
+            : isLight
+            ? 'bg-slate-50 border-r border-slate-300 text-slate-800 font-sans'
+            : 'bg-[#0B1120] border-r border-slate-800/80 text-slate-200 font-sans'
+        } ${
+          // Mobile vs Desktop responsive positioning
+          collapsed 
+            ? 'hidden md:flex md:w-16' 
+            : 'fixed inset-y-0 left-0 w-72 md:relative md:inset-auto md:w-64 lg:w-72'
+        }`}
+      >
       {/* Top Toggle Button Inside Sidebar */}
       {onToggleCollapse && (
         <div className={`p-2 border-b flex items-center justify-between ${
@@ -213,7 +229,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 return (
                   <button
                     key={item.id}
-                    onClick={() => onNavigate(item.id)}
+                    onClick={() => {
+                      onNavigate(item.id);
+                      if (typeof window !== 'undefined' && window.innerWidth < 768 && onToggleCollapse) {
+                        onToggleCollapse();
+                      }
+                    }}
                     className={`w-full flex items-center gap-3 px-3 py-2 rounded text-left transition-all group ${
                       isHmi
                         ? isActive
@@ -294,6 +315,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       )}
     </aside>
+    </>
   );
 };
 

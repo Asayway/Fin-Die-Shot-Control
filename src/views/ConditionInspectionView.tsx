@@ -9,9 +9,10 @@ import {
   History,
   Star
 } from 'lucide-react';
-import { ProductionLineId, ConditionInspectionRecord } from '../types';
+import { ProductionLineId, ConditionInspectionRecord, LINE_INFO_MAP } from '../types';
 import { storageService } from '../services/storageService';
 import { formatShots } from '../services/calculationService';
+import { LineFilterSelector } from '../components/common/LineFilterSelector';
 
 export const ConditionInspectionView: React.FC = () => {
   const [lineId, setLineId] = useState<ProductionLineId>('E6');
@@ -73,6 +74,12 @@ export const ConditionInspectionView: React.FC = () => {
             บันทึกการตรวจเช็คสภาพความสึกหรอของคมตัดแม่พิมพ์ ความสูงครีบฟิน (Burr Height) และการหล่อลื่น
           </p>
         </div>
+
+        <LineFilterSelector
+          selectedLine={lineId}
+          onSelectLine={(l) => setLineId(l as ProductionLineId)}
+          label="LINE:"
+        />
       </div>
 
       {successMsg && (
@@ -100,9 +107,13 @@ export const ConditionInspectionView: React.FC = () => {
                   onChange={e => setLineId(e.target.value as ProductionLineId)}
                   className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm text-slate-100 focus:border-cyan-500 focus:outline-none"
                 >
-                  {['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5', 'E6'].map(l => (
-                    <option key={l} value={l}>Line {l}</option>
-                  ))}
+                  {['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5', 'E6'].map(l => {
+                    const displayLine = l.startsWith('E3-') ? 'E3' : l;
+                    const tag = LINE_INFO_MAP[l as ProductionLineId]?.shortTag || l;
+                    return (
+                      <option key={l} value={l}>Line {displayLine} ({tag})</option>
+                    );
+                  })}
                 </select>
               </div>
 

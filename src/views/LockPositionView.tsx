@@ -32,6 +32,7 @@ import {
 } from '../types';
 import { storageService } from '../services/storageService';
 import { formatShots } from '../services/calculationService';
+import { LineFilterSelector } from '../components/common/LineFilterSelector';
 
 interface LockPositionViewProps {
   initialLineId?: ProductionLineId;
@@ -117,6 +118,7 @@ export const LockPositionView: React.FC<LockPositionViewProps> = ({ initialLineI
   const [showHistoryModal, setShowHistoryModal] = useState<boolean>(false);
 
   const currentUser = storageService.getCurrentUser();
+  const activeConfig = storageService.getLineConfigs().find(c => c.lineId === selectedLineId) || null;
 
   const loadData = () => {
     const data = storageService.getPositionLocks(selectedLineId);
@@ -264,8 +266,8 @@ export const LockPositionView: React.FC<LockPositionViewProps> = ({ initialLineI
 
   return (
     <div className="space-y-4">
-      {/* Top Banner & Line Selector */}
-      <div className="bg-[#0B1322] border border-slate-800/80 rounded-xl p-4 shadow-xl">
+      {/* Top Banner & Line Selector (Sticky Locked at Top) */}
+      <div className="sticky top-0 z-30 bg-[#0B1322]/95 backdrop-blur-md border border-slate-800/80 rounded-xl p-4 shadow-2xl">
         <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-lg bg-cyan-950/60 border border-cyan-500/40 text-cyan-400">
@@ -287,22 +289,11 @@ export const LockPositionView: React.FC<LockPositionViewProps> = ({ initialLineI
           </div>
 
           {/* Line Switcher */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs font-mono font-semibold text-slate-400 mr-1">SELECT LINE:</span>
-            {ALL_LINES.map(line => (
-              <button
-                key={line}
-                onClick={() => setSelectedLineId(line)}
-                className={`px-3 py-1 rounded-md text-xs font-mono font-bold transition-all ${
-                  selectedLineId === line
-                    ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20 ring-1 ring-cyan-400'
-                    : 'bg-slate-900/90 hover:bg-slate-800 text-slate-300 border border-slate-700/80'
-                }`}
-              >
-                {line}
-              </button>
-            ))}
-          </div>
+          <LineFilterSelector
+            selectedLine={selectedLineId}
+            onSelectLine={(line) => setSelectedLineId(line)}
+            label="LINE:"
+          />
         </div>
 
         {/* KPI Metric Summary Strip */}
@@ -521,7 +512,15 @@ export const LockPositionView: React.FC<LockPositionViewProps> = ({ initialLineI
                 </div>
 
                 {/* Interactive Punch Pin Grid */}
-                <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-12 gap-2">
+                <div className="overflow-x-auto pb-4 custom-scrollbar">
+                  <div 
+                    className="grid gap-2 min-w-max" 
+                    style={{ 
+                      gridTemplateColumns: positions.length >= (activeConfig?.rowsCount || 42) 
+                        ? `repeat(${activeConfig?.rowsCount || 60}, minmax(40px, 1fr))` 
+                        : 'repeat(auto-fill, minmax(60px, 1fr))' 
+                    }}
+                  >
                   {positions.map(pos => {
                     const isSelected = selectedIds.includes(pos.id);
                     const lockInfo = LOCK_TYPE_INFO[pos.lockType];
@@ -585,6 +584,7 @@ export const LockPositionView: React.FC<LockPositionViewProps> = ({ initialLineI
                       </div>
                     );
                   })}
+                  </div>
                 </div>
               </div>
             );

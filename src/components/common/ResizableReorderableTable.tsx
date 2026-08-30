@@ -195,10 +195,10 @@ export function ResizableReorderableTable<T>({
 
       {/* Main Resizable & Scrollable Table */}
       <div className="overflow-x-auto border border-slate-800 rounded-xl bg-[#070F1E] shadow-inner custom-scrollbar">
-        <table className="w-full text-left border-collapse font-sans text-xs sm:text-sm">
+        <table className="w-full text-left border-collapse font-sans text-sm sm:text-base md:text-lg">
           {/* Table Header */}
           <thead>
-            <tr className="bg-[#0B172E] border-b border-slate-800 text-cyan-300 font-mono font-bold uppercase select-none">
+            <tr className="bg-[#0B172E] border-b border-slate-800 text-cyan-300 font-mono font-black uppercase select-none text-sm sm:text-base">
               {orderedColumns.map((col, idx) => {
                 const width = colWidths[col.id] || col.width || 140;
                 const alignClass = col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : 'text-left';
@@ -207,7 +207,7 @@ export function ResizableReorderableTable<T>({
                   <th
                     key={col.id}
                     style={{ width: `${width}px`, minWidth: `${col.minWidth || 50}px` }}
-                    className={`relative px-3 py-3 font-extrabold tracking-wider border-r border-slate-800/80 ${alignClass} group`}
+                    className={`relative px-3 py-3.5 font-extrabold tracking-wider border-r border-slate-800/80 ${alignClass} group`}
                   >
                     <div className="flex items-center justify-between gap-1">
                       <span className="truncate">{col.label}</span>
@@ -248,7 +248,7 @@ export function ResizableReorderableTable<T>({
           </thead>
 
           {/* Table Body */}
-          <tbody className="divide-y divide-slate-800/80">
+          <tbody className="divide-y divide-slate-800/80 font-mono font-bold text-sm sm:text-base">
             {data.length === 0 ? (
               <tr>
                 <td colSpan={orderedColumns.length} className="px-4 py-8 text-center text-slate-500 font-thai">
@@ -266,7 +266,7 @@ export function ResizableReorderableTable<T>({
                       <td
                         key={col.id}
                         style={{ width: `${width}px` }}
-                        className={`px-3 py-2.5 border-r border-slate-800/60 ${alignClass}`}
+                        className={`px-3 py-3 border-r border-slate-800/60 ${alignClass}`}
                       >
                         {col.render(row, rowIndex)}
                       </td>

@@ -12,7 +12,7 @@ import {
   Layers,
   ChevronRight
 } from 'lucide-react';
-import { ProductionLineId, LineLiveMonitoringData } from '../types';
+import { ProductionLineId, LineLiveMonitoringData, LINE_INFO_MAP } from '../types';
 import { storageService } from '../services/storageService';
 import { formatShots } from '../services/calculationService';
 import { Badge } from '../components/common/Badge';
@@ -96,9 +96,9 @@ export const LineOverviewView: React.FC<LineOverviewViewProps> = ({ onNavigate }
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-mono font-black text-lg text-cyan-300">
-                      Line {lineId}
+                      Line {lineId.startsWith('E3-') ? 'E3' : lineId}
                     </span>
-                    <span className="text-xs text-slate-400">({lineData.lineName})</span>
+                    <span className="text-xs text-slate-400 font-mono">({LINE_INFO_MAP[lineId]?.shortTag || lineData.lineName})</span>
                   </div>
                   <div className="text-[11px] text-slate-400 font-mono mt-0.5">
                     {lineData.activeConfig?.dieCode || 'N/A'} • {lineData.activeConfig?.tubeSize || 'Ø7'} • {lineData.activeConfig?.material || 'PCM'}

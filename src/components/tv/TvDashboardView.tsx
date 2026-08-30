@@ -9,6 +9,8 @@ import {
   Volume2, 
   VolumeX, 
   RotateCw,
+  RotateCcw,
+  Check,
   Clock,
   Sparkles,
   Info,
@@ -23,7 +25,8 @@ import {
   MachineStatus, 
   PartLiveTrackingItem,
   LifeStatus,
-  StockStatus
+  StockStatus,
+  LINE_INFO_MAP
 } from '../../types';
 import { storageService } from '../../services/storageService';
 import { 
@@ -48,26 +51,48 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
   const [selectedLineId, setSelectedLineId] = useState<ProductionLineId>(initialLineId);
   const [lineData, setLineData] = useState<LineLiveMonitoringData | null>(null);
   
-  // Auto Cycle Options: 0 = OFF, 5, 10, 15, 30 seconds
-  const [autoCycleSeconds, setAutoCycleSeconds] = useState<number>(0);
+  // Auto Cycle Options: 0 = OFF, 5, 10, 15, 30 seconds (Default: 5s Auto Cycle)
+  const [autoCycleSeconds, setAutoCycleSeconds] = useState<number>(5);
   const [highContrast, setHighContrast] = useState<boolean>(false);
-  const [isSimulatingPulse, setIsSimulatingPulse] = useState(true);
+  const [isSimulatingPulse, setIsSimulatingPulse] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<string>('');
   const [selectedModalItem, setSelectedModalItem] = useState<PartLiveTrackingItem | null>(null);
+  const [tvResetModalOpen, setTvResetModalOpen] = useState<boolean>(false);
+  const [tvResetTargetScope, setTvResetTargetScope] = useState<'ALL' | ProductionLineId>('ALL');
+  const [tvResetNewMeter, setTvResetNewMeter] = useState<string>('0');
+  const [tvResetPartWear, setTvResetPartWear] = useState<boolean>(true);
+  const [tvResetShiftCounters, setTvResetShiftCounters] = useState<boolean>(true);
+  const [tvResetToast, setTvResetToast] = useState<string | null>(null);
+
+  // Default standard proportional column widths matching the verified TV layout (sum = 100%)
+  const DEFAULT_TV_COL_WIDTHS: Record<string, number> = {
+    no: 3.5,
+    stage: 18.5,
+    lifeLimit: 9.5,
+    currentShot: 11.0,
+    usage: 6.5,
+    remaining: 11.0,
+    progress: 10.5,
+    lastChange: 11.0,
+    installQty: 5.0,
+    spareQty: 5.0,
+    status: 8.5
+  };
 
   // Proportional Column Resizing State (% width out of the box so it fits 100% screen width seamlessly)
-  const [colWidths, setColWidths] = useState<Record<string, number>>({
-    no: 4,
-    stage: 22,
-    lifeLimit: 10,
-    currentShot: 11,
-    usage: 7,
-    remaining: 11,
-    progress: 11,
-    lastChange: 9,
-    installQty: 4,
-    spareQty: 4,
-    status: 7
+  const [colWidths, setColWidths] = useState<Record<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem('findie_tv_col_widths_v3');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object' && parsed.stage && parsed.currentShot) {
+          return parsed;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return DEFAULT_TV_COL_WIDTHS;
   });
 
   const handleResizeStart = (e: React.MouseEvent, colKey: string) => {
@@ -75,13 +100,21 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
     const startX = e.pageX;
     const container = (e.currentTarget.closest('.table-container') as HTMLElement) || document.body;
     const containerWidth = container.clientWidth || 1200;
-    const startPercent = colWidths[colKey];
+    const startPercent = colWidths[colKey] || DEFAULT_TV_COL_WIDTHS[colKey] || 10;
     
     const onMouseMove = (moveEvent: MouseEvent) => {
       const deltaPx = moveEvent.pageX - startX;
       const deltaPercent = (deltaPx / containerWidth) * 100;
       const newPercent = Math.max(2, Math.min(50, startPercent + deltaPercent));
-      setColWidths(prev => ({ ...prev, [colKey]: parseFloat(newPercent.toFixed(2)) }));
+      setColWidths(prev => {
+        const updated = { ...prev, [colKey]: parseFloat(newPercent.toFixed(2)) };
+        try {
+          localStorage.setItem('findie_tv_col_widths_v3', JSON.stringify(updated));
+        } catch {
+          // ignore
+        }
+        return updated;
+      });
     };
     
     const onMouseUp = () => {
@@ -233,23 +266,39 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
           <span className={`text-xs sm:text-sm font-mono font-black uppercase tracking-wider mr-1 ${
             highContrast ? 'text-yellow-300 text-base' : 'text-cyan-400'
           }`}>LINE:</span>
-          {linesList.map(line => (
-            <button
-              key={line}
-              onClick={() => setSelectedLineId(line)}
-              className={`px-3 py-1 sm:px-4 sm:py-1.5 md:px-5 md:py-2 rounded-lg text-sm sm:text-base md:text-lg font-mono font-black transition-all ${
-                selectedLineId === line
-                  ? highContrast
-                    ? 'bg-yellow-400 text-black border-2 border-white shadow-xl scale-105 font-black'
-                    : 'bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-400/40 ring-2 ring-cyan-300 scale-105'
-                  : highContrast
-                    ? 'bg-zinc-900 text-white border-2 border-zinc-600 hover:bg-zinc-800'
-                    : 'bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/90'
-              }`}
-            >
-              {line}
-            </button>
-          ))}
+          {linesList.map(line => {
+            const info = LINE_INFO_MAP[line];
+            const isSelected = selectedLineId === line;
+            const lineStatus = storageService.getLineMonitoring(line)?.machineStatus || 'RUNNING';
+            const displayLine = line.startsWith('E3-') ? 'E3' : line;
+            return (
+              <button
+                key={line}
+                onClick={() => setSelectedLineId(line)}
+                className={`px-2.5 py-1 sm:px-3 sm:py-1.5 md:px-3.5 md:py-1.5 rounded-lg text-xs sm:text-sm md:text-base font-mono font-black transition-all flex items-center gap-1.5 border whitespace-nowrap ${
+                  isSelected
+                    ? highContrast
+                      ? 'bg-yellow-400 text-black border-2 border-white shadow-xl scale-105 font-black'
+                      : 'bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-400/40 ring-2 ring-cyan-300 scale-105'
+                    : highContrast
+                      ? 'bg-zinc-900 text-white border-2 border-zinc-600 hover:bg-zinc-800'
+                      : 'bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/90'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                  lineStatus === 'RUNNING' ? 'bg-emerald-400 animate-pulse' :
+                  lineStatus === 'IDLE' ? 'bg-amber-400' :
+                  lineStatus === 'MAINTENANCE' ? 'bg-cyan-400' : 'bg-rose-500'
+                }`} />
+                <span>{displayLine}</span>
+                <span className={`text-[10px] px-1 py-0.2 rounded ${
+                  isSelected ? 'bg-slate-950/80 text-cyan-300 font-bold' : 'bg-slate-800 text-slate-400'
+                }`}>
+                  {info?.shortTag || line}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -312,19 +361,17 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
 
       {/* TOP HEADER: CLEAN INDUSTRIAL DISPLAY - flex-none */}
       <div className="flex-none grid grid-cols-12 items-center gap-1.5 sm:gap-3 px-2 sm:px-3 py-1.5 sm:py-2 bg-[#0E172A] border border-slate-800/90 rounded-lg mb-1 sm:mb-1.5 shadow-sm">
-        {/* Line Code Box */}
-        <div className="col-span-3 sm:col-span-2">
-          <div className="inline-block px-2.5 sm:px-4 py-1 bg-cyan-950/40 border border-cyan-500/60 rounded text-cyan-300 font-mono font-bold text-lg sm:text-2xl tracking-wider text-center shadow-inner">
-            {selectedLineId}
+        {/* Center Title & Line Specs (expanded col-span to remove redundant box) */}
+        <div className="col-span-9 text-left pl-2">
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 bg-cyan-950 text-cyan-300 border border-cyan-500/60 rounded font-mono font-bold text-xs sm:text-sm">
+              LINE {selectedLineId}
+            </span>
+            <h2 className="text-sm sm:text-base md:text-lg font-bold tracking-wide text-white uppercase font-['Plus_Jakarta_Sans'] leading-tight">
+              FIN DIE SPARE PARTS SHOT COUNT ({LINE_INFO_MAP[selectedLineId]?.nameTh || selectedLineId})
+            </h2>
           </div>
-        </div>
-
-        {/* Center Title */}
-        <div className="col-span-6 sm:col-span-7 text-center">
-          <h2 className="text-sm sm:text-base md:text-lg font-bold tracking-wide text-white uppercase font-['Plus_Jakarta_Sans'] leading-tight">
-            FIN DIE SPARE PARTS SHOT COUNT
-          </h2>
-          <div className="text-[10px] sm:text-xs font-mono text-cyan-300/90 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2.5 mt-0.5 sm:mt-1">
+          <div className="text-[10px] sm:text-xs font-mono text-cyan-300/90 flex flex-wrap items-center justify-start gap-1.5 sm:gap-2.5 mt-0.5 sm:mt-1">
             <span className="bg-slate-900/90 px-1.5 sm:px-2 py-0.5 rounded border border-slate-800 text-slate-300">
               DIE: <strong className="text-white">{lineData.activeConfig?.dieCode || `FD-${selectedLineId}-07`}</strong>
             </span>
@@ -358,9 +405,12 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
           <div className="text-[9px] sm:text-[10px] font-sans tracking-wide text-slate-400 font-medium uppercase">
             STATUS
           </div>
-          <div className="flex items-center justify-center gap-1 text-emerald-400 font-bold text-xs sm:text-sm md:text-base font-mono">
-            <Play className="w-2.5 h-2.5 sm:w-3 sm:h-3 fill-emerald-400 text-emerald-400" />
-            <span>{lineData.machineStatus}</span>
+          <div className="flex items-center justify-center gap-1 font-bold text-xs sm:text-sm md:text-base font-mono">
+            {lineData.machineStatus === 'RUNNING' && <span className="text-emerald-400 flex items-center gap-1">🟢 RUNNING</span>}
+            {lineData.machineStatus === 'IDLE' && <span className="text-amber-300 flex items-center gap-1">🟡 IDLE</span>}
+            {lineData.machineStatus === 'MAINTENANCE' && <span className="text-cyan-300 flex items-center gap-1">🔧 MAINTENANCE</span>}
+            {lineData.machineStatus === 'STOPPED' && <span className="text-rose-400 flex items-center gap-1">🔴 STOPPED</span>}
+            {(!lineData.machineStatus) && <span className="text-emerald-400 flex items-center gap-1">🟢 RUNNING</span>}
           </div>
         </div>
 
@@ -426,50 +476,50 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-[#070F1E] border-x border-b border-slate-800/90 mb-1 rounded-b-lg shadow-inner table-container">
         <div className="w-full flex-1 flex flex-col min-h-0">
           {/* Table Header Row (flex-none) */}
-          <div className="flex-none bg-[#0B172E] border-b border-slate-800 text-cyan-300 font-bold uppercase flex items-center px-1.5 py-2 select-none relative h-10 md:h-12 text-xs sm:text-sm md:text-base tracking-wider">
-            <div className="h-full flex items-center justify-center flex-shrink-0 border-r border-slate-800/70 relative truncate" style={{ width: `${colWidths.no}%` }}>
-              <span>No.</span>
-              <div className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'no')} />
+          <div className="flex-none bg-[#0B172E] border-b border-slate-800 text-cyan-300 font-bold uppercase flex items-center px-1.5 py-2.5 select-none relative h-11 md:h-12 text-[11px] sm:text-xs md:text-sm lg:text-[14px] tracking-wide">
+            <div className="h-full flex items-center justify-center flex-shrink-0 border-r border-slate-800/70 relative whitespace-nowrap" style={{ width: `${colWidths.no}%` }}>
+              <span>NO.</span>
+              <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'no')} />
             </div>
-            <div className="h-full flex items-center justify-start px-2 sm:px-3 font-sans border-r border-slate-800/70 flex-shrink-0 relative truncate" style={{ width: `${colWidths.stage}%` }}>
+            <div className="h-full flex items-center justify-start px-2 sm:px-3 font-sans border-r border-slate-800/70 flex-shrink-0 relative whitespace-nowrap" style={{ width: `${colWidths.stage}%` }}>
               <span>FIN DIE SPARE PARTS</span>
-              <div className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'stage')} />
+              <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'stage')} />
             </div>
-            <div className="h-full flex items-center justify-end px-1.5 sm:px-2 border-r border-slate-800/70 flex-shrink-0 relative truncate" style={{ width: `${colWidths.lifeLimit}%` }}>
-              <span>LIFE LIMIT (Shot)</span>
-              <div className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'lifeLimit')} />
+            <div className="h-full flex items-center justify-end px-1.5 sm:px-2.5 border-r border-slate-800/70 flex-shrink-0 relative whitespace-nowrap" style={{ width: `${colWidths.lifeLimit}%` }}>
+              <span>LIFE LIMIT (SHOT)</span>
+              <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'lifeLimit')} />
             </div>
-            <div className="h-full flex items-center justify-end px-1.5 sm:px-2 border-r border-slate-800/70 flex-shrink-0 relative truncate" style={{ width: `${colWidths.currentShot}%` }}>
-              <span>CURRENT SHOT (Shot)</span>
-              <div className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'currentShot')} />
+            <div className="h-full flex items-center justify-end px-1.5 sm:px-2.5 border-r border-slate-800/70 flex-shrink-0 relative whitespace-nowrap" style={{ width: `${colWidths.currentShot}%` }}>
+              <span>CURRENT SHOT (SHOT)</span>
+              <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'currentShot')} />
             </div>
-            <div className="h-full flex items-center justify-center px-1 border-r border-slate-800/70 flex-shrink-0 relative truncate" style={{ width: `${colWidths.usage}%` }}>
+            <div className="h-full flex items-center justify-center px-1 border-r border-slate-800/70 flex-shrink-0 relative whitespace-nowrap" style={{ width: `${colWidths.usage}%` }}>
               <span>USAGE %</span>
-              <div className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'usage')} />
+              <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'usage')} />
             </div>
-            <div className="h-full flex items-center justify-end px-1.5 sm:px-2 border-r border-slate-800/70 flex-shrink-0 relative truncate" style={{ width: `${colWidths.remaining}%` }}>
-              <span>REMAINING (Shot)</span>
-              <div className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'remaining')} />
+            <div className="h-full flex items-center justify-end px-1.5 sm:px-2.5 border-r border-slate-800/70 flex-shrink-0 relative whitespace-nowrap" style={{ width: `${colWidths.remaining}%` }}>
+              <span>REMAINING (SHOT)</span>
+              <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'remaining')} />
             </div>
-            <div className="h-full flex items-center justify-center px-1.5 sm:px-2.5 border-r border-slate-800/70 flex-shrink-0 relative truncate" style={{ width: `${colWidths.progress}%` }}>
+            <div className="h-full flex items-center justify-center px-1.5 sm:px-2 border-r border-slate-800/70 flex-shrink-0 relative whitespace-nowrap" style={{ width: `${colWidths.progress}%` }}>
               <span>PROGRESS</span>
-              <div className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'progress')} />
+              <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'progress')} />
             </div>
-            <div className="h-full flex items-center justify-end px-1.5 sm:px-2 border-r border-slate-800/70 flex-shrink-0 hidden md:flex relative truncate" style={{ width: `${colWidths.lastChange}%` }}>
-              <span>LAST CHANGE (Shot)</span>
-              <div className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'lastChange')} />
+            <div className="h-full flex items-center justify-end px-1.5 sm:px-2.5 border-r border-slate-800/70 flex-shrink-0 relative whitespace-nowrap" style={{ width: `${colWidths.lastChange}%` }}>
+              <span>LAST CHANGE (SHOT)</span>
+              <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'lastChange')} />
             </div>
-            <div className="h-full flex items-center justify-center px-1 border-r border-slate-800/70 flex-shrink-0 relative truncate" style={{ width: `${colWidths.installQty}%` }}>
+            <div className="h-full flex items-center justify-center px-1 border-r border-slate-800/70 flex-shrink-0 relative whitespace-nowrap" style={{ width: `${colWidths.installQty}%` }}>
               <span>INST QTY</span>
-              <div className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'installQty')} />
+              <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'installQty')} />
             </div>
-            <div className="h-full flex items-center justify-center px-1 border-r border-slate-800/70 flex-shrink-0 relative truncate" style={{ width: `${colWidths.spareQty}%` }}>
+            <div className="h-full flex items-center justify-center px-1 border-r border-slate-800/70 flex-shrink-0 relative whitespace-nowrap" style={{ width: `${colWidths.spareQty}%` }}>
               <span>SPARE QTY</span>
-              <div className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'spareQty')} />
+              <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'spareQty')} />
             </div>
-            <div className="h-full flex items-center justify-center px-1 flex-shrink-0 relative truncate" style={{ width: `${colWidths.status}%` }}>
+            <div className="h-full flex items-center justify-center px-1 flex-shrink-0 relative whitespace-nowrap" style={{ width: `${colWidths.status}%` }}>
               <span>STATUS</span>
-              <div className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'status')} />
+              <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'status')} />
             </div>
           </div>
 
@@ -487,21 +537,21 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
               let rowHighlight = '';
 
               if (status === 'OVER_LIFE') {
-                usageColor = 'text-red-400 font-black';
+                usageColor = 'text-red-400 font-bold';
                 barColor = 'bg-red-600';
                 barBorder = 'border-red-500';
-                rowHighlight = 'bg-red-950/30';
+                rowHighlight = 'bg-red-950/20';
               } else if (status === 'CRITICAL') {
-                usageColor = 'text-rose-400 font-black';
+                usageColor = 'text-rose-400 font-bold';
                 barColor = 'bg-rose-500';
                 barBorder = 'border-rose-500';
-                rowHighlight = 'bg-rose-950/25';
+                rowHighlight = 'bg-rose-950/20';
               } else if (status === 'PREPARE') {
-                usageColor = 'text-amber-400 font-black';
+                usageColor = 'text-amber-400 font-bold';
                 barColor = 'bg-amber-500';
                 barBorder = 'border-amber-500';
               } else if (status === 'WARNING') {
-                usageColor = 'text-yellow-300 font-black';
+                usageColor = 'text-yellow-300 font-bold';
                 barColor = 'bg-yellow-400';
                 barBorder = 'border-yellow-500';
               }
@@ -510,10 +560,10 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
               let statusLabel = 'NORMAL';
 
               if (status === 'OVER_LIFE') {
-                statusBadgeClass = 'bg-red-950 text-red-200 border-red-500 font-black animate-pulse hover:bg-red-900 shadow-lg shadow-red-900/50';
+                statusBadgeClass = 'bg-red-950 text-red-200 border-red-500 font-bold animate-pulse hover:bg-red-900 shadow-md shadow-red-900/40';
                 statusLabel = 'OVER LIFE';
               } else if (status === 'CRITICAL') {
-                statusBadgeClass = 'bg-rose-950 text-rose-200 border-rose-500 font-black hover:bg-rose-900';
+                statusBadgeClass = 'bg-rose-950 text-rose-200 border-rose-500 font-bold hover:bg-rose-900';
                 statusLabel = 'CRITICAL';
               } else if (status === 'PREPARE') {
                 statusBadgeClass = 'bg-amber-950 text-amber-200 border-amber-500 font-bold hover:bg-amber-900';
@@ -523,41 +573,41 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
                 statusLabel = 'WARNING';
               }
 
-              const rowDensityClass = 'flex-1 min-h-[40px] md:min-h-[48px] py-1.5 md:py-2';
+              const rowDensityClass = 'flex-1 min-h-[42px] md:min-h-[48px] py-1.5 md:py-2';
               const isStdMissing = item.isStandardMissing || item.lifeLimit <= 0;
 
               return (
                 <div 
                   key={item.slotId || idx} 
-                  className={`flex items-center px-1.5 font-mono transition-colors hover:bg-cyan-950/40 ${rowHighlight} ${rowDensityClass}`}
+                  className={`flex items-center px-1.5 font-mono transition-colors hover:bg-cyan-950/30 ${rowHighlight} ${rowDensityClass}`}
                 >
                   {/* No. */}
-                  <div className="h-full flex items-center justify-center text-slate-300 font-bold text-xs sm:text-sm md:text-base flex-shrink-0 border-r border-slate-800/70 truncate" style={{ width: `${colWidths.no}%` }}>
+                  <div className="h-full flex items-center justify-center text-slate-200 font-bold text-sm sm:text-base md:text-lg flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap" style={{ width: `${colWidths.no}%` }}>
                     {idx + 1}
                   </div>
 
                   {/* Fin Die Spare Parts */}
-                  <div className="h-full flex items-center justify-start px-2 sm:px-3 font-sans font-bold text-white truncate border-r border-slate-800/70 tracking-wide flex-shrink-0 text-sm sm:text-base md:text-lg" style={{ width: `${colWidths.stage}%` }}>
+                  <div className="h-full flex items-center justify-start px-2 sm:px-3 font-sans font-bold text-white border-r border-slate-800/70 tracking-wide flex-shrink-0 text-sm sm:text-base md:text-lg whitespace-nowrap truncate" style={{ width: `${colWidths.stage}%` }}>
                     <span className="truncate">{item.stagePunchDie || item.partName}</span>
                   </div>
 
                   {/* Life Limit */}
-                  <div className="h-full flex items-center justify-end px-1.5 sm:px-2 text-slate-200 font-bold flex-shrink-0 border-r border-slate-800/70 truncate text-xs sm:text-sm md:text-base" style={{ width: `${colWidths.lifeLimit}%` }}>
-                    {isStdMissing ? <span className="text-amber-400 text-xs italic">MISSING</span> : formatShots(item.lifeLimit)}
+                  <div className="h-full flex items-center justify-end px-1.5 sm:px-2.5 text-slate-200 font-bold flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap text-sm sm:text-base md:text-lg" style={{ width: `${colWidths.lifeLimit}%` }}>
+                    {isStdMissing ? <span className="text-amber-400 text-xs sm:text-sm italic">MISSING</span> : formatShots(item.lifeLimit)}
                   </div>
 
                   {/* Used Shot */}
-                  <div className="h-full flex items-center justify-end px-1.5 sm:px-2 text-cyan-200 font-black flex-shrink-0 border-r border-slate-800/70 truncate text-sm sm:text-base md:text-lg tracking-tight" style={{ width: `${colWidths.currentShot}%` }}>
+                  <div className="h-full flex items-center justify-end px-1.5 sm:px-2.5 text-cyan-200 font-bold flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap text-sm sm:text-base md:text-lg tracking-tight" style={{ width: `${colWidths.currentShot}%` }}>
                     {formatShots(usedShotVal)}
                   </div>
 
                   {/* Usage % */}
-                  <div className={`h-full flex items-center justify-center px-1 font-black flex-shrink-0 border-r border-slate-800/70 truncate text-sm sm:text-base md:text-lg ${usageColor}`} style={{ width: `${colWidths.usage}%` }}>
+                  <div className={`h-full flex items-center justify-center px-1 font-bold flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap text-sm sm:text-base md:text-lg ${usageColor}`} style={{ width: `${colWidths.usage}%` }}>
                     {isStdMissing ? 'N/A' : `${item.usagePercent}%`}
                   </div>
 
                   {/* Remaining Shot */}
-                  <div className={`h-full flex items-center justify-end px-1.5 sm:px-2 font-black flex-shrink-0 border-r border-slate-800/70 truncate text-sm sm:text-base md:text-lg tracking-tight ${
+                  <div className={`h-full flex items-center justify-end px-1.5 sm:px-2.5 font-bold flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap text-sm sm:text-base md:text-lg tracking-tight ${
                     item.remainingShot < 0 ? 'text-red-400' : 'text-slate-100'
                   }`} style={{ width: `${colWidths.remaining}%` }}>
                     {isStdMissing ? 'N/A' : formatShots(item.remainingShot)}
@@ -565,41 +615,41 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
 
                   {/* Progress Bar */}
                   <div className="h-full flex items-center justify-center px-1.5 sm:px-2 flex-shrink-0 border-r border-slate-800/70" style={{ width: `${colWidths.progress}%` }}>
-                    <div className={`relative w-full bg-slate-900/90 h-6 sm:h-7 rounded border ${barBorder} overflow-hidden flex items-center shadow-inner`}>
+                    <div className={`relative w-full bg-slate-900/90 h-6 sm:h-7 md:h-8 rounded border ${barBorder} overflow-hidden flex items-center shadow-inner`}>
                       {!isStdMissing && (
                         <div
                           className={`h-full ${barColor} transition-all duration-300`}
                           style={{ width: `${Math.min(100, Math.max(0, item.usagePercent))}%` }}
                         />
                       )}
-                      <span className="absolute inset-0 flex items-center justify-center text-xs sm:text-sm md:text-base font-mono font-black text-white drop-shadow-[0_1.5px_3px_rgba(0,0,0,1)]">
+                      <span className="absolute inset-0 flex items-center justify-center text-xs sm:text-sm md:text-base font-mono font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
                         {isStdMissing ? 'N/A' : `${item.usagePercent}%`}
                       </span>
                     </div>
                   </div>
 
                   {/* Shot at Last Change */}
-                  <div className="h-full items-center justify-end px-1.5 sm:px-2 text-slate-300 font-bold flex-shrink-0 border-r border-slate-800/70 hidden md:flex truncate text-xs sm:text-sm md:text-base" style={{ width: `${colWidths.lastChange}%` }}>
+                  <div className="h-full flex items-center justify-end px-1.5 sm:px-2.5 text-slate-200 font-bold flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap text-sm sm:text-base md:text-lg" style={{ width: `${colWidths.lastChange}%` }}>
                     {formatShots(shotAtLastChangeVal)}
                   </div>
 
                   {/* Install Qty */}
-                  <div className="h-full flex items-center justify-center px-1 text-slate-100 font-bold flex-shrink-0 border-r border-slate-800/70 truncate text-xs sm:text-sm md:text-base" style={{ width: `${colWidths.installQty}%` }}>
+                  <div className="h-full flex items-center justify-center px-1 text-slate-100 font-bold flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap text-sm sm:text-base md:text-lg" style={{ width: `${colWidths.installQty}%` }}>
                     {item.installQty}
                   </div>
 
                   {/* Available Spare */}
-                  <div className="h-full flex items-center justify-center px-1 text-slate-100 font-bold flex-shrink-0 border-r border-slate-800/70 truncate text-xs sm:text-sm md:text-base" style={{ width: `${colWidths.spareQty}%` }}>
+                  <div className="h-full flex items-center justify-center px-1 text-slate-100 font-bold flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap text-sm sm:text-base md:text-lg" style={{ width: `${colWidths.spareQty}%` }}>
                     {availableSpareVal}
                   </div>
 
                   {/* Life Status Column (Clickable to open detail modal) */}
-                  <div className="h-full flex items-center justify-center px-1 flex-shrink-0 truncate" style={{ width: `${colWidths.status}%` }}>
+                  <div className="h-full flex items-center justify-center px-1 flex-shrink-0" style={{ width: `${colWidths.status}%` }}>
                     <button
                       type="button"
                       onClick={() => setSelectedModalItem(item)}
-                      className={`w-full py-1.5 sm:py-2 rounded text-xs sm:text-sm md:text-base font-black font-mono border truncate transition-all shadow-md ${statusBadgeClass}`}
-                      title="กดเพื่อดูรายละเอียดแจ้งเตือนเฉพาะ Parts นี้"
+                      className={`w-full py-1.5 px-1 rounded text-[11px] sm:text-xs md:text-sm font-bold font-mono border whitespace-nowrap transition-all shadow ${statusBadgeClass}`}
+                      title="กดเพื่อดูรายละเอียดสถานะและการจัดการของชิ้นส่วนนี้"
                     >
                       {statusLabel}
                     </button>

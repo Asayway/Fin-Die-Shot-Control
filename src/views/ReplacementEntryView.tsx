@@ -38,6 +38,7 @@ import {
 } from '../types';
 import { storageService } from '../services/storageService';
 import { formatShots } from '../services/calculationService';
+import { LineFilterSelector } from '../components/common/LineFilterSelector';
 
 interface ReplacementEntryViewProps {
   initialLineId?: ProductionLineId;
@@ -455,8 +456,8 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
 
   return (
     <div className="space-y-3">
-      {/* Integrated Top Header Card & Line + Tabs Navigation */}
-      <div id="replacement-header" className="bg-slate-900 border border-slate-800 rounded-xl p-3 sm:p-4 space-y-3 shadow-lg">
+      {/* Integrated Top Header Card & Line + Tabs Navigation (Sticky Locked at Top) */}
+      <div id="replacement-header" className="sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-xl p-3 sm:p-4 space-y-3 shadow-2xl">
         {/* Row 1: Title & Line Selector Pills */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-2 border-b border-slate-800/80">
           <div>
@@ -474,23 +475,11 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
           </div>
 
           {/* Line Selector Pills */}
-          <div className="flex items-center gap-1.5 flex-wrap bg-slate-950 p-1 rounded-lg border border-slate-800">
-            <span className="text-xs font-mono font-black text-cyan-400 px-2 uppercase tracking-wider">LINE:</span>
-            {linesList.map(line => (
-              <button
-                id={`line-tab-${line}`}
-                key={line}
-                onClick={() => setSelectedLineId(line)}
-                className={`px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-lg text-xs sm:text-sm font-mono font-black transition-all ${
-                  selectedLineId === line
-                    ? 'bg-cyan-400 text-slate-950 shadow-md shadow-cyan-400/40 ring-2 ring-cyan-300 scale-105'
-                    : 'bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80'
-                }`}
-              >
-                {line}
-              </button>
-            ))}
-          </div>
+          <LineFilterSelector
+            selectedLine={selectedLineId}
+            onSelectLine={(line) => setSelectedLineId(line)}
+            label="LINE:"
+          />
         </div>
 
         {/* Row 2: Navigation Tabs */}

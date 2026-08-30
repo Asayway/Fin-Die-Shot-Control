@@ -237,8 +237,8 @@ export const SpareStockProcurementView: React.FC = () => {
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-4 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+      {/* Filter and Search Bar (Sticky Locked at Top) */}
+      <div className="sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-lg p-4 flex flex-wrap items-center justify-between gap-3 text-xs font-mono shadow-2xl">
         <div className="flex items-center gap-2 flex-1 min-w-[240px]">
           <Search className="w-4 h-4 text-slate-400" />
           <input

@@ -4,6 +4,91 @@
 
 export type ProductionLineId = 'E1' | 'E2' | 'E3-1' | 'E3-2' | 'E3-3' | 'E4' | 'E5' | 'E6';
 
+export interface LineInfoDetails {
+  id: ProductionLineId;
+  name: string;
+  nameTh: string;
+  shortTag: string;
+  tubeSize: TubeSize;
+  finType: string;
+  description: string;
+}
+
+export const LINE_INFO_MAP: Record<ProductionLineId, LineInfoDetails> = {
+  'E1': {
+    id: 'E1',
+    name: 'LINE E1',
+    nameTh: 'ไลน์ E1 (Ø7 Slit)',
+    shortTag: 'Ø7 Slit',
+    tubeSize: 'Ø7',
+    finType: 'Slit (half)',
+    description: 'Condenser Ø7 PCM Slit'
+  },
+  'E2': {
+    id: 'E2',
+    name: 'LINE E2',
+    nameTh: 'ไลน์ E2 (Ø5 Slit)',
+    shortTag: 'Ø5 Slit',
+    tubeSize: 'Ø5',
+    finType: 'Slit (half)',
+    description: 'Micro-groove Ø5 Gold Slit'
+  },
+  'E3-1': {
+    id: 'E3-1',
+    name: 'LINE E3',
+    nameTh: 'ไลน์ E3 (Slit 3P)',
+    shortTag: 'Slit 3P',
+    tubeSize: 'Ø7',
+    finType: 'Slit 3-Pass',
+    description: 'Evaporator Ø7 PCM Slit 3P'
+  },
+  'E3-2': {
+    id: 'E3-2',
+    name: 'LINE E3',
+    nameTh: 'ไลน์ E3 (WL+ 4P)',
+    shortTag: 'WL+ 4P',
+    tubeSize: 'Ø7',
+    finType: 'Wavy Louver 4P',
+    description: 'Evaporator Ø7 Wavy Louver 4P'
+  },
+  'E3-3': {
+    id: 'E3-3',
+    name: 'LINE E3',
+    nameTh: 'ไลน์ E3 (Corr 4P)',
+    shortTag: 'Corr 4P',
+    tubeSize: 'Ø7',
+    finType: 'Corrugate 4P',
+    description: 'Evaporator Ø7 Corrugate 4P'
+  },
+  'E4': {
+    id: 'E4',
+    name: 'LINE E4',
+    nameTh: 'ไลน์ E4 (Ø5 Slit)',
+    shortTag: 'Ø5 Slit',
+    tubeSize: 'Ø5',
+    finType: 'Slit (half)',
+    description: 'High Speed Ø5 Bare Slit'
+  },
+  'E5': {
+    id: 'E5',
+    name: 'LINE E5',
+    nameTh: 'ไลน์ E5 (Ø5 Slit)',
+    shortTag: 'Ø5 Slit',
+    tubeSize: 'Ø5',
+    finType: 'Slit (half)',
+    description: 'High Speed Ø5 Gold Slit'
+  },
+  'E6': {
+    id: 'E6',
+    name: 'LINE E6',
+    nameTh: 'ไลน์ E6 (Ø7 Louver)',
+    shortTag: 'Ø7 Louver',
+    tubeSize: 'Ø7',
+    finType: 'Lover',
+    description: 'Heavy Duty Ø7 PCM Louver'
+  }
+};
+
 export type AluminumMaterial = 'PCM' | 'GOLD' | 'BARE' | string;
 export type FinMaterial = AluminumMaterial;
 
@@ -240,6 +325,7 @@ export interface LineActiveConfiguration {
   effectiveTo?: string;
   status?: ConfigurationStatus;
   isActive: boolean;
+  defaultSpm?: number;
   reasonForChange?: string;
   revision?: string; // e.g. "Rev 1.0", "Rev 1.1", "Rev 2.0"
   versionNumber?: number;
@@ -631,7 +717,7 @@ export interface AuditLogEntry {
   actionCategory?: 'CONFIGURATION' | 'STANDARD_CHANGE' | 'SHOT_ADJUSTMENT' | 'REPLACEMENT' | 'REGRIND' | 'APPROVAL' | 'SYSTEM' | 'STOCK' | 'PROCUREMENT';
 }
 
-export type AppTheme = 'dark' | 'hmi' | 'industrial-dark';
+export type AppTheme = 'dark' | 'light' | 'hmi' | 'industrial-dark';
 
 export interface SystemSettings {
   language: 'EN' | 'TH' | 'DUAL';
