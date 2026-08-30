@@ -13,7 +13,9 @@ import {
   Sparkles,
   Info,
   ChevronDown,
-  ShieldAlert
+  ShieldAlert,
+  Eye,
+  X
 } from 'lucide-react';
 import { 
   LineLiveMonitoringData, 
@@ -45,9 +47,51 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
 }) => {
   const [selectedLineId, setSelectedLineId] = useState<ProductionLineId>(initialLineId);
   const [lineData, setLineData] = useState<LineLiveMonitoringData | null>(null);
-  const [autoCycle, setAutoCycle] = useState(false);
+  
+  // Auto Cycle Options: 0 = OFF, 5, 10, 15, 30 seconds
+  const [autoCycleSeconds, setAutoCycleSeconds] = useState<number>(0);
+  const [highContrast, setHighContrast] = useState<boolean>(false);
   const [isSimulatingPulse, setIsSimulatingPulse] = useState(true);
   const [currentTime, setCurrentTime] = useState<string>('');
+  const [selectedModalItem, setSelectedModalItem] = useState<PartLiveTrackingItem | null>(null);
+
+  // Proportional Column Resizing State (% width out of the box so it fits 100% screen width seamlessly)
+  const [colWidths, setColWidths] = useState<Record<string, number>>({
+    no: 4,
+    stage: 22,
+    lifeLimit: 10,
+    currentShot: 11,
+    usage: 7,
+    remaining: 11,
+    progress: 11,
+    lastChange: 9,
+    installQty: 4,
+    spareQty: 4,
+    status: 7
+  });
+
+  const handleResizeStart = (e: React.MouseEvent, colKey: string) => {
+    e.preventDefault();
+    const startX = e.pageX;
+    const container = (e.currentTarget.closest('.table-container') as HTMLElement) || document.body;
+    const containerWidth = container.clientWidth || 1200;
+    const startPercent = colWidths[colKey];
+    
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const deltaPx = moveEvent.pageX - startX;
+      const deltaPercent = (deltaPx / containerWidth) * 100;
+      const newPercent = Math.max(2, Math.min(50, startPercent + deltaPercent));
+      setColWidths(prev => ({ ...prev, [colKey]: parseFloat(newPercent.toFixed(2)) }));
+    };
+    
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+    
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  };
 
   const linesList: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5', 'E6'];
 
@@ -119,17 +163,24 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
     return () => clearInterval(timer);
   }, []);
 
-  // TV Auto-Cycle lines every 15 seconds if enabled
+  // TV Auto-Cycle lines with custom configurable intervals: OFF, 5s, 10s, 15s, 30s
+  const cycleIntervals = [0, 5, 10, 15, 30];
+  const handleToggleAutoCycle = () => {
+    const currentIdx = cycleIntervals.indexOf(autoCycleSeconds);
+    const nextIdx = (currentIdx + 1) % cycleIntervals.length;
+    setAutoCycleSeconds(cycleIntervals[nextIdx]);
+  };
+
   useEffect(() => {
-    if (!autoCycle) return;
+    if (autoCycleSeconds <= 0) return;
     const interval = setInterval(() => {
       setSelectedLineId(prev => {
         const nextIdx = (linesList.indexOf(prev) + 1) % linesList.length;
         return linesList[nextIdx];
       });
-    }, 15000);
+    }, autoCycleSeconds * 1000);
     return () => clearInterval(interval);
-  }, [autoCycle]);
+  }, [autoCycleSeconds]);
 
   // Simulated live shot pulse counter (PLC heartbeat)
   useEffect(() => {
@@ -174,18 +225,26 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
         : 'h-[calc(100vh-84px)] min-h-[560px] p-2 sm:p-3 md:p-3.5 rounded-xl'
     }`}>
       
-      {/* Top TV Controls Bar (Line Switcher, Auto Cycle, Sample Badge, Fullscreen) - flex-none */}
-      <div className="flex-none flex flex-wrap items-center justify-between gap-1 sm:gap-2 pb-1 sm:pb-1.5 mb-1 sm:mb-1.5 border-b border-slate-800/80 text-xs">
-        <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap">
-          <span className="text-[10px] sm:text-[11px] font-mono font-semibold text-slate-400 mr-0.5 tracking-wide">LINE:</span>
+      {/* Top TV Controls Bar (Line Switcher, Auto Cycle, High Contrast, Fullscreen) - flex-none */}
+      <div className={`flex-none flex flex-wrap items-center justify-between gap-2 pb-2 mb-1.5 border-b ${
+        highContrast ? 'border-yellow-400 border-b-2' : 'border-slate-800/80'
+      }`}>
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+          <span className={`text-xs sm:text-sm font-mono font-black uppercase tracking-wider mr-1 ${
+            highContrast ? 'text-yellow-300 text-base' : 'text-cyan-400'
+          }`}>LINE:</span>
           {linesList.map(line => (
             <button
               key={line}
               onClick={() => setSelectedLineId(line)}
-              className={`px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded text-[10px] sm:text-xs font-mono font-bold transition-all ${
+              className={`px-3 py-1 sm:px-4 sm:py-1.5 md:px-5 md:py-2 rounded-lg text-sm sm:text-base md:text-lg font-mono font-black transition-all ${
                 selectedLineId === line
-                  ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20 ring-1 ring-cyan-400'
-                  : 'bg-slate-900/90 hover:bg-slate-800 text-slate-300 border border-slate-700/80'
+                  ? highContrast
+                    ? 'bg-yellow-400 text-black border-2 border-white shadow-xl scale-105 font-black'
+                    : 'bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-400/40 ring-2 ring-cyan-300 scale-105'
+                  : highContrast
+                    ? 'bg-zinc-900 text-white border-2 border-zinc-600 hover:bg-zinc-800'
+                    : 'bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/90'
               }`}
             >
               {line}
@@ -193,46 +252,59 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
           ))}
         </div>
 
-        <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap">
-          {/* SAMPLE DATA - NOT FOR PRODUCTION BADGE */}
-          <div className="hidden lg:flex items-center gap-1 px-2 py-0.5 rounded bg-amber-950/60 border border-amber-500/60 text-amber-300 font-mono font-semibold text-[10px] shadow-sm tracking-wider">
-            <ShieldAlert className="w-3 h-3 text-amber-400 flex-shrink-0" />
-            <span>SAMPLE DATA - NOT FOR PRODUCTION</span>
-          </div>
-
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* HIGH CONTRAST TOGGLE BUTTON */}
           <button
-            onClick={() => setAutoCycle(!autoCycle)}
-            className={`flex items-center gap-1 px-1.5 py-0.5 sm:px-2 sm:py-0.5 rounded text-[10px] font-mono font-medium border transition-colors ${
-              autoCycle
-                ? 'bg-amber-950/70 text-amber-300 border-amber-600/80'
-                : 'bg-slate-900/80 text-slate-400 border-slate-700/80 hover:text-slate-200'
+            onClick={() => setHighContrast(!highContrast)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-mono font-black border-2 transition-all ${
+              highContrast
+                ? 'bg-yellow-400 text-black border-white shadow-lg ring-2 ring-yellow-300 font-black'
+                : 'bg-slate-900 text-yellow-400 border-yellow-500/60 hover:bg-slate-800'
             }`}
-            title="Auto-switch line every 15 seconds"
+            title="Toggle High Contrast Display Mode for older TV monitors"
           >
-            <RotateCw className={`w-3 h-3 ${autoCycle ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">AUTO-CYCLE</span> <span>{autoCycle ? '15s' : 'OFF'}</span>
+            <Eye className={`w-4 h-4 ${highContrast ? 'text-black' : 'text-yellow-400'}`} />
+            <span>HIGH CONTRAST</span>
+            <span className="font-black px-1.5 py-0.5 rounded bg-black/30 text-white text-[11px]">{highContrast ? 'ON' : 'OFF'}</span>
+          </button>
+
+          {/* AUTO-CYCLE TIMER SELECTOR BUTTON (OFF, 5s, 10s, 15s, 30s) */}
+          <button
+            onClick={handleToggleAutoCycle}
+            className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-mono font-black border-2 transition-all ${
+              autoCycleSeconds > 0
+                ? 'bg-amber-400 text-slate-950 border-amber-200 shadow-md ring-2 ring-amber-300'
+                : 'bg-slate-900 text-slate-300 border-slate-700 hover:text-white'
+            }`}
+            title="Click to cycle Auto-Switch timer: OFF -> 5s -> 10s -> 15s -> 30s -> OFF"
+          >
+            <RotateCw className={`w-4 h-4 ${autoCycleSeconds > 0 ? 'animate-spin text-slate-950' : ''}`} />
+            <span className="hidden sm:inline">AUTO-CYCLE</span>
+            <span className="font-extrabold px-1.5 py-0.5 bg-black/40 text-white rounded text-xs">
+              {autoCycleSeconds > 0 ? `${autoCycleSeconds}s` : 'OFF'}
+            </span>
           </button>
 
           <button
             onClick={() => setIsSimulatingPulse(!isSimulatingPulse)}
-            className={`flex items-center gap-1 px-1.5 py-0.5 sm:px-2 sm:py-0.5 rounded text-[10px] font-mono font-medium border transition-colors ${
+            className={`flex items-center gap-1 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg text-xs sm:text-sm font-mono font-bold border transition-colors ${
               isSimulatingPulse
-                ? 'bg-emerald-950/70 text-emerald-300 border-emerald-600/80'
-                : 'bg-slate-900/80 text-slate-400 border-slate-700/80 hover:text-slate-200'
+                ? 'bg-emerald-950 text-emerald-300 border-emerald-500 shadow-md'
+                : 'bg-slate-900 text-slate-400 border-slate-700 hover:text-slate-200'
             }`}
             title="Toggle simulated live PLC shot pulses"
           >
-            <Sparkles className="w-3 h-3 text-cyan-400" />
+            <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
             <span className="hidden sm:inline">PLC</span> <span>{isSimulatingPulse ? 'LIVE' : 'PAUSED'}</span>
           </button>
 
           {onToggleFullscreen && (
             <button
               onClick={onToggleFullscreen}
-              className="p-1 sm:p-1.5 rounded bg-slate-800/80 text-cyan-300 border border-slate-700/80 hover:bg-slate-700 transition-colors"
+              className="p-1.5 sm:p-2 rounded-lg bg-slate-800 text-cyan-300 border border-slate-700 hover:bg-slate-700 transition-colors shadow-sm"
               title={isFullscreenMode ? "Exit Fullscreen TV (ย่อหน้าจอ)" : "Expand Fullscreen TV (ขยายเต็มจอ)"}
             >
-              {isFullscreenMode ? <Minimize2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Maximize2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
+              {isFullscreenMode ? <Minimize2 className="w-4 h-4 sm:w-5 sm:h-5" /> : <Maximize2 className="w-4 h-4 sm:w-5 sm:h-5" />}
             </button>
           )}
         </div>
@@ -345,255 +417,318 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
       </div>
 
       {/* TABLE SECTION TITLE - flex-none */}
-      <div className="flex-none bg-[#0C1A33] border border-slate-800 text-center py-1 rounded-t-lg text-xs sm:text-sm font-bold tracking-wider text-cyan-200 uppercase font-sans">
-        FIN DIE PART LIFE MONITORING
+      <div className="flex-none bg-[#0C1A33] border border-slate-800 text-center py-1 rounded-t-lg text-xs sm:text-sm font-bold tracking-wider text-cyan-200 uppercase font-sans flex items-center justify-between px-3">
+        <span>FIN DIE PART LIFE MONITORING - LINE {selectedLineId}</span>
+        <span className="text-[10px] text-slate-400 font-mono">กดที่ปุ่ม STATUS เพื่อดูรายละเอียดสถานะและแจ้งเตือนของแต่ละชิ้นส่วน</span>
       </div>
 
       {/* TV MAIN MONITORING CONTAINER (FLEX-1 AUTO-STRETCH TO FILL 100% SCREEN HEIGHT) */}
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-[#070F1E] border-x border-b border-slate-800/90 mb-1 sm:mb-1.5 rounded-b-lg shadow-inner">
-        {/* Table Header Row (flex-none) */}
-        <div className="flex-none bg-[#0B172E] border-b border-slate-800 text-cyan-300/90 text-[10px] sm:text-xs font-semibold uppercase flex items-center px-2 py-1.5 select-none">
-          <div className="w-8 sm:w-10 text-center flex-shrink-0 border-r border-slate-800/70">No.</div>
-          <div className="flex-1 min-w-[120px] px-2 sm:px-3 text-left font-sans border-r border-slate-800/70">STAGE PUNCH / DIE</div>
-          <div className="w-20 sm:w-24 md:w-28 text-right px-1.5 sm:px-2 border-r border-slate-800/70 flex-shrink-0">LIFE LIMIT</div>
-          <div className="w-20 sm:w-24 md:w-28 text-right px-1.5 sm:px-2 border-r border-slate-800/70 flex-shrink-0">USED SHOT</div>
-          <div className="w-14 sm:w-16 md:w-20 text-center px-1 border-r border-slate-800/70 flex-shrink-0">USAGE %</div>
-          <div className="w-20 sm:w-24 md:w-28 text-right px-1.5 sm:px-2 border-r border-slate-800/70 flex-shrink-0">REMAINING</div>
-          <div className="w-28 sm:w-36 md:w-44 text-center px-1.5 sm:px-2.5 border-r border-slate-800/70 flex-shrink-0">PROGRESS</div>
-          <div className="w-20 sm:w-24 md:w-28 text-right px-1.5 sm:px-2 border-r border-slate-800/70 flex-shrink-0 hidden md:block">LAST CHG SHOT</div>
-          <div className="w-10 sm:w-12 text-center px-1 border-r border-slate-800/70 flex-shrink-0">INST.</div>
-          <div className="w-10 sm:w-12 text-center px-1 border-r border-slate-800/70 flex-shrink-0">SPARE</div>
-          <div className="w-16 sm:w-20 md:w-24 text-center px-1 border-r border-slate-800/70 flex-shrink-0">STATUS</div>
-          <div className="w-20 sm:w-24 md:w-28 text-center px-1 flex-shrink-0">ORDER</div>
-        </div>
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-[#070F1E] border-x border-b border-slate-800/90 mb-1 rounded-b-lg shadow-inner table-container">
+        <div className="w-full flex-1 flex flex-col min-h-0">
+          {/* Table Header Row (flex-none) */}
+          <div className="flex-none bg-[#0B172E] border-b border-slate-800 text-cyan-300 font-bold uppercase flex items-center px-1.5 py-2 select-none relative h-10 md:h-12 text-xs sm:text-sm md:text-base tracking-wider">
+            <div className="h-full flex items-center justify-center flex-shrink-0 border-r border-slate-800/70 relative truncate" style={{ width: `${colWidths.no}%` }}>
+              <span>No.</span>
+              <div className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'no')} />
+            </div>
+            <div className="h-full flex items-center justify-start px-2 sm:px-3 font-sans border-r border-slate-800/70 flex-shrink-0 relative truncate" style={{ width: `${colWidths.stage}%` }}>
+              <span>FIN DIE SPARE PARTS</span>
+              <div className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'stage')} />
+            </div>
+            <div className="h-full flex items-center justify-end px-1.5 sm:px-2 border-r border-slate-800/70 flex-shrink-0 relative truncate" style={{ width: `${colWidths.lifeLimit}%` }}>
+              <span>LIFE LIMIT (Shot)</span>
+              <div className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'lifeLimit')} />
+            </div>
+            <div className="h-full flex items-center justify-end px-1.5 sm:px-2 border-r border-slate-800/70 flex-shrink-0 relative truncate" style={{ width: `${colWidths.currentShot}%` }}>
+              <span>CURRENT SHOT (Shot)</span>
+              <div className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'currentShot')} />
+            </div>
+            <div className="h-full flex items-center justify-center px-1 border-r border-slate-800/70 flex-shrink-0 relative truncate" style={{ width: `${colWidths.usage}%` }}>
+              <span>USAGE %</span>
+              <div className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'usage')} />
+            </div>
+            <div className="h-full flex items-center justify-end px-1.5 sm:px-2 border-r border-slate-800/70 flex-shrink-0 relative truncate" style={{ width: `${colWidths.remaining}%` }}>
+              <span>REMAINING (Shot)</span>
+              <div className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'remaining')} />
+            </div>
+            <div className="h-full flex items-center justify-center px-1.5 sm:px-2.5 border-r border-slate-800/70 flex-shrink-0 relative truncate" style={{ width: `${colWidths.progress}%` }}>
+              <span>PROGRESS</span>
+              <div className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'progress')} />
+            </div>
+            <div className="h-full flex items-center justify-end px-1.5 sm:px-2 border-r border-slate-800/70 flex-shrink-0 hidden md:flex relative truncate" style={{ width: `${colWidths.lastChange}%` }}>
+              <span>LAST CHANGE (Shot)</span>
+              <div className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'lastChange')} />
+            </div>
+            <div className="h-full flex items-center justify-center px-1 border-r border-slate-800/70 flex-shrink-0 relative truncate" style={{ width: `${colWidths.installQty}%` }}>
+              <span>INST QTY</span>
+              <div className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'installQty')} />
+            </div>
+            <div className="h-full flex items-center justify-center px-1 border-r border-slate-800/70 flex-shrink-0 relative truncate" style={{ width: `${colWidths.spareQty}%` }}>
+              <span>SPARE QTY</span>
+              <div className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'spareQty')} />
+            </div>
+            <div className="h-full flex items-center justify-center px-1 flex-shrink-0 relative truncate" style={{ width: `${colWidths.status}%` }}>
+              <span>STATUS</span>
+              <div className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'status')} />
+            </div>
+          </div>
 
-        {/* Table Rows Body: flex-1 flex flex-col so rows evenly divide available vertical height */}
-        <div className="flex-1 flex flex-col min-h-0 overflow-hidden divide-y divide-slate-800/60">
-          {items.map((item, idx) => {
-            const usedShotVal = item.usedShot !== undefined ? item.usedShot : item.currentShot;
-            const shotAtLastChangeVal = item.shotAtLastChange !== undefined ? item.shotAtLastChange : item.lastChangeShot;
-            const availableSpareVal = item.availableSpare !== undefined ? item.availableSpare : item.backupQty;
-            const status: LifeStatus = item.lifeStatus || item.alertStatus || 'NORMAL';
+          {/* Table Rows Body */}
+          <div className="flex-1 flex flex-col min-h-0 overflow-y-auto divide-y divide-slate-800/70 custom-scrollbar">
+            {items.map((item, idx) => {
+              const usedShotVal = item.usedShot !== undefined ? item.usedShot : item.currentShot;
+              const shotAtLastChangeVal = item.shotAtLastChange !== undefined ? item.shotAtLastChange : item.lastChangeShot;
+              const availableSpareVal = item.availableSpare !== undefined ? item.availableSpare : item.backupQty;
+              const status: LifeStatus = item.lifeStatus || item.alertStatus || 'NORMAL';
 
-            // Exact color matching for usage percentage & progress bar
-            let usageColor = 'text-emerald-400 font-semibold';
-            let barColor = 'bg-emerald-500';
-            let barBorder = 'border-emerald-600/70';
-            let rowHighlight = '';
+              let usageColor = 'text-emerald-400 font-bold';
+              let barColor = 'bg-emerald-500';
+              let barBorder = 'border-emerald-500';
+              let rowHighlight = '';
 
-            if (status === 'OVER_LIFE') {
-              usageColor = 'text-red-400 font-bold';
-              barColor = 'bg-red-600';
-              barBorder = 'border-red-500/80';
-              rowHighlight = 'bg-red-950/20';
-            } else if (status === 'CRITICAL') {
-              usageColor = 'text-rose-400 font-bold';
-              barColor = 'bg-rose-500';
-              barBorder = 'border-rose-500/80';
-              rowHighlight = 'bg-rose-950/15';
-            } else if (status === 'PREPARE') {
-              usageColor = 'text-amber-400 font-semibold';
-              barColor = 'bg-amber-500';
-              barBorder = 'border-amber-500/80';
-            } else if (status === 'WARNING') {
-              usageColor = 'text-yellow-300 font-semibold';
-              barColor = 'bg-yellow-400';
-              barBorder = 'border-yellow-500/80';
-            } else if (status === 'STANDARD_MISSING') {
-              usageColor = 'text-amber-400 italic';
-              barColor = 'bg-slate-700';
-              barBorder = 'border-amber-700/80';
-            } else if (status === 'DATA_ERROR') {
-              usageColor = 'text-red-400 italic font-bold';
-              barColor = 'bg-red-900';
-              barBorder = 'border-red-600/80';
-            }
+              if (status === 'OVER_LIFE') {
+                usageColor = 'text-red-400 font-black';
+                barColor = 'bg-red-600';
+                barBorder = 'border-red-500';
+                rowHighlight = 'bg-red-950/30';
+              } else if (status === 'CRITICAL') {
+                usageColor = 'text-rose-400 font-black';
+                barColor = 'bg-rose-500';
+                barBorder = 'border-rose-500';
+                rowHighlight = 'bg-rose-950/25';
+              } else if (status === 'PREPARE') {
+                usageColor = 'text-amber-400 font-black';
+                barColor = 'bg-amber-500';
+                barBorder = 'border-amber-500';
+              } else if (status === 'WARNING') {
+                usageColor = 'text-yellow-300 font-black';
+                barColor = 'bg-yellow-400';
+                barBorder = 'border-yellow-500';
+              }
 
-            // Life status badge styling
-            let statusBadgeClass = 'bg-emerald-950/80 text-emerald-300 border-emerald-700/80';
-            let statusLabel = 'NORMAL';
+              let statusBadgeClass = 'bg-emerald-950/90 text-emerald-300 border-emerald-600 hover:bg-emerald-900';
+              let statusLabel = 'NORMAL';
 
-            if (status === 'OVER_LIFE') {
-              statusBadgeClass = 'bg-red-950 text-red-300 border-red-600 font-bold';
-              statusLabel = 'OVER LIFE';
-            } else if (status === 'CRITICAL') {
-              statusBadgeClass = 'bg-rose-950/90 text-rose-300 border-rose-600/90 font-bold';
-              statusLabel = 'CRITICAL';
-            } else if (status === 'PREPARE') {
-              statusBadgeClass = 'bg-amber-950/90 text-amber-300 border-amber-600/90 font-semibold';
-              statusLabel = 'PREPARE';
-            } else if (status === 'WARNING') {
-              statusBadgeClass = 'bg-yellow-950/90 text-yellow-300 border-yellow-600/90';
-              statusLabel = 'WARNING';
-            } else if (status === 'STANDARD_MISSING') {
-              statusBadgeClass = 'bg-amber-950 text-amber-400 border-amber-700 italic';
-              statusLabel = 'NO STD';
-            } else if (status === 'DATA_ERROR') {
-              statusBadgeClass = 'bg-red-950 text-red-400 border-red-700 font-bold';
-              statusLabel = 'ERROR';
-            }
+              if (status === 'OVER_LIFE') {
+                statusBadgeClass = 'bg-red-950 text-red-200 border-red-500 font-black animate-pulse hover:bg-red-900 shadow-lg shadow-red-900/50';
+                statusLabel = 'OVER LIFE';
+              } else if (status === 'CRITICAL') {
+                statusBadgeClass = 'bg-rose-950 text-rose-200 border-rose-500 font-black hover:bg-rose-900';
+                statusLabel = 'CRITICAL';
+              } else if (status === 'PREPARE') {
+                statusBadgeClass = 'bg-amber-950 text-amber-200 border-amber-500 font-bold hover:bg-amber-900';
+                statusLabel = 'PREPARE';
+              } else if (status === 'WARNING') {
+                statusBadgeClass = 'bg-yellow-950 text-yellow-200 border-yellow-500 font-bold hover:bg-yellow-900';
+                statusLabel = 'WARNING';
+              }
 
-            // Order Status styling
-            let orderClass = 'text-emerald-400';
-            if (item.orderStatus === 'PR PREPARING') orderClass = 'text-amber-400 font-semibold';
-            if (item.orderStatus === 'PO OPEN') orderClass = 'text-rose-400 font-semibold';
-            if (item.orderStatus === 'ORDERED') orderClass = 'text-cyan-300 font-semibold';
+              const rowDensityClass = 'flex-1 min-h-[40px] md:min-h-[48px] py-1.5 md:py-2';
+              const isStdMissing = item.isStandardMissing || item.lifeLimit <= 0;
 
-            const isStdMissing = item.isStandardMissing || item.lifeLimit <= 0;
+              return (
+                <div 
+                  key={item.slotId || idx} 
+                  className={`flex items-center px-1.5 font-mono transition-colors hover:bg-cyan-950/40 ${rowHighlight} ${rowDensityClass}`}
+                >
+                  {/* No. */}
+                  <div className="h-full flex items-center justify-center text-slate-300 font-bold text-xs sm:text-sm md:text-base flex-shrink-0 border-r border-slate-800/70 truncate" style={{ width: `${colWidths.no}%` }}>
+                    {idx + 1}
+                  </div>
 
-            return (
-              <div 
-                key={item.slotId || idx} 
-                className={`flex-1 min-h-0 flex items-center justify-between px-2 text-[10px] sm:text-xs font-mono transition-colors hover:bg-cyan-950/30 ${rowHighlight}`}
-              >
-                {/* No. */}
-                <div className="w-8 sm:w-10 text-center text-slate-400 font-medium flex-shrink-0 border-r border-slate-800/70 py-0.5">
-                  {idx + 1}
-                </div>
+                  {/* Fin Die Spare Parts */}
+                  <div className="h-full flex items-center justify-start px-2 sm:px-3 font-sans font-bold text-white truncate border-r border-slate-800/70 tracking-wide flex-shrink-0 text-sm sm:text-base md:text-lg" style={{ width: `${colWidths.stage}%` }}>
+                    <span className="truncate">{item.stagePunchDie || item.partName}</span>
+                  </div>
 
-                {/* Stage Punch / Die */}
-                <div className="flex-1 min-w-[120px] px-2 sm:px-3 font-sans font-medium text-slate-100 truncate border-r border-slate-800/70 py-0.5">
-                  {item.stagePunchDie || item.partName}
-                </div>
+                  {/* Life Limit */}
+                  <div className="h-full flex items-center justify-end px-1.5 sm:px-2 text-slate-200 font-bold flex-shrink-0 border-r border-slate-800/70 truncate text-xs sm:text-sm md:text-base" style={{ width: `${colWidths.lifeLimit}%` }}>
+                    {isStdMissing ? <span className="text-amber-400 text-xs italic">MISSING</span> : formatShots(item.lifeLimit)}
+                  </div>
 
-                {/* Life Limit */}
-                <div className="w-20 sm:w-24 md:w-28 text-right px-1.5 sm:px-2 text-slate-200 flex-shrink-0 border-r border-slate-800/70 py-0.5">
-                  {isStdMissing ? (
-                    <span className="text-amber-400 text-[9px] sm:text-[10px] italic">MISSING</span>
-                  ) : (
-                    formatShots(item.lifeLimit)
-                  )}
-                </div>
+                  {/* Used Shot */}
+                  <div className="h-full flex items-center justify-end px-1.5 sm:px-2 text-cyan-200 font-black flex-shrink-0 border-r border-slate-800/70 truncate text-sm sm:text-base md:text-lg tracking-tight" style={{ width: `${colWidths.currentShot}%` }}>
+                    {formatShots(usedShotVal)}
+                  </div>
 
-                {/* Used Shot */}
-                <div className="w-20 sm:w-24 md:w-28 text-right px-1.5 sm:px-2 text-slate-100 font-semibold flex-shrink-0 border-r border-slate-800/70 py-0.5">
-                  {item.isDataError ? (
-                    <span className="text-red-400 text-[9px] sm:text-[10px]">ERROR</span>
-                  ) : (
-                    formatShots(usedShotVal)
-                  )}
-                </div>
+                  {/* Usage % */}
+                  <div className={`h-full flex items-center justify-center px-1 font-black flex-shrink-0 border-r border-slate-800/70 truncate text-sm sm:text-base md:text-lg ${usageColor}`} style={{ width: `${colWidths.usage}%` }}>
+                    {isStdMissing ? 'N/A' : `${item.usagePercent}%`}
+                  </div>
 
-                {/* Usage % */}
-                <div className={`w-14 sm:w-16 md:w-20 text-center px-1 text-[10px] sm:text-xs font-bold flex-shrink-0 border-r border-slate-800/70 py-0.5 ${usageColor}`}>
-                  {isStdMissing ? 'N/A' : `${item.usagePercent}%`}
-                </div>
+                  {/* Remaining Shot */}
+                  <div className={`h-full flex items-center justify-end px-1.5 sm:px-2 font-black flex-shrink-0 border-r border-slate-800/70 truncate text-sm sm:text-base md:text-lg tracking-tight ${
+                    item.remainingShot < 0 ? 'text-red-400' : 'text-slate-100'
+                  }`} style={{ width: `${colWidths.remaining}%` }}>
+                    {isStdMissing ? 'N/A' : formatShots(item.remainingShot)}
+                  </div>
 
-                {/* Remaining Shot */}
-                <div className={`w-20 sm:w-24 md:w-28 text-right px-1.5 sm:px-2 flex-shrink-0 border-r border-slate-800/70 py-0.5 ${
-                  item.remainingShot < 0 ? 'text-red-400 font-semibold' : 'text-slate-200'
-                }`}>
-                  {isStdMissing ? 'N/A' : formatShots(item.remainingShot)}
-                </div>
+                  {/* Progress Bar */}
+                  <div className="h-full flex items-center justify-center px-1.5 sm:px-2 flex-shrink-0 border-r border-slate-800/70" style={{ width: `${colWidths.progress}%` }}>
+                    <div className={`relative w-full bg-slate-900/90 h-6 sm:h-7 rounded border ${barBorder} overflow-hidden flex items-center shadow-inner`}>
+                      {!isStdMissing && (
+                        <div
+                          className={`h-full ${barColor} transition-all duration-300`}
+                          style={{ width: `${Math.min(100, Math.max(0, item.usagePercent))}%` }}
+                        />
+                      )}
+                      <span className="absolute inset-0 flex items-center justify-center text-xs sm:text-sm md:text-base font-mono font-black text-white drop-shadow-[0_1.5px_3px_rgba(0,0,0,1)]">
+                        {isStdMissing ? 'N/A' : `${item.usagePercent}%`}
+                      </span>
+                    </div>
+                  </div>
 
-                {/* Progress Bar (Centered vertically with max aesthetic fill) */}
-                <div className="w-28 sm:w-36 md:w-44 px-1.5 sm:px-2.5 flex-shrink-0 flex items-center justify-center border-r border-slate-800/70 py-0.5">
-                  <div className={`relative w-full bg-slate-900/90 h-3.5 sm:h-4.5 rounded-sm border ${barBorder} overflow-hidden flex items-center shadow-inner`}>
-                    {!isStdMissing && (
-                      <div
-                        className={`h-full ${barColor} transition-all duration-300`}
-                        style={{ width: `${Math.min(100, Math.max(0, item.usagePercent))}%` }}
-                      />
-                    )}
-                    <span className="absolute inset-0 flex items-center justify-center text-[9px] sm:text-[10px] font-mono font-bold text-slate-100 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
-                      {isStdMissing ? 'N/A' : `${item.usagePercent}%`}
-                    </span>
+                  {/* Shot at Last Change */}
+                  <div className="h-full items-center justify-end px-1.5 sm:px-2 text-slate-300 font-bold flex-shrink-0 border-r border-slate-800/70 hidden md:flex truncate text-xs sm:text-sm md:text-base" style={{ width: `${colWidths.lastChange}%` }}>
+                    {formatShots(shotAtLastChangeVal)}
+                  </div>
+
+                  {/* Install Qty */}
+                  <div className="h-full flex items-center justify-center px-1 text-slate-100 font-bold flex-shrink-0 border-r border-slate-800/70 truncate text-xs sm:text-sm md:text-base" style={{ width: `${colWidths.installQty}%` }}>
+                    {item.installQty}
+                  </div>
+
+                  {/* Available Spare */}
+                  <div className="h-full flex items-center justify-center px-1 text-slate-100 font-bold flex-shrink-0 border-r border-slate-800/70 truncate text-xs sm:text-sm md:text-base" style={{ width: `${colWidths.spareQty}%` }}>
+                    {availableSpareVal}
+                  </div>
+
+                  {/* Life Status Column (Clickable to open detail modal) */}
+                  <div className="h-full flex items-center justify-center px-1 flex-shrink-0 truncate" style={{ width: `${colWidths.status}%` }}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedModalItem(item)}
+                      className={`w-full py-1.5 sm:py-2 rounded text-xs sm:text-sm md:text-base font-black font-mono border truncate transition-all shadow-md ${statusBadgeClass}`}
+                      title="กดเพื่อดูรายละเอียดแจ้งเตือนเฉพาะ Parts นี้"
+                    >
+                      {statusLabel}
+                    </button>
                   </div>
                 </div>
-
-                {/* Shot at Last Change */}
-                <div className="w-20 sm:w-24 md:w-28 text-right px-1.5 sm:px-2 text-slate-300 flex-shrink-0 border-r border-slate-800/70 py-0.5 hidden md:block">
-                  {formatShots(shotAtLastChangeVal)}
-                </div>
-
-                {/* Install Qty */}
-                <div className="w-10 sm:w-12 text-center px-1 text-slate-200 flex-shrink-0 border-r border-slate-800/70 py-0.5">
-                  {item.installQty}
-                </div>
-
-                {/* Available Spare */}
-                <div className="w-10 sm:w-12 text-center px-1 text-slate-200 flex-shrink-0 border-r border-slate-800/70 py-0.5">
-                  {availableSpareVal}
-                </div>
-
-                {/* Life Status Column */}
-                <div className="w-16 sm:w-20 md:w-24 text-center px-1 flex-shrink-0 border-r border-slate-800/70 py-0.5">
-                  <span className={`inline-block px-1 sm:px-1.5 py-0.5 rounded text-[8px] sm:text-[10px] font-mono border ${statusBadgeClass}`}>
-                    {statusLabel}
-                  </span>
-                </div>
-
-                {/* Order Status */}
-                <div className={`w-20 sm:w-24 md:w-28 text-center px-1 text-[9px] sm:text-[10px] font-mono tracking-wide uppercase truncate flex-shrink-0 py-0.5 ${orderClass}`}>
-                  {item.orderStatus}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* BOTTOM SUMMARY STATS BAR - flex-none */}
-      <div className="flex-none grid grid-cols-4 sm:grid-cols-8 gap-1 sm:gap-1.5 mb-1 sm:mb-1.5 text-center font-mono">
-        {/* Total Items */}
-        <div className="bg-[#09152B] border border-slate-800 rounded py-1 px-1 shadow-sm">
-          <div className="text-[8px] sm:text-[9px] text-slate-400 font-medium uppercase truncate">TOTAL ITEMS</div>
-          <div className="text-xs sm:text-base font-bold text-slate-100">{items.length}</div>
-        </div>
-
-        {/* Normal (0-69%) */}
-        <div className="bg-[#06201B] border border-emerald-900/80 rounded py-1 px-1 shadow-sm">
-          <div className="text-[8px] sm:text-[9px] text-emerald-400/90 font-medium uppercase truncate">NORMAL (0-69%)</div>
-          <div className="text-xs sm:text-base font-bold text-emerald-400">{normalCount}</div>
-        </div>
-
-        {/* Warning (70-84%) */}
-        <div className="bg-[#24210A] border border-yellow-900/80 rounded py-1 px-1 shadow-sm">
-          <div className="text-[8px] sm:text-[9px] text-yellow-300/90 font-medium uppercase truncate">WARN (70-84%)</div>
-          <div className="text-xs sm:text-base font-bold text-yellow-300">{warningCount}</div>
-        </div>
-
-        {/* Prepare (85-94%) */}
-        <div className="bg-[#2B1B0A] border border-amber-900/80 rounded py-1 px-1 shadow-sm">
-          <div className="text-[8px] sm:text-[9px] text-amber-400/90 font-medium uppercase truncate">PREP (85-94%)</div>
-          <div className="text-xs sm:text-base font-bold text-amber-400">{prepareCount}</div>
-        </div>
-
-        {/* Critical (95-99%) */}
-        <div className="bg-[#300C12] border border-rose-900/80 rounded py-1 px-1 shadow-sm">
-          <div className="text-[8px] sm:text-[9px] text-rose-400/90 font-medium uppercase truncate">CRIT (95-99%)</div>
-          <div className="text-xs sm:text-base font-bold text-rose-400">{criticalCount}</div>
-        </div>
-
-        {/* Over Life (>=100%) */}
-        <div className="bg-[#3B0707] border border-red-900/80 rounded py-1 px-1 shadow-sm">
-          <div className="text-[8px] sm:text-[9px] text-red-400/90 font-medium uppercase truncate">OVER (≥100%)</div>
-          <div className="text-xs sm:text-base font-bold text-red-400">{overLifeCount}</div>
-        </div>
-
-        {/* Low Stock */}
-        <div className="bg-[#2B0E17] border border-rose-900/80 rounded py-1 px-1 shadow-sm">
-          <div className="text-[8px] sm:text-[9px] text-rose-300/90 font-medium uppercase truncate">LOW STOCK</div>
-          <div className="text-xs sm:text-base font-bold text-rose-400">{lowStockCount}</div>
-        </div>
-
-        {/* Delivery Risk */}
-        <div className="bg-[#350A0A] border border-red-900/80 rounded py-1 px-1 shadow-sm">
-          <div className="text-[8px] sm:text-[9px] text-red-300/90 font-medium uppercase truncate">DELIV RISK</div>
-          <div className="text-xs sm:text-base font-bold text-red-400">{deliveryRiskCount}</div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
       {/* BOTTOM MARQUEE / ALERT BANNER - flex-none */}
-      <div className="flex-none bg-[#2E0909] border border-red-700/80 rounded flex items-center overflow-hidden font-mono text-[10px] sm:text-xs shadow-md">
-        <div className="bg-red-600 text-white font-bold px-2 sm:px-3 py-1 flex items-center gap-1 uppercase flex-shrink-0 tracking-wider">
-          <AlertTriangle className="w-3 h-3 fill-white text-red-600" />
+      <div className="flex-none bg-[#2E0909] border border-red-700/80 rounded flex items-center overflow-hidden font-mono text-xs sm:text-sm md:text-base shadow-md">
+        <div className="bg-red-600 text-white font-black px-2.5 sm:px-4 py-1.5 flex items-center gap-1.5 uppercase flex-shrink-0 tracking-wider">
+          <AlertTriangle className="w-4 h-4 fill-white text-red-600" />
           <span>ALERT</span>
         </div>
-        <div className="px-2.5 py-1 text-red-200 font-medium truncate flex-1 tracking-wide">
+        <div className="px-3 py-1.5 text-red-100 font-bold truncate flex-1 tracking-wide">
           {dynamicTickerMessage}
         </div>
       </div>
+
+      {/* ITEM STATUS & WARNING DETAIL MODAL */}
+      {selectedModalItem && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0B172E] border-2 border-cyan-500/80 rounded-xl shadow-2xl max-w-xl w-full p-5 text-slate-100 font-sans space-y-4 relative">
+            <button
+              onClick={() => setSelectedModalItem(null)}
+              className="absolute top-3 right-3 text-slate-400 hover:text-white bg-slate-800 p-1.5 rounded-full"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 border-b border-slate-800 pb-3">
+              <div className="p-3 rounded-lg bg-cyan-950 border border-cyan-500/40 text-cyan-400">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-xs font-mono font-bold text-cyan-400 uppercase tracking-widest">
+                  LINE {selectedLineId} • PART STATUS DETAILS
+                </span>
+                <h3 className="text-lg sm:text-xl font-bold text-white leading-tight">
+                  {selectedModalItem.stagePunchDie || selectedModalItem.partName}
+                </h3>
+              </div>
+            </div>
+
+            {/* Metrics Breakdown Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 font-mono text-xs">
+              <div className="bg-slate-900/90 p-2.5 rounded border border-slate-800">
+                <div className="text-slate-400 text-[10px]">CURRENT SHOT</div>
+                <div className="text-base font-bold text-cyan-300 mt-0.5">
+                  {formatShots(selectedModalItem.usedShot !== undefined ? selectedModalItem.usedShot : selectedModalItem.currentShot)}
+                </div>
+              </div>
+
+              <div className="bg-slate-900/90 p-2.5 rounded border border-slate-800">
+                <div className="text-slate-400 text-[10px]">LIFE LIMIT</div>
+                <div className="text-base font-bold text-slate-200 mt-0.5">
+                  {selectedModalItem.lifeLimit > 0 ? formatShots(selectedModalItem.lifeLimit) : 'NO STD'}
+                </div>
+              </div>
+
+              <div className="bg-slate-900/90 p-2.5 rounded border border-slate-800">
+                <div className="text-slate-400 text-[10px]">REMAINING SHOT</div>
+                <div className={`text-base font-bold mt-0.5 ${selectedModalItem.remainingShot < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                  {formatShots(selectedModalItem.remainingShot)}
+                </div>
+              </div>
+
+              <div className="bg-slate-900/90 p-2.5 rounded border border-slate-800">
+                <div className="text-slate-400 text-[10px]">USAGE RATE</div>
+                <div className="text-base font-bold text-amber-300 mt-0.5">
+                  {selectedModalItem.usagePercent}%
+                </div>
+              </div>
+
+              <div className="bg-slate-900/90 p-2.5 rounded border border-slate-800">
+                <div className="text-slate-400 text-[10px]">INSTALL QTY</div>
+                <div className="text-base font-bold text-slate-200 mt-0.5">
+                  {selectedModalItem.installQty} Pcs
+                </div>
+              </div>
+
+              <div className="bg-slate-900/90 p-2.5 rounded border border-slate-800">
+                <div className="text-slate-400 text-[10px]">SPARE STOCK</div>
+                <div className="text-base font-bold text-emerald-300 mt-0.5">
+                  {selectedModalItem.availableSpare !== undefined ? selectedModalItem.availableSpare : selectedModalItem.backupQty} Pcs
+                </div>
+              </div>
+            </div>
+
+            {/* Status Recommendation Box */}
+            <div className={`p-3.5 rounded-lg border text-xs leading-relaxed ${
+              selectedModalItem.usagePercent >= 100
+                ? 'bg-red-950/60 border-red-600 text-red-200'
+                : selectedModalItem.usagePercent >= 90
+                ? 'bg-rose-950/60 border-rose-600 text-rose-200'
+                : selectedModalItem.usagePercent >= 80
+                ? 'bg-amber-950/60 border-amber-600 text-amber-200'
+                : 'bg-emerald-950/60 border-emerald-600 text-emerald-200'
+            }`}>
+              <div className="font-bold font-mono text-sm uppercase mb-1 flex items-center gap-1.5">
+                <Info className="w-4 h-4" />
+                <span>คำแนะนำการบำรุงรักษาและการเปลี่ยนชิ้นส่วน (RECOMMENDED ACTION)</span>
+              </div>
+              {selectedModalItem.usagePercent >= 100 ? (
+                <p>⚠️ **เกินกำหนดอายุมาตรฐาน (OVER LIFE)**: ชิ้นส่วนนี้ใช้งานครบกำหนดแล้ว ควรดำเนินการเปลี่ยนชิ้นส่วนใหม่ทันที เพื่อป้องกันครีบฟินไม่ได้มาตรฐาน (Fin Defect) หรือ Die เสียหาย</p>
+              ) : selectedModalItem.usagePercent >= 90 ? (
+                <p>🚨 **วิกฤต (CRITICAL ≥ 90%)**: ชิ้นส่วนอยู่ในช่วงวิกฤตใกล้หมดอายุ โปรดเตรียมอะไหล่สำรองและวางแผนเปลี่ยนชิ้นส่วนในรอบ Maintenance ถัดไป</p>
+              ) : selectedModalItem.usagePercent >= 80 ? (
+                <p>⚠️ **เตรียมตัว (PREPARE ≥ 80%)**: ชิ้นส่วนเริ่มมีความเสื่อมสภาพ ตรวจสอบสต็อกอะไหล่สำรองเพื่อความพร้อมในการผลิต</p>
+              ) : (
+                <p>✅ **ปกติ (NORMAL)**: ชิ้นส่วนทำงานอยู่ในเกณฑ์มาตรฐาน ไม่พบความผิดปกติ</p>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setSelectedModalItem(null)}
+                className="px-5 py-2 rounded bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold font-mono text-xs transition-colors"
+              >
+                ปิดหน้าต่าง (CLOSE)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

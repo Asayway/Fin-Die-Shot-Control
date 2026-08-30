@@ -10,8 +10,10 @@ import { ShotEntryView } from './views/ShotEntryView';
 import { ReplacementEntryView } from './views/ReplacementEntryView';
 import { RegrindingEntryView } from './views/RegrindingEntryView';
 import { LockPositionView } from './views/LockPositionView';
-import { LineConfigurationView, PartMasterView } from './views/LineConfigurationView';
+import { LineConfigurationView } from './views/LineConfigurationView';
+import { PartMasterView } from './views/PartMasterView';
 import { PartLifeStandardSetupView, InstallQuantitySetupView } from './views/PartLifeStandardSetupView';
+import { UnifiedToolingMasterView } from './views/UnifiedToolingMasterView';
 import { SpareStockProcurementView, ReplacementHistoryView } from './views/SpareStockProcurementView';
 import { ReportsView } from './views/ReportsView';
 import { SystemSettingsView, LoginView } from './views/SystemSettingsView';
@@ -87,15 +89,17 @@ export default function App() {
       case 'lock-position':
         return <LockPositionView initialLineId={targetLineId} />;
       case 'line-configuration':
-        return <LineConfigurationView />;
+        return <UnifiedToolingMasterView initialTab="unified-settings" />;
+      case 'unified-tooling-setup':
+        return <UnifiedToolingMasterView initialTab="unified-settings" />;
       case 'part-master':
-        return <PartMasterView />;
+        return <UnifiedToolingMasterView initialTab="master" />;
       case 'life-standard-setup':
-        return <PartLifeStandardSetupView />;
+        return <UnifiedToolingMasterView initialTab="standards" />;
       case 'install-quantity-setup':
-        return <InstallQuantitySetupView />;
+        return <UnifiedToolingMasterView initialTab="install" />;
       case 'spare-stock':
-        return <SpareStockProcurementView />;
+        return <UnifiedToolingMasterView initialTab="unified-settings" />;
       case 'replacement-history':
         return <ReplacementHistoryView />;
       case 'reports':
@@ -124,11 +128,12 @@ export default function App() {
 
   // If in dedicated fullscreen TV mode, display without outer shell header/sidebar, 100% viewport fit
   const isHmi = settings.theme === 'hmi' || settings.theme === 'industrial-dark';
+  const isLight = settings.theme === 'light';
 
   if (isTvFullscreen && activeRoute === 'tv-monitoring') {
     return (
       <div className={`fixed inset-0 z-50 overflow-hidden flex flex-col h-screen w-screen max-h-screen max-w-screen p-0 m-0 ${
-        isHmi ? 'bg-black text-green-400 font-mono' : 'bg-[#070D18] text-slate-100 font-sans'
+        isHmi ? 'theme-hmi bg-black text-green-400 font-mono' : isLight ? 'theme-light bg-slate-100 text-slate-900 font-sans' : 'theme-dark bg-[#070D18] text-slate-100 font-sans'
       }`}>
         <TvDashboardView
           initialLineId={targetLineId}
@@ -143,8 +148,10 @@ export default function App() {
     <div 
       className={`h-screen max-h-screen overflow-hidden flex flex-col transition-colors duration-200 ${
         isHmi
-          ? 'bg-black text-green-400 font-mono selection:bg-green-500 selection:text-black'
-          : 'bg-[#070D18] text-slate-100 font-sans selection:bg-cyan-500 selection:text-slate-950'
+          ? 'theme-hmi bg-black text-green-400 font-mono selection:bg-green-500 selection:text-black'
+          : isLight
+          ? 'theme-light bg-slate-100 text-slate-900 font-sans selection:bg-cyan-600 selection:text-white'
+          : 'theme-dark bg-[#070D18] text-slate-100 font-sans selection:bg-cyan-500 selection:text-slate-950'
       }`}
     >
       {/* Top Header */}
@@ -176,7 +183,7 @@ export default function App() {
 
         {/* Content Body - Independent scrollable view container */}
         <main className={`flex-1 min-h-0 overflow-y-auto p-3 sm:p-5 lg:p-6 custom-scrollbar transition-all duration-300 ${
-          isHmi ? 'bg-black' : 'bg-[#080E1B]'
+          isHmi ? 'bg-black text-green-400' : isLight ? 'bg-slate-100 text-slate-900' : 'bg-[#080E1B] text-slate-100'
         }`}>
           <div className="max-w-[1440px] mx-auto pb-10">
             {renderActiveView()}

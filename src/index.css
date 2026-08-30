@@ -10,6 +10,78 @@
   }
 }
 
+/* Industrial HMI (Matrix Green & Solid Black) Theme Override */
+.theme-hmi .bg-\[\#070F1E\],
+.theme-hmi .bg-\[\#0B172E\],
+.theme-hmi .bg-\[\#0C1A33\],
+.theme-hmi .bg-\[\#0E172A\],
+.theme-hmi .bg-\[\#1E293B\],
+.theme-hmi .bg-\[\#0F172A\],
+.theme-hmi .bg-\[\#0B1322\],
+.theme-hmi .bg-\[\#080E1B\],
+.theme-hmi .bg-\[\#070D18\],
+.theme-hmi .bg-slate-900,
+.theme-hmi .bg-slate-950,
+.theme-hmi .bg-slate-800 {
+  background-color: #000000 !important;
+}
+
+.theme-hmi .border-slate-800,
+.theme-hmi .border-slate-700,
+.theme-hmi .border-slate-800\/90,
+.theme-hmi .border-slate-800\/80 {
+  border-color: #166534 !important;
+}
+
+/* Light Theme Override: Clean Office & Report Light Palette */
+.theme-light body {
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+.theme-light .bg-\[\#070F1E\],
+.theme-light .bg-\[\#0B172E\],
+.theme-light .bg-\[\#0C1A33\],
+.theme-light .bg-\[\#0E172A\],
+.theme-light .bg-\[\#1E293B\],
+.theme-light .bg-\[\#0F172A\],
+.theme-light .bg-\[\#0B1322\],
+.theme-light .bg-\[\#080E1B\],
+.theme-light .bg-\[\#070D18\],
+.theme-light .bg-\[\#0B1120\],
+.theme-light .bg-slate-900,
+.theme-light .bg-slate-950 {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+.theme-light .bg-slate-950\/80,
+.theme-light .bg-slate-950\/50,
+.theme-light .bg-slate-900\/80,
+.theme-light .bg-slate-900\/50,
+.theme-light .bg-slate-900\/60,
+.theme-light .bg-zinc-950 {
+  background-color: #f1f5f9 !important;
+}
+
+.theme-light .text-white,
+.theme-light .text-slate-100,
+.theme-light .text-slate-200 {
+  color: #0f172a !important;
+}
+
+.theme-light .text-slate-300,
+.theme-light .text-slate-400 {
+  color: #334155 !important;
+}
+
+.theme-light .border-slate-800,
+.theme-light .border-slate-700,
+.theme-light .border-slate-800\/90,
+.theme-light .border-slate-800\/80 {
+  border-color: #cbd5e1 !important;
+}
+
 /* Industrial HMI Monospace & Glowing Accents */
 .font-mono-tech {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
@@ -41,5 +113,3 @@
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #475569;
 }
-
-

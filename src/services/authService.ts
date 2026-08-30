@@ -469,7 +469,6 @@ export function checkRouteAccess(
         reasonTh: 'การบันทึกตรวจสอบสภาพแม่พิมพ์ต้องใช้สิทธิ์ Operator หรือ Maintenance'
       };
 
-    case 'line-configuration':
     case 'part-master':
     case 'install-quantity-setup':
       if (permissions.canMaintainPartMaster || permissions.canManagePartPositionAndDieConfig || permissions.canConfirmLineConfig) {

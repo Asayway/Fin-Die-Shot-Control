@@ -454,90 +454,93 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
   };
 
   return (
-    <div className="space-y-6">
-      {/* Top Header Card */}
-      <div id="replacement-header" className="bg-slate-900 border border-slate-800 rounded-lg p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="p-2 bg-cyan-500/10 text-cyan-400 rounded-lg border border-cyan-500/20">
-              <Wrench className="w-5 h-5" />
-            </span>
-            <h1 className="text-xl font-bold text-white tracking-tight">
-              Part Replacement Entry & Life Initialization
-            </h1>
+    <div className="space-y-3">
+      {/* Integrated Top Header Card & Line + Tabs Navigation */}
+      <div id="replacement-header" className="bg-slate-900 border border-slate-800 rounded-xl p-3 sm:p-4 space-y-3 shadow-lg">
+        {/* Row 1: Title & Line Selector Pills */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-2 border-b border-slate-800/80">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="p-1.5 bg-cyan-500/10 text-cyan-400 rounded-lg border border-cyan-500/20">
+                <Wrench className="w-4 h-4" />
+              </span>
+              <h1 className="text-base sm:text-lg font-bold text-white tracking-tight">
+                Part Replacement Entry & Life Initialization
+              </h1>
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5 font-thai">
+              บันทึกการเปลี่ยนอะไหล่แม่พิมพ์ Fin Press (เริ่มนับอายุรอบใหม่ พร้อมเก็บประวัติชิ้นเดิม)
+            </p>
           </div>
-          <p className="text-sm text-slate-400 mt-1 font-thai">
-            บันทึกการเปลี่ยนอะไหล่แม่พิมพ์ Fin Press (เริ่มนับอายุรอบใหม่ตามธุรกรรมที่อนุมัติ พร้อมเก็บประวัติชิ้นเดิม)
-          </p>
+
+          {/* Line Selector Pills */}
+          <div className="flex items-center gap-1.5 flex-wrap bg-slate-950 p-1 rounded-lg border border-slate-800">
+            <span className="text-xs font-mono font-black text-cyan-400 px-2 uppercase tracking-wider">LINE:</span>
+            {linesList.map(line => (
+              <button
+                id={`line-tab-${line}`}
+                key={line}
+                onClick={() => setSelectedLineId(line)}
+                className={`px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-lg text-xs sm:text-sm font-mono font-black transition-all ${
+                  selectedLineId === line
+                    ? 'bg-cyan-400 text-slate-950 shadow-md shadow-cyan-400/40 ring-2 ring-cyan-300 scale-105'
+                    : 'bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80'
+                }`}
+              >
+                {line}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Line Selector Pills */}
-        <div className="flex items-center gap-1.5 flex-wrap bg-slate-950 p-1.5 rounded-lg border border-slate-800">
-          <span className="text-xs text-slate-400 px-2 font-mono">Line:</span>
-          {linesList.map(line => (
+        {/* Row 2: Navigation Tabs */}
+        <div className="flex items-center justify-between pt-0.5">
+          <div className="flex items-center gap-2">
             <button
-              id={`line-tab-${line}`}
-              key={line}
-              onClick={() => setSelectedLineId(line)}
-              className={`px-3 py-1.5 rounded text-xs font-mono font-bold transition-all ${
-                selectedLineId === line
-                  ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20 ring-1 ring-cyan-400'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              id="tab-entry"
+              onClick={() => setActiveTab('entry')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all border ${
+                activeTab === 'entry'
+                  ? 'bg-cyan-500 text-slate-950 border-cyan-400 font-bold shadow'
+                  : 'bg-slate-950 text-slate-400 hover:text-white border-slate-800'
               }`}
             >
-              {line}
+              <Wrench className="w-3.5 h-3.5" />
+              New Replacement Entry
             </button>
-          ))}
-        </div>
-      </div>
+            <button
+              id="tab-drafts"
+              onClick={() => setActiveTab('drafts')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all border ${
+                activeTab === 'drafts'
+                  ? 'bg-cyan-500 text-slate-950 border-cyan-400 font-bold shadow'
+                  : 'bg-slate-950 text-slate-400 hover:text-white border-slate-800'
+              }`}
+            >
+              <Save className="w-3.5 h-3.5" />
+              Drafts ({drafts.length})
+            </button>
+            <button
+              id="tab-history"
+              onClick={() => setActiveTab('history')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all border ${
+                activeTab === 'history'
+                  ? 'bg-cyan-500 text-slate-950 border-cyan-400 font-bold shadow'
+                  : 'bg-slate-950 text-slate-400 hover:text-white border-slate-800'
+              }`}
+            >
+              <History className="w-3.5 h-3.5" />
+              History Log ({historyRecords.length})
+            </button>
+          </div>
 
-      {/* Tabs Bar */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-        <div className="flex items-center gap-2">
-          <button
-            id="tab-entry"
-            onClick={() => setActiveTab('entry')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all ${
-              activeTab === 'entry'
-                ? 'bg-cyan-500 text-slate-950 font-bold shadow'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-            }`}
-          >
-            <Wrench className="w-4 h-4" />
-            New Replacement Entry
-          </button>
-          <button
-            id="tab-history"
-            onClick={() => setActiveTab('history')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all ${
-              activeTab === 'history'
-                ? 'bg-cyan-500 text-slate-950 font-bold shadow'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-            }`}
-          >
-            <History className="w-4 h-4" />
-            Replacement Audit History ({filteredHistory.length})
-          </button>
-          <button
-            id="tab-drafts"
-            onClick={() => setActiveTab('drafts')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all ${
-              activeTab === 'drafts'
-                ? 'bg-cyan-500 text-slate-950 font-bold shadow'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-            }`}
-          >
-            <Save className="w-4 h-4" />
-            Drafts ({drafts.length})
-          </button>
+          {activeDraftId && activeTab === 'entry' && (
+            <span className="text-[11px] px-2.5 py-1 bg-amber-500/10 text-amber-300 border border-amber-500/30 rounded-full font-mono flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+              Editing Draft: {activeDraftId}
+            </span>
+          )}
         </div>
-
-        {activeDraftId && activeTab === 'entry' && (
-          <span className="text-xs px-2.5 py-1 bg-amber-500/10 text-amber-300 border border-amber-500/30 rounded-full font-mono flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-            Editing Draft: {activeDraftId}
-          </span>
-        )}
       </div>
 
       {/* Notification Banner */}
@@ -587,18 +590,6 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                   Die Code: <span className="font-mono text-slate-200">{lineData?.activeConfig?.dieCode || 'N/A'}</span> • Active Config: <span className="font-mono text-slate-200">{lineData?.activeConfig?.id || 'Slot 1'}</span>
                 </p>
               </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  id="btn-save-draft"
-                  type="button"
-                  onClick={handleSaveDraft}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
-                >
-                  <Save className="w-3.5 h-3.5 text-amber-400" />
-                  Save Draft
-                </button>
-              </div>
             </div>
 
             <form onSubmit={e => { e.preventDefault(); handleOpenPreview(); }} className="space-y-6">
@@ -623,7 +614,7 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                     >
                       {lineData?.items.map(item => (
                         <option key={item.slotId} value={item.partCode}>
-                          {item.partCode} - {item.partName} ({item.stagePunchDie})
+                          {item.stagePunchDie || item.partName}
                         </option>
                       ))}
                     </select>

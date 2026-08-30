@@ -60,6 +60,8 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
   const [allowMultiEntry, setAllowMultiEntry] = useState<boolean>(false);
   const [showTouchKeypad, setShowTouchKeypad] = useState<boolean>(false);
 
+  const [showGuide, setShowGuide] = useState<boolean>(false);
+
   // Meter Reading States
   const [previousReadingInput, setPreviousReadingInput] = useState<string>('0');
   const [newReadingInput, setNewReadingInput] = useState<string>('0');
@@ -371,89 +373,122 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
   const isHmi = systemSettings?.theme === 'hmi' || systemSettings?.theme === 'industrial-dark';
 
   return (
-    <div className={`space-y-4 select-none ${isHmi ? 'font-mono' : 'font-sans'}`}>
-      {/* Top Industrial Bar */}
-      <div className={`rounded-xl p-3 sm:p-4 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-3 border ${
+    <div className={`space-y-3 select-none ${isHmi ? 'font-mono' : 'font-sans'}`}>
+      
+      {/* Top Header: Integrated Line Bar + Terminal Header + Action Tabs */}
+      <div className={`rounded-xl p-3 sm:p-4 shadow-xl space-y-3 border ${
         isHmi 
           ? 'bg-black border-2 border-green-500 text-green-400' 
           : 'bg-[#0E172A] border-slate-800/90 text-slate-100'
       }`}>
-        <div className="flex items-center gap-2.5">
-          <div className={`p-2.5 rounded-lg border ${
-            isHmi 
-              ? 'bg-green-950 border-green-500 text-green-400' 
-              : 'bg-cyan-950/60 border-cyan-500/50 text-cyan-300'
-          }`}>
-            <Zap className="w-5 h-5 sm:w-6 sm:h-6" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className={`text-base sm:text-lg md:text-xl font-bold uppercase tracking-wider ${
+        
+        {/* Row 1: Terminal Title & Line Selector Tabs */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-800/80">
+          <div className="flex items-center gap-2.5">
+            <div className={`p-1.5 rounded-lg border ${
+              isHmi 
+                ? 'bg-green-950 border-green-500 text-green-400' 
+                : 'bg-cyan-950/60 border-cyan-500/50 text-cyan-300'
+            }`}>
+              <Zap className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className={`text-sm sm:text-base font-bold uppercase tracking-wider ${
                 isHmi ? 'text-green-400 text-matrix-glow font-mono font-extrabold' : 'text-white font-["Plus_Jakarta_Sans"]'
               }`}>
-                MANUAL SHOT ENTRY TERMINAL
+                MANUAL SHOT ENTRY TERMINAL (LINE {selectedLineId})
               </h2>
-              <span className={`px-2 py-0.5 rounded text-[10px] font-bold border font-mono ${
-                isHmi 
-                  ? 'bg-green-950 text-green-300 border-green-500' 
-                  : 'bg-cyan-950/80 text-cyan-300 border-cyan-600/70'
-              }`}>
-                LINE HMI
-              </span>
+              <p className={`text-[11px] ${isHmi ? 'text-green-500/80 font-mono' : 'text-slate-400'}`}>
+                FIN DIE SHOT COUNTER RECORDING | <span className="font-thai">บันทึกยอดช็อตสายผลิต</span>
+              </p>
             </div>
-            <p className={`text-xs ${isHmi ? 'text-green-500/80 font-mono' : 'text-slate-400'}`}>
-              FIN DIE SHOT COUNTER RECORDING & PLC ACCUMULATION | <span className="font-thai">บันทึกยอดช็อตและคำนวณสะสม</span>
-            </p>
+          </div>
+
+          {/* Line Selector Pills */}
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+            <span className="text-xs font-mono font-black text-cyan-400 mr-0.5 tracking-wider uppercase">LINE:</span>
+            {linesList.map(line => (
+              <button
+                key={line}
+                onClick={() => setSelectedLineId(line)}
+                className={`px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-lg text-xs sm:text-sm font-mono font-black transition-all ${
+                  selectedLineId === line
+                    ? isHmi
+                      ? 'bg-green-500 text-black shadow-lg shadow-green-500/40 ring-2 ring-green-300 scale-105'
+                      : 'bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-400/40 ring-2 ring-cyan-300 scale-105'
+                    : isHmi
+                      ? 'bg-zinc-950 hover:bg-zinc-900 text-green-400 border border-green-800'
+                      : 'bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80'
+                }`}
+              >
+                {line}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Action Tabs */}
-        <div className={`flex items-center gap-1.5 p-1 rounded-lg border self-start md:self-center ${
-          isHmi ? 'bg-zinc-950 border-green-900' : 'bg-slate-950 border-slate-800'
-        }`}>
-          <button
-            onClick={() => setActiveTab('entry')}
-            className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
-              activeTab === 'entry'
-                ? isHmi
-                  ? 'bg-green-500 text-black shadow-md font-extrabold'
-                  : 'bg-cyan-500 text-slate-950 shadow-md font-bold'
-                : isHmi
-                  ? 'text-green-400 hover:bg-green-950/80'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-900'
-            }`}
-          >
-            <Zap className="w-3.5 h-3.5" />
-            <span>RECORD FORM</span>
-          </button>
+        {/* Row 2: Action Tabs & Help Toggle */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+          <div className={`flex items-center gap-1.5 p-1 rounded-lg border ${
+            isHmi ? 'bg-zinc-950 border-green-900' : 'bg-slate-950 border-slate-800'
+          }`}>
+            <button
+              onClick={() => setActiveTab('entry')}
+              className={`px-3.5 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 active:ring-4 ${
+                activeTab === 'entry'
+                  ? isHmi
+                    ? 'bg-green-500 text-black shadow-lg shadow-green-500/30 font-extrabold ring-2 ring-green-300'
+                    : 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/30 font-bold ring-2 ring-cyan-300'
+                  : isHmi
+                    ? 'text-green-400 hover:bg-green-950/80'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-900'
+              }`}
+            >
+              <Zap className="w-3.5 h-3.5" />
+              <span>RECORD FORM</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`px-3.5 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 active:ring-4 ${
+                activeTab === 'history'
+                  ? isHmi
+                    ? 'bg-green-500 text-black shadow-lg shadow-green-500/30 font-extrabold ring-2 ring-green-300'
+                    : 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/30 font-bold ring-2 ring-cyan-300'
+                  : isHmi
+                    ? 'text-green-400 hover:bg-green-950/80'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-900'
+              }`}
+            >
+              <History className="w-3.5 h-3.5" />
+              <span>HISTORY ({shotLogs.length})</span>
+            </button>
+
+            <button
+              onClick={() => setCounterResetModalOpen(true)}
+              className={`px-3 py-1.5 rounded-md text-xs font-bold border transition-all flex items-center gap-1.5 active:scale-95 active:ring-4 ${
+                isHmi
+                  ? 'bg-zinc-900 hover:bg-amber-950 text-amber-400 border-amber-600/70'
+                  : 'bg-slate-900 hover:bg-amber-950/60 text-amber-300 border-amber-600/60'
+              }`}
+              title="รีเซ็ตมิเตอร์หน้าเครื่องเมื่อเปลี่ยนเกจใหม่"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+              <span>RESET METER</span>
+            </button>
+          </div>
 
           <button
-            onClick={() => setActiveTab('history')}
-            className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
-              activeTab === 'history'
-                ? isHmi
-                  ? 'bg-green-500 text-black shadow-md font-extrabold'
-                  : 'bg-cyan-500 text-slate-950 shadow-md font-bold'
-                : isHmi
-                  ? 'text-green-400 hover:bg-green-950/80'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-900'
+            type="button"
+            onClick={() => setShowGuide(!showGuide)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${
+              showGuide
+                ? isHmi ? 'bg-green-950 text-green-300 border-green-700' : 'bg-cyan-950 text-cyan-300 border-cyan-700'
+                : isHmi ? 'bg-black text-green-400 border-green-900 hover:bg-zinc-900' : 'bg-slate-900 text-slate-300 border-slate-800 hover:text-white'
             }`}
           >
-            <History className="w-3.5 h-3.5" />
-            <span>HISTORY ({shotLogs.length})</span>
-          </button>
-
-          <button
-            onClick={() => setCounterResetModalOpen(true)}
-            className={`px-2.5 py-1.5 rounded-md text-xs font-bold border transition-colors flex items-center gap-1 ${
-              isHmi
-                ? 'bg-zinc-900 hover:bg-amber-950 text-amber-400 border-amber-600/70'
-                : 'bg-slate-900 hover:bg-amber-950/60 text-amber-300 border-amber-600/60'
-            }`}
-            title="รีเซ็ตมิเตอร์หน้าเครื่องเมื่อเปลี่ยนเกจใหม่"
-          >
-            <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden sm:inline">RESET METER</span>
+            <Info className="w-3.5 h-3.5 text-cyan-400" />
+            <span>{showGuide ? 'HIDE GUIDE (ซ่อนคู่มือ)' : 'คู่มือการบันทึก (GUIDE)'}</span>
           </button>
         </div>
       </div>
@@ -478,7 +513,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
             {notification.type === 'info' && <Info className={`w-4 h-4 flex-shrink-0 ${isHmi ? 'text-green-400' : 'text-cyan-400'}`} />}
             <span className="font-bold">{notification.message}</span>
           </div>
-          <button onClick={() => setNotification(null)} className="text-slate-400 hover:text-white p-1">
+          <button onClick={() => setNotification(null)} className="text-slate-400 hover:text-white p-1 active:scale-90 active:bg-slate-800 rounded">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -486,15 +521,40 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
 
       {/* TAB 1: MAIN ENTRY FORM (STREAMLINED MINIMALIST OPERATOR INTERFACE) */}
       {activeTab === 'entry' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5">
           
           {/* Main Operator Form Column (Col 8) */}
-          <div className={`lg:col-span-8 rounded-xl p-4 sm:p-6 space-y-5 shadow-xl border ${
+          <div className={`lg:col-span-8 rounded-xl p-3.5 sm:p-4 space-y-4 shadow-xl border ${
             isHmi 
               ? 'bg-black border-2 border-green-500/90' 
               : 'bg-[#0E172A] border-slate-800/90'
           }`}>
             
+            {/* Operator Instructions / Help Guide (Collapsible) */}
+            {showGuide && (
+              <div className={`p-3 rounded-lg border text-xs space-y-1.5 animate-fadeIn ${
+                isHmi ? 'bg-zinc-950 border-green-800 text-green-300' : 'bg-slate-900 border-slate-700 text-slate-300'
+              }`}>
+                <div className="flex items-start gap-2.5">
+                  <Info className={`w-4 h-4 mt-0.5 flex-shrink-0 ${isHmi ? 'text-green-500' : 'text-cyan-400'}`} />
+                  <div className="space-y-1">
+                    <h3 className={`text-xs font-bold uppercase tracking-wider ${isHmi ? 'text-green-400' : 'text-white'}`}>
+                      คู่มือการบันทึกยอดช็อตและการคำนวณสะสมอายุอะไหล่ (Shift Shot Entry Guide)
+                    </h3>
+                    <div className="text-xs space-y-1 font-thai leading-relaxed">
+                      <p><strong className="text-emerald-400">หลักการทำงานคำนวณสะสมยอดช็อต:</strong></p>
+                      <ol className="list-decimal pl-4 space-y-0.5">
+                        <li><strong>ระบุเลขมิเตอร์ตั้งต้นก่อนเริ่มนับ (Start Record Shot):</strong> เช่น เลขเดิมหน้าเครื่องก่อนเริ่มงาน = <strong>10,000</strong> ช็อต</li>
+                        <li><strong>กรอกตัวเลขมิเตอร์ที่อ่านได้จากหน้าตู้ควบคุม (Machine Panel Meter):</strong> เมื่อเดินเครื่องเสร็จกะเช้า (19:30 น.) อ่านเลขได้ <strong>23,000</strong> ช็อต</li>
+                        <li><strong>คำนวณยอดช็อตประจำกะ (Shift Increment):</strong> ระบบคำนวณผลต่าง <code className="px-1 py-0.5 rounded bg-slate-800 text-cyan-300">23,000 - 10,000 = +13,000 ช็อต</code></li>
+                        <li><strong>สะสมลงรายการอะไหล่ Parts 1..N:</strong> นำยอดเพิ่ม <strong className="text-emerald-400">+13,000 ช็อต</strong> ไปสะสมเข้ายอดใช้อะไหล่แม่พิมพ์ทุกชิ้นประจำสายผลิตนั้นๆ สะสมไปเรื่อยๆ ทุกวัน</li>
+                      </ol>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Mode Selector: Method A (Manual Meter Reading) vs Method B (Direct PLC Increment) */}
             <div className={`flex items-center justify-between gap-2 p-1.5 rounded-lg border ${
               isHmi ? 'bg-zinc-950 border-green-800' : 'bg-slate-950 border-slate-800'
@@ -502,34 +562,34 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
               <button
                 type="button"
                 onClick={() => setInputMethod('METER_READING')}
-                className={`flex-1 py-2.5 px-3 rounded-md text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+                className={`flex-1 py-3 px-3 rounded-md text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 active:scale-95 active:ring-4 touch-manipulation ${
                   inputMethod === 'METER_READING'
                     ? isHmi
-                      ? 'bg-green-500 text-black font-black shadow-lg shadow-green-500/20'
-                      : 'bg-cyan-500 text-slate-950 font-bold shadow-lg shadow-cyan-500/20'
+                      ? 'bg-green-500 text-black font-black shadow-lg shadow-green-500/30 ring-2 ring-green-300 active:ring-green-400 active:bg-green-300'
+                      : 'bg-cyan-500 text-slate-950 font-bold shadow-lg shadow-cyan-500/30 ring-2 ring-cyan-300 active:ring-cyan-400 active:bg-cyan-300'
                     : isHmi
-                      ? 'text-green-400 hover:text-green-200'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'text-green-400 hover:text-green-200 active:bg-green-500 active:text-black active:ring-green-400'
+                      : 'text-slate-400 hover:text-white active:bg-cyan-500 active:text-slate-950 active:ring-cyan-400'
                 }`}
               >
-                <Gauge className="w-4 h-4" />
+                <Gauge className="w-4.5 h-4.5" />
                 <span>MODE 1: MANUAL METER READING (ยอดอ่านมิเตอร์)</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setInputMethod('DIRECT_INCREMENT')}
-                className={`flex-1 py-2.5 px-3 rounded-md text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+                className={`flex-1 py-3 px-3 rounded-md text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 active:scale-95 active:ring-4 touch-manipulation ${
                   inputMethod === 'DIRECT_INCREMENT'
                     ? isHmi
-                      ? 'bg-green-500 text-black font-black shadow-lg shadow-green-500/20'
-                      : 'bg-cyan-500 text-slate-950 font-bold shadow-lg shadow-cyan-500/20'
+                      ? 'bg-green-500 text-black font-black shadow-lg shadow-green-500/30 ring-2 ring-green-300 active:ring-green-400 active:bg-green-300'
+                      : 'bg-cyan-500 text-slate-950 font-bold shadow-lg shadow-cyan-500/30 ring-2 ring-cyan-300 active:ring-cyan-400 active:bg-cyan-300'
                     : isHmi
-                      ? 'text-green-400 hover:text-green-200'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'text-green-400 hover:text-green-200 active:bg-green-500 active:text-black active:ring-green-400'
+                      : 'text-slate-400 hover:text-white active:bg-cyan-500 active:text-slate-950 active:ring-cyan-400'
                 }`}
               >
-                <Cpu className="w-4 h-4" />
+                <Cpu className="w-4.5 h-4.5" />
                 <span>MODE 2: DIRECT / PLC INCREMENT (ยอดช็อตเพิ่ม)</span>
               </button>
             </div>
@@ -711,10 +771,10 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                       key={addQty}
                       type="button"
                       onClick={() => handleQuickAddIncrement(addQty)}
-                      className={`flex-1 min-w-[60px] py-2 px-1 rounded-md text-xs font-bold font-mono transition-colors active:scale-95 border ${
+                      className={`flex-1 min-w-[60px] py-2.5 px-1 rounded-md text-xs sm:text-sm font-bold font-mono transition-all border active:scale-90 active:ring-4 touch-manipulation select-none ${
                         isHmi
-                          ? 'bg-black hover:bg-green-950 text-green-300 border-green-600'
-                          : 'bg-slate-900 hover:bg-cyan-500 hover:text-slate-950 text-cyan-300 border-slate-700/90'
+                          ? 'bg-black hover:bg-green-950 text-green-300 border-green-600 active:bg-green-400 active:text-black active:ring-green-400'
+                          : 'bg-slate-900 hover:bg-cyan-500 hover:text-slate-950 text-cyan-300 border-slate-700/90 active:bg-cyan-400 active:text-slate-950 active:ring-cyan-300'
                       }`}
                     >
                       +{addQty >= 1000 ? `${addQty / 1000}k` : addQty}
@@ -724,7 +784,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
 
                 {/* Optional On-Screen Touch Keypad for Shopfloor Gloves */}
                 {showTouchKeypad && (
-                  <div className={`p-3 rounded-lg grid grid-cols-3 gap-2 text-xl font-bold font-mono animate-fadeIn mt-2 border ${
+                  <div className={`p-3 rounded-lg grid grid-cols-3 gap-2.5 text-xl font-bold font-mono animate-fadeIn mt-2 border ${
                     isHmi ? 'bg-black border-green-500' : 'bg-slate-900 border-slate-700'
                   }`}>
                     {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'CLEAR', '0', 'BACKSPACE'].map(key => (
@@ -732,19 +792,19 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                         key={key}
                         type="button"
                         onClick={() => handleKeypadPress(key)}
-                        className={`py-3 rounded-md border font-mono font-bold transition-colors active:scale-95 flex items-center justify-center ${
+                        className={`py-3.5 rounded-lg border font-mono font-black transition-all active:scale-90 active:ring-4 touch-manipulation select-none flex items-center justify-center ${
                           key === 'CLEAR'
-                            ? 'bg-rose-950/80 border-rose-500 text-rose-300 hover:bg-rose-900 text-sm'
+                            ? 'bg-rose-950/80 border-rose-500 text-rose-300 hover:bg-rose-900 text-sm active:bg-rose-500 active:text-black active:ring-rose-400'
                             : key === 'BACKSPACE'
                             ? isHmi
-                              ? 'bg-zinc-900 border-green-700 text-green-300 hover:bg-zinc-800 text-sm'
-                              : 'bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700 text-sm'
+                              ? 'bg-zinc-900 border-green-700 text-green-300 hover:bg-zinc-800 text-sm active:bg-green-500 active:text-black active:ring-green-400'
+                              : 'bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700 text-sm active:bg-cyan-400 active:text-slate-950 active:ring-cyan-300'
                             : isHmi
-                              ? 'bg-zinc-950 border-green-500/80 text-green-400 hover:bg-green-950 text-2xl'
-                              : 'bg-slate-950 border-slate-700 text-slate-100 hover:bg-cyan-950/40 text-2xl'
+                              ? 'bg-zinc-950 border-2 border-green-500/80 text-green-400 hover:bg-green-950 text-2xl active:bg-green-400 active:text-black active:ring-green-400 shadow-lg shadow-green-500/20'
+                              : 'bg-slate-950 border-2 border-slate-700 text-slate-100 hover:bg-cyan-950/40 text-2xl active:bg-cyan-400 active:text-slate-950 active:ring-cyan-300 shadow-lg shadow-cyan-500/20'
                         }`}
                       >
-                        {key === 'BACKSPACE' ? <Delete className="w-5 h-5" /> : key}
+                        {key === 'BACKSPACE' ? <Delete className="w-6 h-6 stroke-[2.5]" /> : key}
                       </button>
                     ))}
                   </div>
@@ -783,14 +843,14 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                 type="button"
                 onClick={handleOpenSubmissionPreview}
                 disabled={!isIncrementPositive || isLowerReadingDetected}
-                className={`w-full py-4 sm:py-5 px-6 rounded-xl text-lg sm:text-xl font-bold transition-all flex items-center justify-center gap-3 uppercase tracking-wider shadow-xl ${
+                className={`w-full py-4 sm:py-5 px-6 rounded-xl text-lg sm:text-xl font-bold transition-all flex items-center justify-center gap-3 uppercase tracking-wider shadow-xl active:scale-95 active:ring-8 touch-manipulation select-none ${
                   !isIncrementPositive || isLowerReadingDetected
                     ? isHmi 
                       ? 'bg-zinc-900 text-zinc-600 border border-zinc-800 cursor-not-allowed'
                       : 'bg-slate-900 text-slate-600 border border-slate-800 cursor-not-allowed'
                     : isHmi
-                      ? 'bg-green-500 hover:bg-green-400 active:scale-[0.99] text-black font-black shadow-green-500/30 ring-2 ring-green-300 font-mono'
-                      : 'bg-cyan-500 hover:bg-cyan-400 active:scale-[0.99] text-slate-950 font-bold shadow-cyan-500/25 ring-2 ring-cyan-400'
+                      ? 'bg-green-500 hover:bg-green-400 text-black font-black shadow-green-500/30 ring-2 ring-green-300 active:ring-green-300 active:bg-green-300 font-mono'
+                      : 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold shadow-cyan-500/25 ring-2 ring-cyan-400 active:ring-cyan-300 active:bg-cyan-300'
                 }`}
               >
                 <CheckCircle2 className="w-6 h-6 sm:w-7 sm:h-7 stroke-[2.5]" />
@@ -808,10 +868,10 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                     type="date"
                     value={productionDate}
                     onChange={e => setProductionDate(e.target.value)}
-                    className={`rounded px-2 py-1 text-xs font-mono border ${
+                    className={`rounded px-2.5 py-1.5 text-xs font-mono border active:ring-2 ${
                       isHmi 
-                        ? 'bg-black border-green-800 text-green-300' 
-                        : 'bg-slate-950 border-slate-700 text-slate-200'
+                        ? 'bg-black border-green-800 text-green-300 active:ring-green-400' 
+                        : 'bg-slate-950 border-slate-700 text-slate-200 active:ring-cyan-400'
                     }`}
                   />
                 </div>
@@ -820,10 +880,10 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                   <button
                     type="button"
                     onClick={handleSaveDraft}
-                    className={`px-3 py-1 rounded text-xs font-bold border transition-colors ${
+                    className={`px-3 py-1.5 rounded text-xs font-bold border transition-all active:scale-95 active:ring-2 touch-manipulation ${
                       isHmi
-                        ? 'bg-zinc-950 hover:bg-zinc-900 text-green-400 border-green-800'
-                        : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700'
+                        ? 'bg-zinc-950 hover:bg-zinc-900 text-green-400 border-green-800 active:bg-green-500 active:text-black active:ring-green-400'
+                        : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700 active:bg-cyan-400 active:text-slate-950 active:ring-cyan-400'
                     }`}
                   >
                     SAVE DRAFT
@@ -831,10 +891,10 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                   <button
                     type="button"
                     onClick={reloadData}
-                    className={`px-3 py-1 rounded text-xs font-bold border transition-colors ${
+                    className={`px-3 py-1.5 rounded text-xs font-bold border transition-all active:scale-95 active:ring-2 touch-manipulation ${
                       isHmi
-                        ? 'bg-zinc-950 hover:bg-zinc-900 text-green-400 border-green-800'
-                        : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700'
+                        ? 'bg-zinc-950 hover:bg-zinc-900 text-green-400 border-green-800 active:bg-green-500 active:text-black active:ring-green-400'
+                        : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700 active:bg-cyan-400 active:text-slate-950 active:ring-cyan-400'
                     }`}
                   >
                     RESET
@@ -843,33 +903,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
               </div>
             </div>
 
-            {/* Quick Optical PLC Pulse Simulator */}
-            <div className={`pt-3 border-t flex items-center justify-between gap-2 flex-wrap ${
-              isHmi ? 'border-green-950' : 'border-slate-800'
-            }`}>
-              <span className={`text-[10px] uppercase font-bold flex items-center gap-1 ${
-                isHmi ? 'text-green-600' : 'text-slate-400'
-              }`}>
-                <Cpu className={`w-3 h-3 ${isHmi ? 'text-green-500' : 'text-cyan-400'}`} />
-                PLC / SENSOR PULSE SIMULATOR:
-              </span>
-              <div className="flex gap-1.5">
-                {[1000, 5000, 20000, 50000].map(qty => (
-                  <button
-                    key={qty}
-                    type="button"
-                    onClick={() => handleQuickPulse(qty)}
-                    className={`px-2 py-1 rounded text-[10px] font-mono border transition-colors ${
-                      isHmi
-                        ? 'bg-black hover:bg-green-950 text-green-400 border-green-900'
-                        : 'bg-slate-900 hover:bg-slate-800 text-cyan-300 border-slate-700'
-                    }`}
-                  >
-                    +{qty >= 1000 ? `${qty / 1000}k PLC` : qty}
-                  </button>
-                ))}
-              </div>
-            </div>
+            
 
           </div>
 
@@ -949,6 +983,72 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                   {currentUser.name} ({currentUser.role})
                 </div>
               </div>
+
+              {/* Live Impact Preview: Parts Shot Accumulation on Line */}
+              <div className={`p-3 rounded-lg border space-y-2.5 ${
+                isHmi ? 'bg-zinc-950 border-green-900' : 'bg-slate-950 border-slate-800'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${
+                    isHmi ? 'text-green-400' : 'text-cyan-300'
+                  }`}>
+                    <Layers className="w-4 h-4" />
+                    <span>PARTS WEAR ACCUMULATION</span>
+                  </div>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${
+                    isHmi ? 'bg-green-950 text-green-300 border border-green-700' : 'bg-cyan-950 text-cyan-300 border border-cyan-700'
+                  }`}>
+                    +{formatShots(incrementVal)} shots
+                  </span>
+                </div>
+
+                <p className={`text-[11px] font-thai leading-tight ${isHmi ? 'text-green-600' : 'text-slate-400'}`}>
+                  ยอดช็อต +{formatShots(incrementVal)} จะถูกนำไปสะสมเพิ่มเข้าชิ้นส่วนแม่พิมพ์ทุกรายการประจำสาย {selectedLineId}:
+                </p>
+
+                <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1 custom-scrollbar">
+                  {currentLine?.items?.slice(0, 10).map((item, idx) => {
+                    const curShot = item.usedShot !== undefined ? item.usedShot : (item.currentShot || 0);
+                    const newShot = curShot + incrementVal;
+                    const limit = item.lifeLimit || 18000000;
+                    const usagePct = Math.round((newShot / limit) * 100);
+
+                    let statusBadgeClass = 'bg-emerald-950/80 text-emerald-300 border-emerald-700';
+                    if (usagePct >= 100) statusBadgeClass = 'bg-rose-950 text-rose-300 border-rose-700 font-bold animate-pulse';
+                    else if (usagePct >= 85) statusBadgeClass = 'bg-amber-950 text-amber-300 border-amber-700 font-bold';
+
+                    return (
+                      <div key={item.slotId || idx} className={`p-2 rounded border text-xs font-mono space-y-1 transition-colors ${
+                        isHmi ? 'bg-black border-green-900/80 hover:border-green-600' : 'bg-slate-900/90 border-slate-800 hover:border-slate-700'
+                      }`}>
+                        <div className="flex items-center justify-between">
+                          <span className={`font-bold truncate max-w-[160px] ${isHmi ? 'text-green-300' : 'text-slate-200'}`}>
+                            {item.stagePunchDie || item.partName}
+                          </span>
+                          <span className={`text-[10px] px-1 py-0.5 rounded border ${statusBadgeClass}`}>
+                            {usagePct}%
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] text-slate-400">
+                          <span>{formatShots(curShot)} → <strong className={isHmi ? 'text-green-400' : 'text-emerald-400'}>{formatShots(newShot)}</strong></span>
+                          <span className="text-[10px] text-slate-500">Max: {formatShots(limit)}</span>
+                        </div>
+
+                        {/* Mini progress bar */}
+                        <div className="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden border border-slate-800">
+                          <div
+                            className={`h-full transition-all ${
+                              usagePct >= 100 ? 'bg-rose-500' : usagePct >= 85 ? 'bg-amber-500' : 'bg-emerald-500'
+                            }`}
+                            style={{ width: `${Math.min(100, usagePct)}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -976,6 +1076,32 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
 
             {/* Filter Bar */}
             <div className="flex items-center gap-2 flex-wrap text-xs">
+              <button
+                onClick={() => {
+                  const data = filteredShotLogs;
+                  const headers = 'Log ID,Production Date,Line ID,Shift,Input Method,Previous Total,New Total,Shots Added,Operator,Reason,Notes,Timestamp\n';
+                  const rows = data.map(log => 
+                    `"${log.id}","${log.productionDate}","${log.lineId}","${log.shift}","${log.inputMethod}",${log.previousTotal},${log.newTotal},${log.shotsAdded},"${log.operatorName || ''}","${log.entryReason || ''}","${(log.notes || '').replace(/"/g, '""')}","${log.timestamp}"`
+                  ).join('\n');
+                  
+                  const blob = new Blob(['\uFEFF' + headers + rows], { type: 'text/csv;charset=utf-8;' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `Shot_Accumulation_Logs_${new Date().toISOString().substring(0, 10)}.csv`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                className={`px-3 py-1 rounded font-bold font-mono transition-all flex items-center gap-1.5 border shadow ${
+                  isHmi 
+                    ? 'bg-green-500 text-black border-green-400 hover:bg-green-400 font-extrabold' 
+                    : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-400'
+                }`}
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>EXPORT CSV (ส่งออกไฟล์ CSV)</span>
+              </button>
+
               <select
                 value={historyLineFilter}
                 onChange={e => setHistoryLineFilter(e.target.value)}

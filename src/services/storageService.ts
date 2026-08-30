@@ -230,6 +230,12 @@ class StorageService {
     return JSON.parse(localStorage.getItem(STORAGE_KEYS.LIFE_STANDARDS) || '[]');
   }
 
+  public saveLifeStandards(standards: PartLifeStandard[]): void {
+    localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(standards));
+    this.addAuditLog('STANDARD_CHANGE', `Bulk updated ${standards.length} Part Life Standards`);
+    this.notify();
+  }
+
   public getLinesMonitoring(): Record<ProductionLineId, LineLiveMonitoringData> {
     const raw = localStorage.getItem(STORAGE_KEYS.LINE_MONITORING);
     if (!raw) return {} as Record<ProductionLineId, LineLiveMonitoringData>;
@@ -795,6 +801,53 @@ class StorageService {
 
     this.notify();
     return { success: true, record: newRecord };
+  }
+
+  public recordShotIncrement(lineId: ProductionLineId, inc: number, reason: string = 'PLC Driver', operator: string = 'SYSTEM'): void {
+    const all = this.getLinesMonitoring();
+    const line = all[lineId];
+    if (!line) return;
+
+    const previousTotal = line.machineShotTotal || 0;
+    const newTotal = previousTotal + inc;
+    const standards = this.getLifeStandards();
+    const stocks = this.getSpareStocks();
+
+    const updatedItems = line.items.map(item => {
+      const isNotControlled = item.controlType === 'NOT_CONTROLLED_BY_SHOT' || (item as any).isNotControlledByShot;
+      const isPaused = item.isPaused === true || item.installationStatus === 'PAUSED';
+      const isRemoved = item.isRemoved === true || item.installationStatus === 'REMOVED';
+      const isInactive = item.isActive === false;
+      const isZeroInstall = (item.installQty || 0) <= 0;
+
+      if (isNotControlled || isPaused || isRemoved || isInactive || isZeroInstall) {
+        return item;
+      }
+
+      const curUsed = item.usedShot !== undefined ? item.usedShot : (item.currentShot || 0);
+      const newUsed = curUsed + inc;
+
+      return calculatePartMetrics(
+        {
+          ...item,
+          currentShot: newUsed,
+          usedShot: newUsed
+        },
+        line.activeConfig,
+        standards,
+        stocks
+      );
+    });
+
+    all[lineId] = {
+      ...line,
+      machineShotTotal: newTotal,
+      lastUpdate: new Date().toISOString(),
+      items: updatedItems
+    };
+
+    localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(all));
+    this.notify();
   }
 
   public executeCounterReset(params: {
@@ -1729,6 +1782,60 @@ class StorageService {
    * 4. Does NOT reset part shots unless a replacement record is created.
    * 5. Requires reason and approver credentials.
    */
+  
+  public updateInstallQuantities(updates: Array<{ lineId: string, partCode: string, installQty: number }>): void {
+    const configs = this.getLineConfigs();
+    let configsChanged = false;
+
+    configs.forEach(config => {
+      updates.forEach(u => {
+        if (config.lineId === u.lineId) {
+          if (!config.installedPartQuantities) {
+            config.installedPartQuantities = {};
+          }
+          config.installedPartQuantities[u.partCode] = u.installQty;
+          configsChanged = true;
+        }
+      });
+    });
+
+    if (configsChanged) {
+      localStorage.setItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
+    }
+
+    const allMonitoring = this.getLinesMonitoring();
+    let monitoringChanged = false;
+
+    Object.keys(allMonitoring).forEach(lId => {
+      const lineData = allMonitoring[lId as import('../types').ProductionLineId];
+      if (lineData && lineData.activeConfig) {
+        updates.forEach(u => {
+          if (lineData.lineId === u.lineId) {
+            if (!lineData.activeConfig!.installedPartQuantities) {
+              lineData.activeConfig!.installedPartQuantities = {};
+            }
+            lineData.activeConfig!.installedPartQuantities[u.partCode] = u.installQty;
+            monitoringChanged = true;
+            
+            if (lineData.items) {
+               lineData.items.forEach(p => {
+                 if (p.partCode === u.partCode) {
+                    p.installQty = u.installQty;
+                 }
+               });
+            }
+          }
+        });
+      }
+    });
+
+    if (monitoringChanged) {
+      localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(allMonitoring));
+    }
+
+    this.notify();
+  }
+
   public activateLineConfig(
     configId: string, 
     reason: string, 

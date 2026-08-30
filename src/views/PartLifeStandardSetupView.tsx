@@ -16,6 +16,7 @@ import {
 import { PartLifeStandard, FinMaterial, TubeDiameter, FinType, ProductionLineId } from '../types';
 import { storageService } from '../services/storageService';
 import { formatShots, formatThb, generateCompositeKey } from '../services/calculationService';
+import { ResizableReorderableTable } from '../components/common/ResizableReorderableTable';
 
 export const PartLifeStandardSetupView: React.FC = () => {
   const [standards, setStandards] = useState<PartLifeStandard[]>([]);
@@ -310,69 +311,86 @@ export const PartLifeStandardSetupView: React.FC = () => {
             </div>
           </div>
 
-          <div className="overflow-x-auto max-h-[650px] overflow-y-auto custom-scrollbar">
-            <table className="w-full text-left text-xs font-mono">
-              <thead className="sticky top-0 bg-[#0F172A] text-slate-400 border-b border-slate-700 z-10">
-                <tr>
-                  <th className="p-3 font-medium">STAGE / PART</th>
-                  <th className="p-3 font-medium text-center">MAT</th>
-                  <th className="p-3 font-medium text-center">TUBE</th>
-                  <th className="p-3 font-medium text-right">LIFE LIMIT</th>
-                  <th className="p-3 font-medium text-right">REGRIND (Max mm)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-700/50">
-                {filtered.map(s => {
-                  const isSelected = formData.partCode === s.configKey.partCode && formData.material === s.configKey.material && formData.tubeSize === s.configKey.tubeSize;
-                  const maxGrind = s.maxTotalGrindingLimit ?? s.regrindStandard?.totalRegrindMm ?? 3.00;
-                  const cycles = s.regrindStandard?.maxRegrindCount ?? 4;
-                  const is1Use = s.regrindStandard?.disposeAfterUse;
-
-                  return (
-                    <tr
-                      key={s.id}
+          <div className="p-3">
+            <ResizableReorderableTable<PartLifeStandard>
+              data={filtered}
+              keyExtractor={(s) => s.id}
+              emptyMessage="ไม่พบข้อมูลเกณฑ์มาตรฐานอายุการใช้งาน"
+              columns={[
+                {
+                  id: 'part',
+                  label: 'STAGE / PART',
+                  width: 170,
+                  render: (s) => (
+                    <div 
                       onClick={() => handleSelectStandard(s)}
-                      className={`cursor-pointer transition-colors ${
-                        isSelected 
-                          ? 'bg-cyan-900/30 border-l-4 border-cyan-400 text-cyan-200' 
-                          : 'hover:bg-slate-700/50 text-slate-300'
-                      }`}
+                      className="cursor-pointer space-y-0.5"
                     >
-                      <td className="p-3">
-                        <div className="font-bold text-slate-100">{s.partName}</div>
-                        <div className="text-[11px] text-cyan-400 font-mono">{s.configKey.partCode}</div>
-                        <div className="text-[10px] text-slate-400">{s.stagePunchDie || s.partName}</div>
-                      </td>
-                      <td className="p-3 text-center">
-                        <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                          s.configKey.material === 'PCM' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
-                          s.configKey.material === 'GOLD' ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30' :
-                          'bg-slate-700 text-slate-200'
-                        }`}>
-                          {s.configKey.material}
-                        </span>
-                      </td>
-                      <td className="p-3 text-center text-cyan-300 font-bold">
-                        {s.configKey.tubeSize}
-                      </td>
-                      <td className="p-3 text-right font-mono font-bold text-green-400 text-sm">
-                        {formatShots(s.lifeLimitShots)}
-                      </td>
-                      <td className="p-3 text-right text-slate-300">
-                        {is1Use ? (
-                          <span className="text-rose-400 text-[11px] font-semibold">1-Use (Dispose)</span>
-                        ) : (
-                          <div>
-                            <span className="font-semibold text-slate-200">{cycles}x</span>{' '}
-                            <span className="text-xs text-cyan-400 font-mono">({maxGrind.toFixed(2)}mm)</span>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                      <div className="font-bold text-slate-100">{s.partName}</div>
+                      <div className="text-[11px] text-cyan-400 font-mono">{s.configKey.partCode}</div>
+                      <div className="text-[10px] text-slate-400">{s.stagePunchDie || s.partName}</div>
+                    </div>
+                  )
+                },
+                {
+                  id: 'material',
+                  label: 'MAT',
+                  width: 90,
+                  align: 'center',
+                  render: (s) => (
+                    <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                      s.configKey.material === 'PCM' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
+                      s.configKey.material === 'GOLD' ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30' :
+                      'bg-slate-700 text-slate-200'
+                    }`}>
+                      {s.configKey.material}
+                    </span>
+                  )
+                },
+                {
+                  id: 'tubeSize',
+                  label: 'TUBE',
+                  width: 80,
+                  align: 'center',
+                  render: (s) => (
+                    <span className="text-cyan-300 font-bold font-mono text-xs">
+                      {s.configKey.tubeSize}
+                    </span>
+                  )
+                },
+                {
+                  id: 'lifeLimitShots',
+                  label: 'LIFE LIMIT',
+                  width: 120,
+                  align: 'right',
+                  render: (s) => (
+                    <span className="font-mono font-bold text-green-400 text-xs">
+                      {formatShots(s.lifeLimitShots)}
+                    </span>
+                  )
+                },
+                {
+                  id: 'regrind',
+                  label: 'REGRIND (Max mm)',
+                  width: 140,
+                  align: 'right',
+                  render: (s) => {
+                    const maxGrind = s.maxTotalGrindingLimit ?? s.regrindStandard?.totalRegrindMm ?? 3.00;
+                    const cycles = s.regrindStandard?.maxRegrindCount ?? 4;
+                    const is1Use = s.regrindStandard?.disposeAfterUse;
+
+                    return is1Use ? (
+                      <span className="text-rose-400 text-[11px] font-semibold">1-Use (Dispose)</span>
+                    ) : (
+                      <div className="text-xs">
+                        <span className="font-semibold text-slate-200">{cycles}x</span>{' '}
+                        <span className="text-cyan-400 font-mono">({maxGrind.toFixed(2)}mm)</span>
+                      </div>
+                    );
+                  }
+                }
+              ]}
+            />
           </div>
         </div>
 
@@ -669,30 +687,100 @@ export const PartLifeStandardSetupView: React.FC = () => {
   );
 };
 
+
 export const InstallQuantitySetupView: React.FC = () => {
   const [lines, setLines] = useState<any[]>([]);
-
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValues, setEditValues] = useState<Record<string, number>>({});
+  
   useEffect(() => {
     setLines(storageService.getLineConfigs());
   }, []);
 
-  // Installed Part Quantity Matrix extracted from Excel Sheet
-  const installMatrix = [
-    { no: 1, part: 'Bucking Punch', code: 'PT-BP-01', e1: 168, e2: 168, e3_1: 168, e3_2: 168, e3_3: 168, e4: 168, e5: 168, e6: 168, total: 1344 },
-    { no: 2, part: 'Ironing Punch', code: 'PT-IP-02', e1: 168, e2: 168, e3_1: 168, e3_2: 168, e3_3: 168, e4: 168, e5: 168, e6: 168, total: 1344 },
-    { no: 3, part: 'Ironing Die', code: 'PT-ID-03', e1: 168, e2: 168, e3_1: 168, e3_2: 168, e3_3: 168, e4: 168, e5: 168, e6: 168, total: 1344 },
-    { no: 4, part: 'Louver Punch', code: 'PT-LP-04', e1: 168, e2: 168, e3_1: 168, e3_2: 168, e3_3: 168, e4: 168, e5: 168, e6: 168, total: 1344 },
-    { no: 5, part: 'Louver Die', code: 'PT-LD-05', e1: 168, e2: 168, e3_1: 168, e3_2: 168, e3_3: 168, e4: 168, e5: 168, e6: 168, total: 1344 },
-    { no: 6, part: 'Reflaire Punch', code: 'PT-RP-06', e1: 168, e2: 168, e3_1: 168, e3_2: 168, e3_3: 168, e4: 168, e5: 168, e6: 168, total: 1344 },
-    { no: 7, part: 'Reflaire Die', code: 'PT-RD-07', e1: 168, e2: 168, e3_1: 168, e3_2: 168, e3_3: 168, e4: 168, e5: 168, e6: 168, total: 1344 },
-    { no: 8, part: 'Row Slit Blade', code: 'PT-RS-08', e1: 42, e2: 42, e3_1: 42, e3_2: 42, e3_3: 42, e4: 42, e5: 42, e6: 42, total: 336 },
-    { no: 9, part: 'Side Cutting Punch', code: 'PT-SCP-09', e1: 8, e2: 8, e3_1: 8, e3_2: 8, e3_3: 8, e4: 8, e5: 8, e6: 8, total: 64 },
-    { no: 10, part: 'Side Cutting Die', code: 'PT-SCD-10', e1: 8, e2: 8, e3_1: 8, e3_2: 8, e3_3: 8, e4: 8, e5: 8, e6: 8, total: 64 },
-    { no: 11, part: 'Cut Off Punch', code: 'PT-COP-11', e1: 4, e2: 4, e3_1: 4, e3_2: 4, e3_3: 4, e4: 4, e5: 4, e6: 4, total: 32 },
-    { no: 12, part: 'Cut Off Die', code: 'PT-COD-12', e1: 4, e2: 4, e3_1: 4, e3_2: 4, e3_3: 4, e4: 4, e5: 4, e6: 4, total: 32 }
+  const lineIds = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5', 'E6'];
+
+  // Dynamically build matrix from lines configuration
+  const matrixParts = [
+    { no: 1, part: 'Bucking Punch', code: 'PT-BP-01' },
+    { no: 2, part: 'Ironing Punch', code: 'PT-IP-02' },
+    { no: 3, part: 'Ironing Die', code: 'PT-ID-03' },
+    { no: 4, part: 'Louver Punch', code: 'PT-LP-04' },
+    { no: 5, part: 'Louver Die', code: 'PT-LD-05' },
+    { no: 6, part: 'Reflaire Punch', code: 'PT-RP-06' },
+    { no: 7, part: 'Reflaire Die', code: 'PT-RD-07' },
+    { no: 8, part: 'Row Slit Blade', code: 'PT-RS-08' },
+    { no: 9, part: 'Side Cutting Punch', code: 'PT-SCP-09' },
+    { no: 10, part: 'Side Cutting Die', code: 'PT-SCD-10' },
+    { no: 11, part: 'Cut Off Punch', code: 'PT-COP-11' },
+    { no: 12, part: 'Cut Off Die', code: 'PT-COD-12' }
   ];
 
+  const getCellKey = (partCode: string, lineId: string) => `${partCode}_${lineId}`;
+
+  const installMatrix = matrixParts.map(mp => {
+    const row: any = { ...mp };
+    let total = 0;
+    lineIds.forEach(lId => {
+      let qty = 0;
+      const lineConfig = lines.find(l => l.lineId === lId);
+      if (lineConfig && lineConfig.installedPartQuantities) {
+        qty = lineConfig.installedPartQuantities[mp.code] || 0;
+      }
+      // If we are editing, use editValues if it exists
+      if (isEditing) {
+        qty = editValues[getCellKey(mp.code, lId)] !== undefined ? editValues[getCellKey(mp.code, lId)] : qty;
+      }
+      row[lId] = qty;
+      total += qty;
+    });
+    row.total = total;
+    return row;
+  });
+
   const grandTotal = installMatrix.reduce((sum, item) => sum + item.total, 0);
+
+  const handleEditClick = () => {
+    // Populate edit state
+    const currentValues: Record<string, number> = {};
+    matrixParts.forEach(mp => {
+      lineIds.forEach(lId => {
+        const lineConfig = lines.find(l => l.lineId === lId);
+        if (lineConfig && lineConfig.installedPartQuantities) {
+          currentValues[getCellKey(mp.code, lId)] = lineConfig.installedPartQuantities[mp.code] || 0;
+        }
+      });
+    });
+    setEditValues(currentValues);
+    setIsEditing(true);
+  };
+
+  const handleSaveClick = () => {
+    // Build updates array
+    const updates = Object.keys(editValues).map(key => {
+      const [partCode, lineId] = key.split('_');
+      return { lineId, partCode, installQty: editValues[key] };
+    });
+    
+    // Save via storage service
+    storageService.updateInstallQuantities(updates);
+    
+    // Reload local state
+    setLines(storageService.getLineConfigs());
+    setIsEditing(false);
+  };
+
+  const handleCancelClick = () => {
+    setEditValues({});
+    setIsEditing(false);
+  };
+
+  const handleCellValueChange = (partCode: string, lineId: string, value: string) => {
+    const num = parseInt(value, 10);
+    setEditValues(prev => ({
+      ...prev,
+      [getCellKey(partCode, lineId)]: isNaN(num) ? 0 : num
+    }));
+  };
 
   return (
     <div className="space-y-6">
@@ -700,65 +788,89 @@ export const InstallQuantitySetupView: React.FC = () => {
         <div>
           <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
             <Layers className="w-5 h-5 text-cyan-400" />
-            Fin Die Installed Part Quantity Matrix (E1 - E6)
+            Fin Die Installed Part Quantity Matrix
           </h2>
           <p className="text-sm text-slate-400 mt-1 font-thai">
-            ตารางจำนวนชิ้นส่วนที่ติดตั้งในแม่พิมพ์แต่ละสายการผลิต (อ้างอิงจาก Excel Sheet Total: 11,281 ชิ้นทั่วทั้งโรงงาน)
+            ตารางจำนวนชิ้นส่วนที่ติดตั้งในแม่พิมพ์แต่ละสายการผลิต (สามารถแก้ไขจำนวนติดตั้งต่อไลน์ได้)
           </p>
         </div>
 
-        <div className="bg-[#1E293B] px-4 py-2 rounded border border-slate-700 font-mono text-right">
-          <div className="text-[10px] text-slate-400 font-bold">TOTAL ACTIVE TOOLING IN FACTORY</div>
-          <div className="text-base font-bold text-cyan-300">11,281 EA (All Lines)</div>
+        <div className="flex items-center gap-4">
+          <div className="bg-[#1E293B] px-4 py-2 rounded border border-slate-700 font-mono text-right">
+            <div className="text-[10px] text-slate-400 font-bold">TOTAL ACTIVE TOOLING</div>
+            <div className="text-base font-bold text-cyan-300">{grandTotal.toLocaleString()} EA (All Lines)</div>
+          </div>
+          
+          {isEditing ? (
+            <div className="flex items-center gap-2">
+              <button onClick={handleCancelClick} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded text-sm font-bold transition-colors">
+                Cancel
+              </button>
+              <button onClick={handleSaveClick} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-sm font-bold transition-colors">
+                Save Matrix
+              </button>
+            </div>
+          ) : (
+            <button onClick={handleEditClick} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-sm font-bold transition-colors">
+              Edit Matrix
+            </button>
+          )}
         </div>
       </div>
 
       <div className="bg-[#1E293B] border border-slate-700 rounded-lg p-5 shadow-lg">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs font-mono">
-            <thead>
-              <tr className="bg-[#0F172A] text-slate-400 border-b border-slate-700">
-                <th className="py-2.5 px-2 text-center">No.</th>
-                <th className="py-2.5 px-3">STAGE PUNCH / DIE</th>
-                <th className="py-2.5 px-3">PART CODE</th>
-                <th className="py-2.5 px-2 text-center text-cyan-400">E1</th>
-                <th className="py-2.5 px-2 text-center text-cyan-400">E2</th>
-                <th className="py-2.5 px-2 text-center text-cyan-400">E3-1</th>
-                <th className="py-2.5 px-2 text-center text-cyan-400">E3-2</th>
-                <th className="py-2.5 px-2 text-center text-cyan-400">E3-3</th>
-                <th className="py-2.5 px-2 text-center text-cyan-400">E4</th>
-                <th className="py-2.5 px-2 text-center text-cyan-400">E5</th>
-                <th className="py-2.5 px-2 text-center text-cyan-400">E6</th>
-                <th className="py-2.5 px-3 text-right text-emerald-400">TOTAL (EA)</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-700/60">
-              {installMatrix.map(row => (
-                <tr key={row.no} className="hover:bg-slate-700/50">
-                  <td className="py-2.5 px-2 text-center text-slate-500 font-bold">{row.no}</td>
-                  <td className="py-2.5 px-3 font-semibold text-slate-100">{row.part}</td>
-                  <td className="py-2.5 px-3 text-slate-400">{row.code}</td>
-                  <td className="py-2.5 px-2 text-center text-slate-300">{row.e1}</td>
-                  <td className="py-2.5 px-2 text-center text-slate-300">{row.e2}</td>
-                  <td className="py-2.5 px-2 text-center text-slate-300">{row.e3_1}</td>
-                  <td className="py-2.5 px-2 text-center text-slate-300">{row.e3_2}</td>
-                  <td className="py-2.5 px-2 text-center text-slate-300">{row.e3_3}</td>
-                  <td className="py-2.5 px-2 text-center text-slate-300">{row.e4}</td>
-                  <td className="py-2.5 px-2 text-center text-slate-300">{row.e5}</td>
-                  <td className="py-2.5 px-2 text-center text-slate-300">{row.e6}</td>
-                  <td className="py-2.5 px-3 text-right font-black text-emerald-400">{row.total.toLocaleString()}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="bg-[#0F172A] font-bold border-t-2 border-slate-700 text-slate-100">
-                <td colSpan={3} className="py-3 px-3 text-right text-slate-400">GRAND TOTAL INSTALLED PARTS:</td>
-                <td colSpan={8} className="py-3 px-2 text-center text-cyan-300">1,073 EA / Line Avg</td>
-                <td className="py-3 px-3 text-right text-emerald-400 text-sm font-black">{grandTotal.toLocaleString()} EA</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+        <ResizableReorderableTable
+          data={installMatrix}
+          keyExtractor={(row) => row.no.toString()}
+          emptyMessage="ไม่พบข้อมูล Install Matrix"
+          columns={[
+            {
+              id: 'no',
+              label: 'No.',
+              width: 50,
+              align: 'center',
+              render: (row) => <span className="text-slate-500 font-bold">{row.no}</span>
+            },
+            {
+              id: 'part',
+              label: 'STAGE PUNCH / DIE',
+              width: 180,
+              render: (row) => <span className="font-semibold text-slate-100">{row.part}</span>
+            },
+            {
+              id: 'code',
+              label: 'PART CODE',
+              width: 110,
+              render: (row) => <span className="text-slate-400 font-mono">{row.code}</span>
+            },
+            ...lineIds.map(lId => ({
+              id: lId,
+              label: lId,
+              width: 70,
+              align: 'center' as const,
+              render: (row: any) => (
+                isEditing ? (
+                  <input
+                    type="number"
+                    min="0"
+                    value={row[lId]}
+                    onChange={(e) => handleCellValueChange(row.code, lId, e.target.value)}
+                    className="w-14 sm:w-16 bg-slate-900 border border-slate-600 rounded px-1 py-1 text-center text-white focus:outline-none focus:border-cyan-400 font-mono"
+                  />
+                ) : (
+                  <span className="text-slate-300 font-mono">{row[lId]}</span>
+                )
+              )
+            })),
+            {
+              id: 'total',
+              label: 'TOTAL (EA)',
+              width: 110,
+              align: 'right',
+              render: (row) => <span className="font-black text-emerald-400 font-mono">{row.total.toLocaleString()}</span>
+            }
+          ]}
+        />
       </div>
     </div>
   );

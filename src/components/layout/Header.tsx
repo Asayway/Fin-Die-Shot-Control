@@ -9,6 +9,7 @@ import {
   Radio,
   Terminal,
   Moon,
+  Sun,
   Sparkles,
   Monitor
 } from 'lucide-react';
@@ -35,6 +36,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const [time, setTime] = useState<string>('');
   const isHmi = settings.theme === 'hmi' || settings.theme === 'industrial-dark';
+  const isLight = settings.theme === 'light';
 
   useEffect(() => {
     const updateTime = () => {
@@ -72,6 +74,8 @@ export const Header: React.FC<HeaderProps> = ({
       className={`sticky top-0 z-40 shadow-lg select-none transition-colors duration-200 ${
         isHmi 
           ? 'bg-black border-b-2 border-green-500 text-green-400 font-mono shadow-black/80' 
+          : isLight
+          ? 'bg-white border-b border-slate-200 text-slate-900 font-sans shadow-slate-200/80'
           : 'bg-[#0B1120] border-b border-slate-800 text-slate-100 font-sans shadow-slate-950/60'
       }`}
     >
@@ -139,7 +143,58 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Center/Right: Live Clock & Plant Status & Theme Switcher */}
-        <div className="flex items-center gap-2.5 sm:gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Theme Quick Switcher Pill */}
+          <div className={`flex items-center gap-0.5 p-1 rounded-lg border text-xs font-mono shadow-sm ${
+            isHmi 
+              ? 'bg-black border-green-800' 
+              : isLight 
+              ? 'bg-slate-100 border-slate-300' 
+              : 'bg-slate-900 border-slate-800'
+          }`}>
+            <button
+              type="button"
+              onClick={() => setTheme('light')}
+              className={`px-2 py-1 rounded flex items-center gap-1 transition-all ${
+                settings.theme === 'light'
+                  ? 'bg-amber-500 text-slate-950 font-extrabold shadow'
+                  : isHmi ? 'text-green-500/70 hover:text-green-400' : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Theme สว่าง (Light Mode)"
+            >
+              <Sun className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline text-[11px]">สว่าง</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTheme('dark')}
+              className={`px-2 py-1 rounded flex items-center gap-1 transition-all ${
+                settings.theme === 'dark'
+                  ? 'bg-cyan-500 text-slate-950 font-extrabold shadow'
+                  : isHmi ? 'text-green-500/70 hover:text-green-400' : isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Theme มืด (Dark Slate)"
+            >
+              <Moon className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline text-[11px]">มืด</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTheme('hmi')}
+              className={`px-2 py-1 rounded flex items-center gap-1 transition-all ${
+                isHmi
+                  ? 'bg-green-500 text-black font-extrabold shadow ring-1 ring-green-300'
+                  : isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Theme อุตสาหกรรม (Industrial Black HMI)"
+            >
+              <Terminal className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline text-[11px]">อุตสาหกรรม</span>
+            </button>
+          </div>
+
           {/* Clock */}
           <div 
             className={`hidden md:flex items-center gap-3 px-3 py-1.5 rounded border font-mono text-xs shadow-inner ${
@@ -159,75 +214,6 @@ export const Header: React.FC<HeaderProps> = ({
                 LINES E1-E6 ONLINE
               </span>
             </div>
-          </div>
-
-          {/* Controls: Theme Switcher, Language, Sound */}
-          <div className="flex items-center gap-1.5">
-            {/* Direct Theme Switcher Selector (Theme มืด vs Theme HMI) */}
-            <div 
-              className={`flex items-center p-0.5 rounded border ${
-                isHmi ? 'bg-zinc-950 border-green-700' : 'bg-slate-900 border-slate-700'
-              }`}
-            >
-              <button
-                onClick={() => setTheme('dark')}
-                className={`flex items-center gap-1 px-2 py-1 rounded text-[11px] font-bold transition-all ${
-                  !isHmi
-                    ? 'bg-cyan-500 text-slate-950 shadow font-extrabold'
-                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
-                }`}
-                title="Theme มืด (Dark Slate Theme)"
-              >
-                <Moon className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Theme มืด</span>
-                <span className="sm:hidden">Dark</span>
-              </button>
-
-              <button
-                onClick={() => setTheme('hmi')}
-                className={`flex items-center gap-1 px-2 py-1 rounded text-[11px] font-bold font-mono transition-all ${
-                  isHmi
-                    ? 'bg-green-500 text-black shadow font-black'
-                    : 'text-zinc-400 hover:text-green-400 hover:bg-slate-800'
-                }`}
-                title="Theme HMI (Neon Matrix Green Terminal)"
-              >
-                <Terminal className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Theme HMI</span>
-                <span className="sm:hidden">HMI</span>
-              </button>
-            </div>
-
-            {/* Language Toggle */}
-            <button
-              onClick={toggleLanguage}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded border text-xs font-bold font-mono transition-colors ${
-                isHmi
-                  ? 'bg-zinc-950 hover:bg-green-950 text-green-400 border-green-500/70'
-                  : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700'
-              }`}
-              title="เปลี่ยนภาษาแสดงผล (Toggle Language: EN / TH / DUAL)"
-            >
-              <Globe className={`w-3.5 h-3.5 ${isHmi ? 'text-green-400' : 'text-cyan-400'}`} />
-              <span>{settings.language}</span>
-            </button>
-
-            {/* Sound Alert Toggle */}
-            <button
-              onClick={toggleSound}
-              className={`p-1.5 rounded border text-xs transition-colors ${
-                settings.enableSoundAlerts
-                  ? isHmi
-                    ? 'bg-green-950/80 text-green-300 border-green-500 hover:bg-green-900'
-                    : 'bg-emerald-950 text-emerald-300 border-emerald-700 hover:bg-emerald-900'
-                  : isHmi
-                    ? 'bg-zinc-950 text-zinc-600 border-zinc-800 hover:bg-zinc-900'
-                    : 'bg-slate-900 text-slate-600 border-slate-800 hover:bg-slate-800'
-              }`}
-              title={settings.enableSoundAlerts ? 'การแจ้งเตือนเสียง: เปิด (Sound: ON)' : 'การแจ้งเตือนเสียง: ปิด (Sound: MUTED)'}
-            >
-              {settings.enableSoundAlerts ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-            </button>
           </div>
         </div>
       </div>

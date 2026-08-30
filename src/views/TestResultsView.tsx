@@ -261,7 +261,7 @@ export const TestResultsView: React.FC = () => {
           case 1: { // All routes load
             const routes = [
               'line-overview', 'tv-monitoring', 'shot-entry', 'replacement-entry',
-              'regrinding-entry', 'condition-inspection', 'line-configuration',
+              'regrinding-entry', 'condition-inspection',
               'part-master', 'life-standard-setup', 'install-quantity-setup',
               'spare-stock', 'replacement-history', 'reports', 'user-approval', 'audit-log'
             ];

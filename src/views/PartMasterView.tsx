@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { PartMaster, TubeSizeCompat } from '../types';
 import { storageService } from '../services/storageService';
+import { ResizableReorderableTable, ColumnDef } from '../components/common/ResizableReorderableTable';
 
 export const PartMasterView: React.FC = () => {
   const [parts, setParts] = useState<PartMaster[]>([]);
@@ -165,58 +166,90 @@ export const PartMasterView: React.FC = () => {
 
       {/* Parts Table */}
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-5">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs font-mono">
-            <thead>
-              <tr className="bg-slate-950 text-slate-400 border-b border-slate-800">
-                <th className="py-2.5 px-3">PART CODE</th>
-                <th className="py-2.5 px-3">PART NAME & THAI NAME</th>
-                <th className="py-2.5 px-3">STAGE</th>
-                <th className="py-2.5 px-3">CATEGORY</th>
-                <th className="py-2.5 px-3">DRAWING NO.</th>
-                <th className="py-2.5 px-3 text-right">UNIT COST (THB)</th>
-                <th className="py-2.5 px-3 text-center">TUBE COMPAT</th>
-                <th className="py-2.5 px-3 text-center">ACTION</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/80">
-              {filtered.map(p => (
-                <tr key={p.partCode} className="hover:bg-slate-800/50 transition-colors">
-                  <td className="py-2.5 px-3 font-bold text-cyan-300">{p.partCode}</td>
-                  <td className="py-2.5 px-3">
-                    <div className="font-semibold text-slate-100">{p.partName}</div>
-                    {p.partNameTh && <div className="text-[11px] text-slate-400 font-thai">{p.partNameTh}</div>}
-                  </td>
-                  <td className="py-2.5 px-3 text-slate-300">{p.stageName}</td>
-                  <td className="py-2.5 px-3">
-                    <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[10px]">
-                      {p.category}
-                    </span>
-                  </td>
-                  <td className="py-2.5 px-3 text-slate-400">{p.drawingNumber || '-'}</td>
-                  <td className="py-2.5 px-3 text-right font-bold text-emerald-400">
-                    ฿{p.unitCostThb ? p.unitCostThb.toLocaleString() : '0'}
-                  </td>
-                  <td className="py-2.5 px-3 text-center text-cyan-400">
-                    <span className="px-1.5 py-0.5 rounded bg-cyan-950/60 border border-cyan-800 text-cyan-300 text-[10px]">
-                      {p.tubeSizeCompat}
-                    </span>
-                  </td>
-                  <td className="py-2.5 px-3 text-center">
-                    <button
-                      type="button"
-                      onClick={() => handleOpenEdit(p)}
-                      className="p-1.5 rounded bg-slate-800 hover:bg-cyan-950 text-slate-300 hover:text-cyan-300 border border-slate-700 hover:border-cyan-600 transition-colors"
-                      title="Edit Part Name and Parameters"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ResizableReorderableTable<PartMaster>
+          data={filtered}
+          keyExtractor={(p) => p.partCode}
+          emptyMessage="ไม่พบข้อมูลชิ้นส่วนแม่พิมพ์"
+          columns={[
+            {
+              id: 'partCode',
+              label: 'PART CODE',
+              width: 130,
+              render: (p) => <span className="font-bold text-cyan-300 font-mono">{p.partCode}</span>
+            },
+            {
+              id: 'partName',
+              label: 'PART NAME & THAI NAME',
+              width: 220,
+              render: (p) => (
+                <div>
+                  <div className="font-semibold text-slate-100">{p.partName}</div>
+                  {p.partNameTh && <div className="text-[11px] text-slate-400 font-thai">{p.partNameTh}</div>}
+                </div>
+              )
+            },
+            {
+              id: 'stageName',
+              label: 'STAGE',
+              width: 150,
+              render: (p) => <span className="text-slate-300 font-mono">{p.stageName}</span>
+            },
+            {
+              id: 'category',
+              label: 'CATEGORY',
+              width: 120,
+              render: (p) => (
+                <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-mono">
+                  {p.category}
+                </span>
+              )
+            },
+            {
+              id: 'drawingNumber',
+              label: 'DRAWING NO.',
+              width: 130,
+              render: (p) => <span className="text-slate-400 font-mono">{p.drawingNumber || '-'}</span>
+            },
+            {
+              id: 'unitCostThb',
+              label: 'UNIT COST (THB)',
+              width: 140,
+              align: 'right',
+              render: (p) => (
+                <span className="font-bold text-emerald-400 font-mono">
+                  ฿{p.unitCostThb ? p.unitCostThb.toLocaleString() : '0'}
+                </span>
+              )
+            },
+            {
+              id: 'tubeSizeCompat',
+              label: 'TUBE COMPAT',
+              width: 120,
+              align: 'center',
+              render: (p) => (
+                <span className="px-1.5 py-0.5 rounded bg-cyan-950/60 border border-cyan-800 text-cyan-300 text-[10px] font-mono">
+                  {p.tubeSizeCompat}
+                </span>
+              )
+            },
+            {
+              id: 'action',
+              label: 'ACTION',
+              width: 100,
+              align: 'center',
+              render: (p) => (
+                <button
+                  type="button"
+                  onClick={() => handleOpenEdit(p)}
+                  className="p-1.5 rounded bg-slate-800 hover:bg-cyan-950 text-slate-300 hover:text-cyan-300 border border-slate-700 hover:border-cyan-600 transition-colors"
+                  title="Edit Part Name and Parameters"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                </button>
+              )
+            }
+          ]}
+        />
       </div>
 
       {/* Edit / Add Modal */}

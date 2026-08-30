@@ -54,6 +54,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   theme = 'hmi'
 }) => {
   const isHmi = theme === 'hmi' || theme === 'industrial-dark';
+  const isLight = theme === 'light';
 
   const sections: NavSection[] = [
     {
@@ -103,28 +104,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       titleTh: 'วิศวกรรมแม่พิมพ์และการตั้งค่า',
       items: [
         {
-          id: 'line-configuration',
-          label: 'Line Configuration',
-          labelTh: 'กำหนดสเปกแม่พิมพ์/วัสดุ',
-          icon: Settings2
-        },
-        {
-          id: 'part-master',
-          label: 'Part Master Catalog',
-          labelTh: 'ฐานข้อมูลชิ้นส่วนแม่พิมพ์',
-          icon: Box
-        },
-        {
-          id: 'life-standard-setup',
-          label: 'Life Standard Setup',
-          labelTh: 'เกณฑ์อายุช็อต (10 Keys)',
-          icon: Sliders
-        },
-        {
-          id: 'install-quantity-setup',
-          label: 'Install Quantity Setup',
-          labelTh: 'จำนวนติดตั้งในแม่พิมพ์',
-          icon: Layers
+          id: 'unified-tooling-setup',
+          label: 'Unified Tooling Master Hub',
+          labelTh: 'ศูนย์รวมตั้งค่ามาตรฐานอะไหล่',
+          icon: SlidersHorizontal,
+          badge: 'HUB',
+          badgeColor: 'bg-cyan-950 text-cyan-300 border-cyan-500'
         }
       ]
     },
@@ -132,12 +117,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       title: 'STOCK & SPARE PARTS',
       titleTh: 'คลังอะไหล่และรายงาน',
       items: [
-        {
-          id: 'spare-stock',
-          label: 'Spare Stock & PO Risk',
-          labelTh: 'สต็อกอะไหล่และการสั่งซื้อ',
-          icon: Package
-        },
         {
           id: 'replacement-history',
           label: 'Replacement History',
@@ -171,17 +150,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
       className={`flex flex-col flex-shrink-0 transition-all duration-300 relative select-none shadow-2xl h-full min-h-0 sticky top-0 z-30 ${
         isHmi 
           ? 'bg-black border-r-2 border-green-500/80 text-green-400 font-mono' 
+          : isLight
+          ? 'bg-slate-50 border-r border-slate-300 text-slate-800 font-sans'
           : 'bg-[#0B1120] border-r border-slate-800/80 text-slate-200 font-sans'
       } ${collapsed ? 'w-16' : 'w-64 lg:w-72'}`}
     >
       {/* Top Toggle Button Inside Sidebar */}
       {onToggleCollapse && (
         <div className={`p-2 border-b flex items-center justify-between ${
-          isHmi ? 'border-green-900/60 bg-zinc-950' : 'border-slate-800/60 bg-slate-950/40'
+          isHmi ? 'border-green-900/60 bg-zinc-950' : isLight ? 'border-slate-300 bg-slate-100' : 'border-slate-800/60 bg-slate-950/40'
         }`}>
           {!collapsed && (
             <span className={`text-[11px] font-bold px-2 tracking-wider uppercase ${
-              isHmi ? 'font-mono text-green-400' : 'font-mono text-slate-400'
+              isHmi ? 'font-mono text-green-400' : isLight ? 'font-mono text-slate-700' : 'font-mono text-slate-400'
             }`}>
               {isHmi ? 'HMI MENU' : 'NAVIGATION'}
             </span>
@@ -191,15 +172,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
             className={`p-1.5 rounded transition-colors border ${
               isHmi
                 ? 'hover:bg-green-950 text-green-400 hover:text-green-200 border-green-900/50'
+                : isLight
+                ? 'hover:bg-slate-200 text-slate-700 border-slate-300'
                 : 'hover:bg-slate-800 text-slate-400 hover:text-cyan-300 border-slate-800'
             } ${collapsed ? 'w-full flex justify-center' : 'ml-auto'}`}
             title={collapsed ? "ขยายเมนู (Expand Sidebar)" : "ย่อเมนู (Collapse Sidebar)"}
             aria-label="Toggle Sidebar Collapse"
           >
             {collapsed ? (
-              <ChevronRight className={`w-4 h-4 ${isHmi ? 'text-green-400' : 'text-cyan-400'}`} />
+              <ChevronRight className={`w-4 h-4 ${isHmi ? 'text-green-400' : isLight ? 'text-cyan-600' : 'text-cyan-400'}`} />
             ) : (
-              <ChevronLeft className={`w-4 h-4 ${isHmi ? 'text-green-400' : 'text-slate-400'}`} />
+              <ChevronLeft className={`w-4 h-4 ${isHmi ? 'text-green-400' : isLight ? 'text-slate-600' : 'text-slate-400'}`} />
             )}
           </button>
         </div>
@@ -207,7 +190,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Navigation Links */}
       <div className={`flex-1 overflow-y-auto py-3 px-2 space-y-4 custom-scrollbar ${
-        isHmi ? 'bg-black' : 'bg-[#0B1120]'
+        isHmi ? 'bg-black' : isLight ? 'bg-slate-50' : 'bg-[#0B1120]'
       }`}>
         {sections.map((section, sIdx) => (
           <div key={sIdx} className="space-y-1">

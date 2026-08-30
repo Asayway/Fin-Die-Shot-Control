@@ -334,17 +334,6 @@ export const RegrindingEntryView: React.FC = () => {
             ระบบควบคุมและบันทึกประวัติการเจียระไนลับคมชิ้นส่วนแม่พิมพ์ (ตามมาตรฐาน Excel: อัตราเจียร, ระยะเผื่อรวม, และรอบสูงสุด)
           </p>
         </div>
-
-        {/* Action / Line Info */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setActiveTab('standards')}
-            className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
-          >
-            <Sliders className="w-4 h-4 text-indigo-400" />
-            Master Standards ({standards.length})
-          </button>
-        </div>
       </div>
 
       {/* Tabs */}
