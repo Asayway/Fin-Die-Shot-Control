@@ -29,7 +29,6 @@ import {
   RefreshCw,
   Info,
   Terminal,
-  Cpu,
   Hash,
   Delete,
   Play,
@@ -138,8 +137,8 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
   const [selectedLineId, setSelectedLineId] = useState<ProductionLineId>(initialLineId);
   const [activeTab, setActiveTab] = useState<'entry' | 'history' | 'drafts'>('entry');
 
-  // Input Fields & 3 Entry Modes
-  const [entryMode, setEntryMode] = useState<'MODE_1' | 'MODE_2' | 'MODE_3'>('MODE_1');
+  // Input Fields & 2 Entry Modes
+  const [entryMode, setEntryMode] = useState<'MODE_1' | 'MODE_2'>('MODE_1');
   const [inputMethod, setInputMethod] = useState<ShotInputMethod>('METER_READING');
   const [productionDate, setProductionDate] = useState<string>(new Date().toISOString().substring(0, 10));
   
@@ -181,9 +180,6 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
   } | null>(null);
   const [lossTypeInput, setLossTypeInput] = useState<string>('COIL_CHANGE');
   const [lossReasonInput, setLossReasonInput] = useState<string>('');
-
-  // Mode 3: Direct / PLC Pulse States
-  const [plcBuffer, setPlcBuffer] = useState<number>(0);
 
   // Split Configuration Interval (Advanced)
   const [enableSplitInterval, setEnableSplitInterval] = useState<boolean>(false);
@@ -307,12 +303,6 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
     showNotification('info', `Machine Stopped. Expected Shots: ${mode2ExpectedShots.toLocaleString()} shots`);
   };
 
-  // Mode 3 Quick PLC Pulse Trigger
-  const handleSendPlcPulse = (qty: number) => {
-    setPlcBuffer(prev => prev + qty);
-    showNotification('info', `[PLC PULSE] Received +${qty} pulse trigger`);
-  };
-
   // Sync calculations between Method A (Meter Reading) and Method B (Direct Increment)
   const handleNewReadingChange = (val: string) => {
     const cleaned = val.replace(/[^0-9]/g, '');
@@ -370,16 +360,13 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
     if (entryMode === 'MODE_2') {
       return parseInt(mode2ActualShotsInput.replace(/,/g, ''), 10) || 0;
     }
-    if (entryMode === 'MODE_3') {
-      return plcBuffer;
-    }
     if (enableSplitInterval) {
       const s1 = parseInt(splitPeriod1Shots.replace(/,/g, ''), 10) || 0;
       const s2 = parseInt(splitPeriod2Shots.replace(/,/g, ''), 10) || 0;
       return s1 + s2;
     }
     return newShotsVal - prevShotsVal;
-  }, [entryMode, mode2ActualShotsInput, plcBuffer, newShotsVal, prevShotsVal, enableSplitInterval, splitPeriod1Shots, splitPeriod2Shots]);
+  }, [entryMode, mode2ActualShotsInput, newShotsVal, prevShotsVal, enableSplitInterval, splitPeriod1Shots, splitPeriod2Shots]);
 
   const resultingTotal = useMemo(() => prevShotsVal + incrementVal, [prevShotsVal, incrementVal]);
 
@@ -481,7 +468,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
       lineId: selectedLineId,
       productionDate,
       shift,
-      inputMethod: entryMode === 'MODE_3' ? 'AUTOMATIC_PLC' : inputMethod,
+      inputMethod,
       previousTotal: prevShotsVal,
       newTotal: resultingTotal,
       shotsAdded: incrementVal,
@@ -497,7 +484,6 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
       setPreviewModalOpen(false);
       setLossModalOpen(false);
       setActiveDraftId(null);
-      if (entryMode === 'MODE_3') setPlcBuffer(0);
       if (entryMode === 'MODE_2') setMode2ActualShotsInput('');
       showNotification('success', `SUBMITTED: +${incrementVal.toLocaleString()} shots on Line ${selectedLineId}. New Meter Total: ${resultingTotal.toLocaleString()} shots.`);
       setNotes('');
@@ -628,7 +614,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
               <h2 className={`text-sm sm:text-base font-bold uppercase tracking-wider ${
                 isHmi ? 'text-green-400 font-mono font-extrabold' : 'text-white font-["Plus_Jakarta_Sans"]'
               }`}>
-                FIN DIE SHOT CONTROL TERMINAL (LINE {selectedLineId})
+                SHOT CONTROL (LINE {selectedLineId})
               </h2>
               <p className={`text-[11px] flex items-center gap-2 ${isHmi ? 'text-green-500/80 font-mono' : 'text-slate-400'}`}>
                 <span>DIE: <strong className="text-cyan-300">{currentLine?.activeConfig?.dieCode || `FD-${selectedLineId}-07`}</strong></span>
@@ -667,7 +653,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
               }`}
             >
               <Zap className="w-3.5 h-3.5" />
-              <span>RECORD FORM</span>
+              <span>RECORD</span>
             </button>
 
             <button
@@ -683,7 +669,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
               }`}
             >
               <History className="w-3.5 h-3.5" />
-              <span>RECENT LOGS ({Math.min(10, shotLogs.length)})</span>
+              <span>LOGS ({Math.min(10, shotLogs.length)})</span>
             </button>
 
             <button
@@ -693,7 +679,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                   ? 'bg-zinc-900 hover:bg-amber-950 text-amber-400 border-amber-600/70'
                   : 'bg-slate-900 hover:bg-amber-950/60 text-amber-300 border-amber-600/60'
               }`}
-              title="รีเซ็ตมิเตอร์หน้าเครื่องเมื่อเปลี่ยนเกจใหม่"
+              title="รีเซ็ตมิเตอร์หน้าเครื่อง"
             >
               <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
               <span>RESET METER</span>
@@ -710,7 +696,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
             }`}
           >
             <Info className="w-3.5 h-3.5 text-cyan-400" />
-            <span>{showGuide ? 'HIDE GUIDE (ซ่อนคู่มือ)' : 'คู่มือการบันทึก (GUIDE)'}</span>
+            <span>{showGuide ? 'ซ่อนคู่มือ' : 'คู่มือ'}</span>
           </button>
         </div>
       </div>
@@ -796,8 +782,8 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                       </span>
                     </div>
 
-                    {/* Section 1: 3 Recording Modes */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-[11px] font-thai">
+                    {/* Section 1: 2 Recording Modes */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] font-thai">
                       <div className="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800 space-y-1">
                         <div className="font-bold text-cyan-300 flex items-center gap-1.5 font-mono text-xs">
                           <Gauge className="w-3.5 h-3.5" />
@@ -815,16 +801,6 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                         </div>
                         <p className="text-slate-300 leading-relaxed">
                           คำนวณจากความเร็วรอบ SPM × เวลาทำงาน พร้อมระบบ <strong>หักเวลาพักเบรกอัตโนมัติ (Break Deduction 30-60 นาที)</strong> และระบบ <strong>Loss Time OEE Catcher</strong> บันทึกสาเหตุยอดสูญเสีย
-                        </p>
-                      </div>
-
-                      <div className="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800 space-y-1">
-                        <div className="font-bold text-emerald-300 flex items-center gap-1.5 font-mono text-xs">
-                          <Cpu className="w-3.5 h-3.5" />
-                          MODE 3: DIRECT PLC PULSE
-                        </div>
-                        <p className="text-slate-300 leading-relaxed">
-                          รับสัญญาณ Pulse Counter จริงจากตู้คอนโทรล PLC อัตโนมัติ Real-Time โดยไม่ต้องคีย์ตัวเลขเอง
                         </p>
                       </div>
                     </div>
@@ -854,14 +830,12 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                 </div>
               </div>
             )}
-
-            {/* 3 Entry Mode Selector: Mode 1 (Manual Meter) vs Mode 2 (SPM Simulation + Break Deduction) vs Mode 3 (Direct PLC Pulse) */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-xs font-bold font-mono">
                 <span className={isHmi ? 'text-green-400' : 'text-cyan-300'}>SELECT SHOT RECORDING MODE (เลือกโหมดบันทึกข้อมูล):</span>
-                <span className="text-[11px] text-slate-400 font-thai">รองรับ 3 รูปแบบตามหน้างานจริง</span>
+                <span className="text-[11px] text-slate-400 font-thai">รองรับ 2 รูปแบบตามหน้างานจริง</span>
               </div>
-              <div className={`grid grid-cols-1 sm:grid-cols-3 gap-2 p-1.5 rounded-lg border ${
+              <div className={`grid grid-cols-1 sm:grid-cols-2 gap-2 p-1.5 rounded-lg border ${
                 isHmi ? 'bg-zinc-950 border-green-800' : 'bg-slate-950 border-slate-800'
               }`}>
                 <button
@@ -896,23 +870,6 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                 >
                   <Activity className="w-4 h-4 flex-shrink-0" />
                   <span>MODE 2: SPM SIMULATION</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setEntryMode('MODE_3')}
-                  className={`py-2.5 px-2 rounded-md text-xs font-bold transition-all flex items-center justify-center gap-1.5 active:scale-95 active:ring-2 touch-manipulation ${
-                    entryMode === 'MODE_3'
-                      ? isHmi
-                        ? 'bg-green-500 text-black font-black shadow-lg shadow-green-500/30 ring-2 ring-green-300'
-                        : 'bg-cyan-500 text-slate-950 font-bold shadow-lg shadow-cyan-500/30 ring-2 ring-cyan-300'
-                      : isHmi
-                        ? 'text-green-400 hover:text-green-200'
-                        : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <Cpu className="w-4 h-4 flex-shrink-0" />
-                  <span>MODE 3: DIRECT / PLC</span>
                 </button>
               </div>
             </div>
@@ -996,7 +953,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                     type="text"
                     value={operatorName}
                     onChange={e => setOperatorName(e.target.value)}
-                    placeholder="กรุณากรอกชื่อพนักงาน (บังคับลงชื่อ)..."
+                    placeholder="กรอกชื่อพนักงาน..."
                     className={`w-full rounded-lg px-3.5 py-2.5 text-sm sm:text-base font-bold font-mono focus:outline-none focus:ring-2 transition-all ${
                       !operatorName.trim()
                         ? 'border-2 border-rose-500/80 bg-rose-950/20 text-rose-200 placeholder-rose-400/60 focus:border-rose-400 focus:ring-rose-500/40'
@@ -1234,48 +1191,6 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                 </div>
               )}
 
-              {/* =================================================================== */}
-              {/* MODE 3: DIRECT / PLC PULSE MODE INTERFACE                           */}
-              {/* =================================================================== */}
-              {entryMode === 'MODE_3' && (
-                <div className="space-y-3 font-mono">
-                  <div className={`p-4 rounded-xl border space-y-3 ${
-                    isHmi ? 'bg-black border-green-500' : 'bg-slate-900/90 border-cyan-500/80'
-                  }`}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-                        <span className="text-xs font-bold text-emerald-300">PLC SENSOR STREAM ONLINE</span>
-                      </div>
-                      <span className="text-[11px] text-slate-400 font-mono">LINE {selectedLineId}</span>
-                    </div>
-
-                    <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-center space-y-1">
-                      <span className="text-[11px] text-slate-400 uppercase">UNCOMMITTED PLC PULSE BUFFER</span>
-                      <div className="text-4xl font-black text-cyan-400">
-                        +{plcBuffer.toLocaleString()} <span className="text-xs font-normal text-slate-500">shots</span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase">SIMULATE PLC PULSE TRIGGERS:</span>
-                      <div className="grid grid-cols-4 gap-2">
-                        {[1, 10, 100, 1000].map(qty => (
-                          <button
-                            key={qty}
-                            type="button"
-                            onClick={() => handleSendPlcPulse(qty)}
-                            className="py-2.5 rounded-lg bg-slate-950 hover:bg-cyan-500 hover:text-slate-950 border border-slate-700 text-cyan-300 font-bold text-xs active:scale-95 transition-all shadow"
-                          >
-                            +{qty >= 1000 ? `${qty / 1000}k` : qty} PULSE
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* Optional On-Screen Touch Keypad for Shopfloor Gloves */}
               {showTouchKeypad && (
                 <div className={`p-3 rounded-lg grid grid-cols-3 gap-2.5 text-xl font-bold font-mono animate-fadeIn mt-2 border ${
@@ -1347,7 +1262,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                 }`}
               >
                 <CheckCircle2 className="w-6 h-6 sm:w-7 sm:h-7 stroke-[2.5]" />
-                <span>บันทึกข้อมูล (SUBMIT SHOTS +{formatShots(incrementVal)})</span>
+                <span>ยืนยันบันทึก (+{formatShots(incrementVal)} SHOTS)</span>
               </button>
 
               {/* Secondary Options (Date, Note, Save Draft) */}
@@ -1620,7 +1535,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                 type="text"
                 value={historySearch}
                 onChange={e => setHistorySearch(e.target.value)}
-                placeholder="Search logs..."
+                placeholder="ค้นหาประวัติ..."
                 className={`rounded px-2.5 py-1 font-mono border ${
                   isHmi
                     ? 'bg-zinc-950 border-green-700 text-green-300 placeholder:text-green-800'
@@ -1919,7 +1834,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                   type="text"
                   value={resetReasonInput}
                   onChange={e => setResetReasonInput(e.target.value)}
-                  placeholder="เช่น New Die Setup / Full Routine Calibration / เปลี่ยนมิเตอร์เกจใหม่"
+                  placeholder="ระบุเหตุผลการรีเซ็ต..."
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200"
                   required
                 />

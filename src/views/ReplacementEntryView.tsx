@@ -197,6 +197,21 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
       return;
     }
 
+    if (!changedBy || !changedBy.trim()) {
+      setNotification({ type: 'error', message: 'Mandatory User ID Check: Please specify Technician Name / ID (Changed By).' });
+      return;
+    }
+
+    if (!replacementReason || !replacementReason.trim()) {
+      setNotification({ type: 'error', message: 'Reason selection is mandatory before replacement submission.' });
+      return;
+    }
+
+    if (!replacementDateTime || !replacementDateTime.trim()) {
+      setNotification({ type: 'error', message: 'Date and Time selection is mandatory before submission.' });
+      return;
+    }
+
     // Rule 5: Partial replacements require position numbers
     if (fullSetOrPartial === 'PARTIAL' && (!position || position.trim() === '' || position.toUpperCase() === 'ALL')) {
       setNotification({ type: 'error', message: 'Rule 5 Violation: Partial replacement requires specific position numbers (e.g., Row 1-2, Pos 01-14).' });
@@ -471,11 +486,11 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                 <Wrench className="w-4 h-4" />
               </span>
               <h1 className="text-base sm:text-lg font-bold text-white tracking-tight">
-                Part Replacement Entry & Life Initialization
+                Part Replacement & 2D Layout
               </h1>
             </div>
             <p className="text-xs text-slate-400 mt-0.5 font-thai">
-              บันทึกการเปลี่ยนอะไหล่แม่พิมพ์ Fin Press (เริ่มนับอายุรอบใหม่ พร้อมเก็บประวัติชิ้นเดิม)
+              บันทึกเปลี่ยนอะไหล่แม่พิมพ์และดูผัง 2D
             </p>
           </div>
 
@@ -500,7 +515,7 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
-              2D Interactive Die Layout
+              2D Die Layout
             </button>
             <button
               id="tab-entry"
@@ -512,7 +527,7 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
               }`}
             >
               <Wrench className="w-3.5 h-3.5" />
-              Form Replacement Entry
+              Form Entry
             </button>
             <button
               id="tab-drafts"
@@ -712,7 +727,7 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                       type="text"
                       value={position}
                       onChange={e => setPosition(e.target.value)}
-                      placeholder={fullSetOrPartial === 'PARTIAL' ? 'e.g. Row 1 Pos 1..10' : 'ALL'}
+                      placeholder={fullSetOrPartial === 'PARTIAL' ? 'ระบุตำแหน่ง เช่น แถว 1 ช่อง 1-10' : 'ทั้งหมด (ALL)'}
                       disabled={fullSetOrPartial === 'FULL_SET'}
                       className={`w-full bg-slate-950 border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none ${
                         fullSetOrPartial === 'PARTIAL'
@@ -777,7 +792,7 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                           type="text"
                           value={quantityMismatchReason}
                           onChange={e => setQuantityMismatchReason(e.target.value)}
-                          placeholder="e.g. 4 spare punches defective in lot, emergency partial swap"
+                          placeholder="ระบุเหตุผลที่จำนวนไม่ตรง..."
                           className="w-full bg-slate-950 border border-amber-500/60 rounded px-3 py-1.5 text-xs text-amber-100 focus:border-amber-400 focus:outline-none"
                           required
                         />
@@ -790,7 +805,7 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                           type="text"
                           value={quantityMismatchApprovedBy}
                           onChange={e => setQuantityMismatchApprovedBy(e.target.value)}
-                          placeholder="e.g. Somchai M. (Lead Supervisor)"
+                          placeholder="ชื่อผู้อนุมัติ..."
                           className="w-full bg-slate-950 border border-amber-500/60 rounded px-3 py-1.5 text-xs text-amber-100 focus:border-amber-400 focus:outline-none"
                           required
                         />
@@ -878,7 +893,7 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                       type="text"
                       value={newPartLotNumber}
                       onChange={e => setNewPartLotNumber(e.target.value)}
-                      placeholder="e.g. LOT-2026-NP-882"
+                      placeholder="ระบุเลขล็อตอะไหล่..."
                       className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm font-mono text-slate-100 focus:border-cyan-500 focus:outline-none"
                       required
                     />
@@ -893,7 +908,7 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                       type="text"
                       value={newPartSerialNumber}
                       onChange={e => setNewPartSerialNumber(e.target.value)}
-                      placeholder="e.g. SN-LP-092-A"
+                      placeholder="ระบุ Serial No..."
                       className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm font-mono text-slate-100 focus:border-cyan-500 focus:outline-none"
                     />
                   </div>
@@ -924,7 +939,7 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                       type="text"
                       value={workOrderNumber}
                       onChange={e => setWorkOrderNumber(e.target.value)}
-                      placeholder="e.g. WO-2026-4412"
+                      placeholder="ระบุเลข WO..."
                       className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm font-mono text-slate-100 focus:border-cyan-500 focus:outline-none"
                       required
                     />
@@ -1030,7 +1045,7 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                       rows={3}
                       value={note}
                       onChange={e => setNote(e.target.value)}
-                      placeholder="Enter detailed maintenance notes, torque inspection results, alignment checks..."
+                      placeholder="ระบุบันทึกซ่อมบำรุงเพิ่มเติม..."
                       className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:border-cyan-500 focus:outline-none"
                     />
                   </div>
@@ -1047,7 +1062,7 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                   }}
                   className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-semibold transition-colors"
                 >
-                  Clear / Reset Form
+                  ล้างข้อมูล
                 </button>
 
                 <button
@@ -1056,7 +1071,7 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                   className="px-6 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-cyan-500/20 transition-all hover:scale-[1.01]"
                 >
                   <Eye className="w-4 h-4" />
-                  Review Before & After Preview
+                  ตรวจสอบก่อนบันทึก
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
@@ -1187,7 +1202,7 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                 <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Search Part, WO, Lot..."
+                  placeholder="ค้นหาอะไหล่/WO/ล็อต..."
                   value={historySearch}
                   onChange={e => setHistorySearch(e.target.value)}
                   className="bg-slate-950 border border-slate-700 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-100 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"

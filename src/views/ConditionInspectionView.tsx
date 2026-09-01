@@ -257,7 +257,7 @@ export const ConditionInspectionView: React.FC = () => {
                   type="text"
                   value={action}
                   onChange={e => setAction(e.target.value)}
-                  placeholder="e.g. Clean suction nozzle and re-check in 2 hrs"
+                  placeholder="ระบุข้อเสนอแนะ/การแก้ไข..."
                   className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm text-slate-100 focus:border-cyan-500 focus:outline-none"
                 />
               </div>
@@ -268,7 +268,7 @@ export const ConditionInspectionView: React.FC = () => {
               className="w-full py-3 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded text-sm transition-all shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2"
             >
               <ClipboardCheck className="w-4 h-4" />
-              <span>LOG INSPECTION REPORT</span>
+              <span>บันทึกผลการตรวจเช็ค</span>
             </button>
           </form>
         </div>

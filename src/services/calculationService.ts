@@ -426,7 +426,21 @@ export function calculatePartMetrics(
  * 7. DATA ERROR
  * Secondary sort: usagePercent descending
  */
-export function sortTrackingItems(items: PartLiveTrackingItem[]): PartLiveTrackingItem[] {
+export type TvSortMode = 'INDUSTRIAL_PRIORITY' | 'USAGE_DESC' | 'USAGE_ASC' | 'REMAINING_ASC' | 'STAGE_ORDER' | 'CUSTOM_SEQUENCE';
+
+/**
+ * Flexible sorting for TV monitoring table records:
+ * - INDUSTRIAL_PRIORITY: OVER LIFE -> CRITICAL -> PREPARE -> WARNING -> NORMAL (default)
+ * - USAGE_DESC: Usage % descending
+ * - USAGE_ASC: Usage % ascending
+ * - REMAINING_ASC: Remaining shots ascending (closest to replacement first)
+ * - STAGE_ORDER: Stage / Part name order
+ * - CUSTOM_SEQUENCE: Custom slot/sequence order
+ */
+export function sortTrackingItems(
+  items: PartLiveTrackingItem[], 
+  sortMode: TvSortMode | string = 'INDUSTRIAL_PRIORITY'
+): PartLiveTrackingItem[] {
   const statusRank: Record<LifeStatus, number> = {
     'OVER_LIFE': 1,
     'CRITICAL': 2,
@@ -438,6 +452,32 @@ export function sortTrackingItems(items: PartLiveTrackingItem[]): PartLiveTracki
   };
 
   return [...items].sort((a, b) => {
+    if (sortMode === 'USAGE_DESC') {
+      return (b.usagePercent || 0) - (a.usagePercent || 0);
+    }
+    if (sortMode === 'USAGE_ASC') {
+      return (a.usagePercent || 0) - (b.usagePercent || 0);
+    }
+    if (sortMode === 'REMAINING_ASC') {
+      // Missing standard at the end
+      if (a.isStandardMissing && !b.isStandardMissing) return 1;
+      if (!a.isStandardMissing && b.isStandardMissing) return -1;
+      return (a.remainingShot ?? 999999999) - (b.remainingShot ?? 999999999);
+    }
+    if (sortMode === 'STAGE_ORDER') {
+      const stageA = a.stagePunchDie || a.partName || '';
+      const stageB = b.stagePunchDie || b.partName || '';
+      return stageA.localeCompare(stageB);
+    }
+    if (sortMode === 'CUSTOM_SEQUENCE') {
+      const parseSlot = (s: string) => {
+        const num = parseInt((s || '').replace(/[^0-9]/g, ''), 10);
+        return isNaN(num) ? 999 : num;
+      };
+      return parseSlot(a.slotId) - parseSlot(b.slotId);
+    }
+
+    // Default: INDUSTRIAL_PRIORITY
     const statusA = a.lifeStatus || a.alertStatus || 'NORMAL';
     const statusB = b.lifeStatus || b.alertStatus || 'NORMAL';
     const rankA = statusRank[statusA] ?? 99;

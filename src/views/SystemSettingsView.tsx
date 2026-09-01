@@ -149,10 +149,10 @@ export const SystemSettingsView: React.FC = () => {
         <div>
           <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
             <SlidersHorizontal className="w-5 h-5 text-cyan-400" />
-            Fin Press System Settings & Life Thresholds
+            System Settings & Thresholds
           </h2>
           <p className="text-sm text-slate-400 mt-1 font-thai">
-            ตั้งค่าเกณฑ์เปอร์เซ็นต์แจ้งเตือน (Alert Thresholds), กะการทำงาน และการกู้คืนข้อมูล Seed Data
+            ตั้งค่าเกณฑ์แจ้งเตือน (Alert Thresholds) ธีม และกู้คืนข้อมูล
           </p>
         </div>
 
@@ -161,7 +161,7 @@ export const SystemSettingsView: React.FC = () => {
           className="flex items-center gap-2 px-4 py-2 bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-700 font-bold rounded text-xs transition-all shadow font-mono"
         >
           <RotateCcw className="w-4 h-4" />
-          <span>RESET TO EXCEL SEED DATA</span>
+          <span>RESET TO SEED DATA</span>
         </button>
       </div>
 

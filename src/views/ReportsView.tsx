@@ -369,14 +369,14 @@ export const ReportsView: React.FC = () => {
           <div className="flex items-center gap-2 flex-wrap">
             <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight flex items-center gap-2.5">
               <BarChart3 className="w-6 h-6 text-cyan-400" />
-              Production History & Maintenance Analytics Reports
+              Reports & Analytics
             </h2>
             <span className="px-2.5 py-0.5 rounded text-xs font-mono font-bold bg-emerald-950 text-emerald-300 border border-emerald-600 shadow-sm">
-              EXCEL / CSV EXPORT READY
+              EXCEL EXPORT
             </span>
           </div>
           <p className="text-sm text-slate-400 mt-1 font-thai">
-            ศูนย์รายงานและดาวน์โหลดข้อมูลประวัติการผลิตยอดช็อต (Shot Production History) และประวัติงานซ่อมบำรุงแม่พิมพ์ (Maintenance & Replacement Records)
+            ศูนย์รายงานข้อมูลประวัติการผลิต ยอดช็อต และการซ่อมบำรุงแม่พิมพ์
           </p>
         </div>
 
@@ -388,7 +388,7 @@ export const ReportsView: React.FC = () => {
             title="Download full comprehensive Excel/CSV master file"
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-100" />
-            <span>EXPORT ALL MASTER (EXCEL)</span>
+            <span>EXPORT ALL (EXCEL)</span>
           </button>
         </div>
       </div>
@@ -406,7 +406,7 @@ export const ReportsView: React.FC = () => {
             }`}
           >
             <Activity className="w-3.5 h-3.5" />
-            <span>KPIs & MTBF ANALYTICS</span>
+            <span>KPIs & MTBF</span>
           </button>
 
           <button
@@ -418,7 +418,7 @@ export const ReportsView: React.FC = () => {
             }`}
           >
             <History className="w-3.5 h-3.5 text-emerald-400" />
-            <span>PRODUCTION HISTORY ({shotLogs.length})</span>
+            <span>PRODUCTION ({shotLogs.length})</span>
           </button>
 
           <button
@@ -430,7 +430,7 @@ export const ReportsView: React.FC = () => {
             }`}
           >
             <Wrench className="w-3.5 h-3.5 text-amber-400" />
-            <span>MAINTENANCE REPLACEMENTS ({replacements.length})</span>
+            <span>REPLACEMENTS ({replacements.length})</span>
           </button>
 
           <button
@@ -442,7 +442,7 @@ export const ReportsView: React.FC = () => {
             }`}
           >
             <RotateCcw className="w-3.5 h-3.5 text-cyan-400" />
-            <span>REGRINDING LOGS ({regrindRecords.length})</span>
+            <span>REGRINDING ({regrindRecords.length})</span>
           </button>
         </div>
 
@@ -1132,7 +1132,7 @@ export const AuditLogView: React.FC = () => {
             type="text"
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            placeholder="Search Audit ID, Record ID, User, Reason, IP..."
+            placeholder="ค้นหาประวัติการแก้ไข..."
             className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-slate-100 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
           />
         </div>
@@ -1326,7 +1326,7 @@ export const AuditLogView: React.FC = () => {
                     type="text"
                     value={correctionForm.originalRecordId}
                     onChange={e => setCorrectionForm({ ...correctionForm, originalRecordId: e.target.value })}
-                    placeholder="e.g. REP-2026-0891"
+                    placeholder="รหัสรายการเดิม..."
                     className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-white font-bold"
                     required
                   />
@@ -1339,7 +1339,7 @@ export const AuditLogView: React.FC = () => {
                   type="text"
                   value={correctionForm.fieldChanged}
                   onChange={e => setCorrectionForm({ ...correctionForm, fieldChanged: e.target.value })}
-                  placeholder="e.g. usedShotAtReplacement, quantity, position"
+                  placeholder="ชื่อฟิลด์ที่ต้องการแก้ไข..."
                   className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200"
                   required
                 />
@@ -1374,7 +1374,7 @@ export const AuditLogView: React.FC = () => {
                   rows={3}
                   value={correctionForm.reason}
                   onChange={e => setCorrectionForm({ ...correctionForm, reason: e.target.value })}
-                  placeholder="Explain why this correction is required (e.g. Incorrect meter reading transcribed during Shift 2)..."
+                  placeholder="ระบุเหตุผลในการแก้ไข..."
                   className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-slate-100 focus:border-amber-500 focus:outline-none"
                   required
                 />

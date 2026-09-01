@@ -42,10 +42,10 @@ export const UnifiedToolingMasterView: React.FC<UnifiedToolingMasterViewProps> =
           <div className="flex items-center gap-2.5">
             <span className="px-3 py-1.5 rounded-lg text-xs font-bold tracking-wide uppercase bg-cyan-950 text-cyan-300 border border-cyan-500 font-mono flex items-center gap-2 shadow-sm">
               <Sliders className="w-4 h-4 text-cyan-400" />
-              <span>FIN DIE TOOLING & SPARE MASTER HUB</span>
+              <span>DIE & PART MASTER HUB</span>
             </span>
             <span className="hidden md:inline text-slate-400 text-xs font-thai">
-              ศูนย์จัดการสเปกไลน์ผลิต (E1-E6), สเปก FIN DIE, มาตรฐานช็อต และแคตตาล็อกอะไหล่
+              จัดการสเปกไลน์ (E1-E6), สเปกแม่พิมพ์, มาตรฐานช็อต และอะไหล่
             </span>
           </div>
           
@@ -54,7 +54,7 @@ export const UnifiedToolingMasterView: React.FC<UnifiedToolingMasterViewProps> =
             className="px-3 py-1.5 bg-indigo-900/40 hover:bg-indigo-900 text-indigo-300 border border-indigo-700/50 rounded-lg text-xs font-mono flex items-center gap-2 transition-all shadow-lg"
           >
             <DatabaseZap className="w-3.5 h-3.5" />
-            <span>MIGRATE STANDARD (REVISION: 2025-01-31)</span>
+            <span>MIGRATE STANDARD</span>
           </button>
         </div>
 
@@ -75,7 +75,7 @@ export const UnifiedToolingMasterView: React.FC<UnifiedToolingMasterViewProps> =
             }`}
           >
             <Factory className="w-4 h-4" />
-            <span>0. LINE & DIE SPECIFICATIONS (สเปกไลน์ & FIN DIE)</span>
+            <span>1. LINE & DIE SPECS</span>
           </button>
 
           <button
@@ -92,7 +92,7 @@ export const UnifiedToolingMasterView: React.FC<UnifiedToolingMasterViewProps> =
             }`}
           >
             <Sliders className="w-4 h-4" />
-            <span>1. LIFE STANDARD SETUP</span>
+            <span>2. LIFE STANDARDS</span>
           </button>
 
           <button
@@ -109,7 +109,7 @@ export const UnifiedToolingMasterView: React.FC<UnifiedToolingMasterViewProps> =
             }`}
           >
             <Box className="w-4 h-4" />
-            <span>2. PART MASTER CATALOG</span>
+            <span>3. PART MASTER</span>
           </button>
 
           <button
@@ -126,7 +126,7 @@ export const UnifiedToolingMasterView: React.FC<UnifiedToolingMasterViewProps> =
             }`}
           >
             <Layers className="w-4 h-4" />
-            <span>3. INSTALL MATRIX</span>
+            <span>4. INSTALL MATRIX</span>
           </button>
         </div>
       </div>

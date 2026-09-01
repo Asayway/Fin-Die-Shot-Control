@@ -156,13 +156,13 @@ const STAGE_CONFIGS: StageConfig[] = [
 ];
 
 const COMMON_REASONS = [
-  'Normal PM Life Cycle Limit Reached (หมดอายุการใช้งานตามรอบ)',
-  'Punch Tip Chipped / Broken (ปลายพันช์บิ่น/แตกหัก)',
-  'Louver Blade Edge Dull (คมตัดใบมีดทื่อ - ตัดครีบไม่ขาด)',
-  'Die Clearance Out of Spec (ระยะเคลียแรนซ์แม่พิมพ์หลวมเกินเกณฑ์)',
-  'Periodic Regrinding Scheduled (ส่งเจียระไนลับคมตามรอบช็อต)',
-  'Slot Isolated with Bypass Dummy Pin (สวมพินหลอก/บายพาส)',
-  'Coating Worn Out / Scoring Mark (ผิวเคลือบสึก/เกิดรอยครูด)'
+  'หมดอายุตามรอบ (PM Limit Reached)',
+  'ปลายพันช์บิ่น/แตกหัก (Tip Broken)',
+  'คมใบมีดทื่อ (Blade Dull)',
+  'ระยะเคลียแรนซ์หลวม (Clearance Out)',
+  'เจียรลับคมตามรอบ (Periodic Regrind)',
+  'ใส่พินหลอก/บายพาส (Bypass Pin)',
+  'ผิวเคลือบสึก/เกิดรอย (Coating Worn)'
 ];
 
 const LOCAL_STORAGE_PINS_KEY = 'FIN_DIE_INTERACTIVE_PINS_V2_';
@@ -640,14 +640,14 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-base sm:text-lg font-bold text-white font-mono tracking-tight uppercase">
-                    PART REPLACEMENT & 2D DIE LAYOUT
+                    2D DIE LAYOUT & MATRIX
                   </h1>
                   <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-cyan-950 text-cyan-300 border border-cyan-600 font-mono">
-                    LIVE INTERACTIVE MATRIX
+                    2D MATRIX
                   </span>
                 </div>
                 <p className="text-xs text-slate-400 font-thai">
-                  แผนผังแม่พิมพ์ 2 มิติและบันทึกการเปลี่ยนอะไหล่/ซ่อมบำรุงรายตำแหน่งแบบ Real-time
+                  ผังแม่พิมพ์ 2D และสถานะอะไหล่รายตำแหน่ง Real-Time
                 </p>
               </div>
             </div>
@@ -846,7 +846,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Search Pin Code (e.g. P-03, Burring)..."
+                placeholder="ค้นหาตำแหน่ง/หมุด..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 className="bg-slate-900 border border-slate-700 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-400 w-64 font-mono"
@@ -1171,7 +1171,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
               {/* 4 Large Touch Action Buttons */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-slate-300 uppercase font-mono">
-                  CHOOSE MAINTENANCE ACTION TYPE (เลือกประเภทการซ่อมบำรุง) *
+                  เลือกการซ่อมบำรุง *
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <button
@@ -1188,7 +1188,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
                       {actionType === 'REPLACE_NEW' && <Check className="w-4 h-4 text-emerald-400" />}
                     </div>
                     <div className="mt-2">
-                      <div className="text-xs font-bold font-mono text-emerald-300">เปลี่ยนอะไหล่ใหม่</div>
+                      <div className="text-xs font-bold font-mono text-emerald-300">เปลี่ยนใหม่</div>
                       <div className="text-[10px] text-slate-400 font-thai">Replace New (Reset 0)</div>
                     </div>
                   </button>
@@ -1207,7 +1207,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
                       {actionType === 'REGRIND' && <Check className="w-4 h-4 text-amber-400" />}
                     </div>
                     <div className="mt-2">
-                      <div className="text-xs font-bold font-mono text-amber-300">ถอดไปเจียรลับคม</div>
+                      <div className="text-xs font-bold font-mono text-amber-300">ส่งเจียรลับคม</div>
                       <div className="text-[10px] text-slate-400 font-thai">Regrinding (+1 cycle)</div>
                     </div>
                   </button>
@@ -1227,7 +1227,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
                     </div>
                     <div className="mt-2">
                       <div className="text-xs font-bold font-mono text-rose-300">ชำรุด / แตกหัก</div>
-                      <div className="text-[10px] text-slate-400 font-thai">Broken & Emergency Lock</div>
+                      <div className="text-[10px] text-slate-400 font-thai">Broken & Lock</div>
                     </div>
                   </button>
 
@@ -1245,7 +1245,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
                       {actionType === 'LOCK' && <Check className="w-4 h-4 text-purple-400" />}
                     </div>
                     <div className="mt-2">
-                      <div className="text-xs font-bold font-mono text-purple-300">ปิดใช้งาน / ล็อค</div>
+                      <div className="text-xs font-bold font-mono text-purple-300">ล็อค / บายพาส</div>
                       <div className="text-[10px] text-slate-400 font-thai">Lock / Bypass Dummy</div>
                     </div>
                   </button>
@@ -1256,7 +1256,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
               {actionType === 'REGRIND' && (
                 <div className="grid grid-cols-2 gap-3 bg-amber-950/30 border border-amber-800/50 rounded-xl p-3.5 font-mono text-xs">
                   <div>
-                    <label className="block text-amber-300 font-bold mb-1">ความหนาที่เจียรออก (Depth mm) *</label>
+                    <label className="block text-amber-300 font-bold mb-1">ความหนาเจียรออก (มม.) *</label>
                     <input
                       type="number"
                       step="0.01"
@@ -1269,7 +1269,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
                     />
                   </div>
                   <div>
-                    <label className="block text-amber-300 font-bold mb-1">ความหนาแผ่นชิมรอง (Shim mm) *</label>
+                    <label className="block text-amber-300 font-bold mb-1">ความหนาชิมรอง (มม.) *</label>
                     <input
                       type="number"
                       step="0.01"
@@ -1286,17 +1286,17 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
 
               {actionType === 'LOCK' && (
                 <div className="bg-purple-950/30 border border-purple-800/50 rounded-xl p-3.5 font-mono text-xs space-y-2">
-                  <label className="block text-purple-300 font-bold">LOCK TYPE (ประเภทการล็อค) *</label>
+                  <label className="block text-purple-300 font-bold">ประเภทการล็อค *</label>
                   <select
                     value={lockStatusOption}
                     onChange={e => setLockStatusOption(e.target.value as PositionLockStatus)}
                     className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-purple-300 font-bold focus:outline-none focus:border-purple-400"
                   >
-                    <option value="LOCKED_MAINTENANCE">LOCKED_MAINTENANCE - รอเจียระไน / ซ่อมบำรุง</option>
-                    <option value="LOCKED_BYPASS">LOCKED_BYPASS - ใส่พินหลอก (Bypass Dummy Pin)</option>
-                    <option value="LOCKED_TRIAL">LOCKED_TRIAL - สุ่มทดลองคอยล์ตัวอย่าง</option>
-                    <option value="LOCKED_CALIBRATION">LOCKED_CALIBRATION - ปรับระยะเคลียแรนซ์</option>
-                    <option value="LOCKED_HOLD">LOCKED_HOLD - อายัดตรวจสอบคุณภาพ (QC Hold)</option>
+                    <option value="LOCKED_MAINTENANCE">รอเจียร / ซ่อมบำรุง (LOCKED_MAINTENANCE)</option>
+                    <option value="LOCKED_BYPASS">ใส่พินหลอก (LOCKED_BYPASS)</option>
+                    <option value="LOCKED_TRIAL">สุ่มลองคอยล์ (LOCKED_TRIAL)</option>
+                    <option value="LOCKED_CALIBRATION">ตั้งระยะคลาย (LOCKED_CALIBRATION)</option>
+                    <option value="LOCKED_HOLD">อายัดตรวจสอบ (LOCKED_HOLD)</option>
                   </select>
                 </div>
               )}
@@ -1304,14 +1304,14 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
               {/* Form Fields: Technician, Date-Time, Remarks */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-mono">
                 <div>
-                  <label className="block text-slate-400 font-bold mb-1">ผู้ปฏิบัติงาน / ช่างซ่อม (TECHNICIAN) *</label>
+                  <label className="block text-slate-400 font-bold mb-1">ช่างซ่อม / ผู้บันทึก *</label>
                   <div className="relative">
                     <UserCheck className="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
                     <input
                       type="text"
                       value={technicianName}
                       onChange={e => setTechnicianName(e.target.value)}
-                      placeholder="e.g. Somchai M. (Tooling Lead)"
+                      placeholder="ระบุชื่อช่าง..."
                       className="w-full bg-slate-950 border border-slate-700 rounded pl-8 pr-2.5 py-1.5 text-slate-100 focus:outline-none focus:border-cyan-400"
                       required
                     />
@@ -1319,7 +1319,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
                 </div>
 
                 <div>
-                  <label className="block text-slate-400 font-bold mb-1">วันที่-เวลา (DATE & TIME) *</label>
+                  <label className="block text-slate-400 font-bold mb-1">วัน-เวลา *</label>
                   <div className="relative">
                     <Calendar className="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
                     <input
@@ -1335,7 +1335,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
 
               <div>
                 <label className="block text-slate-400 font-bold mb-1 text-xs font-mono">
-                  สาเหตุ / หมายเหตุ (REMARKS / REASON) *
+                  สาเหตุ / หมายเหตุ *
                 </label>
                 <div className="space-y-1.5">
                   <select
@@ -1344,7 +1344,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
                     }}
                     className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-300 font-thai focus:outline-none focus:border-cyan-400"
                   >
-                    <option value="">-- เลือกสาเหตุมาตรฐาน (Quick Common Reasons) --</option>
+                    <option value="">-- เลือกสาเหตุ --</option>
                     {COMMON_REASONS.map((r, idx) => (
                       <option key={idx} value={r}>{r}</option>
                     ))}
@@ -1353,7 +1353,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
                     rows={2}
                     value={remarks}
                     onChange={e => setRemarks(e.target.value)}
-                    placeholder="พิมพ์รายละเอียดเพิ่มเติม เช่น เปลี่ยนสเปก, คมตัดบิ่น, เลขที่ใบสั่งงาน..."
+                    placeholder="ระบุรายละเอียด..."
                     className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-xs text-slate-100 font-thai focus:outline-none focus:border-cyan-400"
                     required
                   />
@@ -1413,14 +1413,14 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
                   onClick={() => setSelectedPin(null)}
                   className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono font-bold"
                 >
-                  Cancel (ยกเลิก)
+                  ยกเลิก
                 </button>
                 <button
                   type="submit"
                   className="px-5 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-mono font-bold shadow-lg shadow-cyan-900/50 flex items-center gap-1.5"
                 >
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>Confirm & Save Transaction (บันทึกข้อมูล)</span>
+                  <span>บันทึกข้อมูล</span>
                 </button>
               </div>
             </form>
@@ -1486,7 +1486,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Search history..."
+                placeholder="ค้นหาประวัติ..."
                 value={historySearch}
                 onChange={e => setHistorySearch(e.target.value)}
                 className="bg-slate-900 border border-slate-700 rounded-lg pl-8 pr-2.5 py-1.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-400 w-44 font-mono"

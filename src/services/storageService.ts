@@ -2201,6 +2201,135 @@ class StorageService {
     return { success: true, message: `Configuration ${cfg.id} deactivated.` };
   }
 
+  /**
+   * Configures which parts are installed on a specific line and their installed quantities (target 12-20 items per line).
+   * Immediately updates line monitoring data and notifies subscribers.
+   */
+  public saveLineInstalledParts(
+    lineId: ProductionLineId,
+    installedParts: Array<{ partCode: string; installQty: number; displaySeq?: number }>
+  ): { success: boolean; message: string; itemCount: number } {
+    const configs = this.getLineConfigs();
+    let configIdx = configs.findIndex(c => c.lineId === lineId && c.isActive);
+    if (configIdx === -1) {
+      configIdx = configs.findIndex(c => c.lineId === lineId);
+    }
+
+    const installedQtyMap: Record<string, number> = {};
+    installedParts.forEach(item => {
+      if (item.partCode && item.installQty > 0) {
+        installedQtyMap[item.partCode] = item.installQty;
+      }
+    });
+
+    let currentConfig: LineActiveConfiguration;
+    if (configIdx >= 0) {
+      currentConfig = {
+        ...configs[configIdx],
+        installedPartQuantities: installedQtyMap
+      };
+      configs[configIdx] = currentConfig;
+    } else {
+      currentConfig = {
+        id: `CFG-${lineId}-CUSTOM`,
+        lineId,
+        lineName: `Fin Press Line ${lineId}`,
+        dieCode: `FD-${lineId}-07`,
+        dieName: `Fin Die ${lineId}`,
+        tubeSize: lineId.includes('5') || lineId === 'E2' || lineId === 'E4' || lineId === 'E5' ? 'Ø5' : 'Ø7',
+        finType: 'Slit (half)',
+        material: 'PCM',
+        thicknessMm: 0.10,
+        effectiveFrom: new Date().toISOString(),
+        isActive: true,
+        status: 'ACTIVE',
+        installedPartQuantities: installedQtyMap
+      };
+      configs.push(currentConfig);
+    }
+    localStorage.setItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
+
+    // Update line monitoring live items
+    const allMonitoring = this.getLinesMonitoring();
+    const lineData = allMonitoring[lineId] || {
+      lineId,
+      lineName: lineId,
+      machineStatus: 'RUNNING',
+      machineShotTotal: 120000000,
+      shiftShot: 210000,
+      dailyShot: 4200000,
+      monthlyShot: 45000000,
+      shotSignal: 'NORMAL',
+      lastUpdate: new Date().toISOString().substring(0, 19),
+      activeConfig: currentConfig,
+      items: []
+    };
+
+    const partMasters = this.getPartMasters();
+    const standards = this.getLifeStandards();
+    const stocks = this.getSpareStocks();
+    const existingItemsMap = new Map((lineData.items || []).map(item => [item.partCode, item]));
+
+    const newTrackingItems: PartLiveTrackingItem[] = [];
+
+    installedParts.forEach((item, idx) => {
+      if (!item.partCode || item.installQty <= 0) return;
+
+      const partCode = item.partCode;
+      const qty = item.installQty;
+      const master = partMasters.find(p => p.partCode === partCode);
+      const existing = existingItemsMap.get(partCode);
+
+      const currentShot = existing ? (existing.usedShot ?? existing.currentShot ?? 0) : Math.round(Math.random() * 20000000);
+      const lastChangeShot = existing ? (existing.shotAtLastChange ?? existing.lastChangeShot ?? lineData.machineShotTotal) : Math.max(0, lineData.machineShotTotal - currentShot);
+      const regrindCount = existing ? existing.regrindCount : 0;
+      const totalMmGround = existing ? existing.totalMmGround : 0;
+
+      const updatedItem = calculatePartMetrics(
+        {
+          slotId: `SLOT-${lineId}-${String(item.displaySeq || idx + 1).padStart(2, '0')}`,
+          partCode,
+          partName: master ? master.partName : (existing ? existing.partName : partCode),
+          stagePunchDie: master ? master.stageName : (existing ? existing.stagePunchDie : 'Fin Die Part'),
+          position: existing ? existing.position : `Position #${idx + 1}`,
+          installQty: qty,
+          backupQty: existing ? existing.backupQty : (stocks.find(s => s.partCode === partCode)?.currentStockQty || 168),
+          usedShot: currentShot,
+          currentShot: currentShot,
+          shotAtLastChange: lastChangeShot,
+          lastChangeShot: lastChangeShot,
+          regrindCount,
+          totalMmGround
+        },
+        currentConfig,
+        standards,
+        stocks
+      );
+
+      newTrackingItems.push(updatedItem);
+    });
+
+    lineData.activeConfig = currentConfig;
+    lineData.items = newTrackingItems;
+    lineData.lastUpdate = new Date().toISOString().substring(0, 19);
+    allMonitoring[lineId] = lineData;
+    localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(allMonitoring));
+
+    this.addAuditLog(
+      'CONFIGURATION',
+      `Configured ${newTrackingItems.length} installed parts for Line ${lineId} (Target 12-20 items per line)`,
+      `ตั้งค่าการติดตั้งชิ้นส่วน ${newTrackingItems.length} รายการ สำหรับไลน์ ${lineId}`,
+      lineId
+    );
+
+    this.notify();
+    return {
+      success: true,
+      message: `บันทึกรายการชิ้นส่วนติดตั้ง ${newTrackingItems.length} รายการ สำหรับไลน์ ${lineId} สำเร็จ`,
+      itemCount: newTrackingItems.length
+    };
+  }
+
   public cloneLineConfig(configId: string, customSlotName?: string): LineActiveConfiguration | null {
     const configs = this.getLineConfigs();
     const source = configs.find(c => c.id === configId);

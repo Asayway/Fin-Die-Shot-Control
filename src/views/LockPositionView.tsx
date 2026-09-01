@@ -396,7 +396,7 @@ export const LockPositionView: React.FC<LockPositionViewProps> = ({ initialLineI
             <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Search Position / Code..."
+              placeholder="ค้นหาตำแหน่ง/รหัส..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-slate-900/90 border border-slate-700/80 rounded-lg pl-8 pr-2.5 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
@@ -789,7 +789,7 @@ export const LockPositionView: React.FC<LockPositionViewProps> = ({ initialLineI
                 <div>
                   <input
                     type="text"
-                    placeholder="Enter custom reason..."
+                    placeholder="ระบุสาเหตุ..."
                     value={modalCustomReason}
                     onChange={(e) => setModalCustomReason(e.target.value)}
                     required
@@ -821,7 +821,7 @@ export const LockPositionView: React.FC<LockPositionViewProps> = ({ initialLineI
                   rows={2}
                   value={modalNotes}
                   onChange={(e) => setModalNotes(e.target.value)}
-                  placeholder="Optional details, clearance measurements, or tooling WO#..."
+                  placeholder="ระบุหมายเหตุ/รายละเอียด..."
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-cyan-500"
                 />
               </div>
@@ -832,7 +832,7 @@ export const LockPositionView: React.FC<LockPositionViewProps> = ({ initialLineI
                   onClick={() => setActiveEditingItem(null)}
                   className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono"
                 >
-                  Cancel
+                  ยกเลิก
                 </button>
                 <button
                   type="submit"
@@ -906,7 +906,7 @@ export const LockPositionView: React.FC<LockPositionViewProps> = ({ initialLineI
                 <div>
                   <input
                     type="text"
-                    placeholder="Enter custom batch reason..."
+                    placeholder="ระบุสาเหตุ..."
                     value={modalCustomReason}
                     onChange={(e) => setModalCustomReason(e.target.value)}
                     required
@@ -923,7 +923,7 @@ export const LockPositionView: React.FC<LockPositionViewProps> = ({ initialLineI
                   rows={2}
                   value={modalNotes}
                   onChange={(e) => setModalNotes(e.target.value)}
-                  placeholder="Optional details..."
+                  placeholder="ระบุหมายเหตุ..."
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-cyan-500"
                 />
               </div>

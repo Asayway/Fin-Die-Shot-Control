@@ -33,6 +33,7 @@ import {
   formatShots, 
   calculatePartMetrics, 
   sortTrackingItems, 
+  TvSortMode,
   calculateSummaryStats, 
   generateDynamicAlertTicker 
 } from '../../services/calculationService';
@@ -50,6 +51,11 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
 }) => {
   const [selectedLineId, setSelectedLineId] = useState<ProductionLineId>(initialLineId);
   const [lineData, setLineData] = useState<LineLiveMonitoringData | null>(null);
+  
+  // Sort Mode State (Default: INDUSTRIAL_PRIORITY)
+  const [tvSortMode, setTvSortMode] = useState<TvSortMode>(() => {
+    return (localStorage.getItem('findie_tv_sort_mode') as TvSortMode) || 'INDUSTRIAL_PRIORITY';
+  });
   
   // Auto Cycle Options: 0 = OFF, 5, 10, 15, 30 seconds (Default: 5s Auto Cycle)
   const [autoCycleSeconds, setAutoCycleSeconds] = useState<number>(5);
@@ -163,10 +169,8 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
       );
     });
 
-    // Sort items strictly according to industrial priority:
-    // 1. OVER LIFE -> 2. CRITICAL -> 3. PREPARE -> 4. WARNING -> 5. NORMAL -> 6. STANDARD MISSING -> 7. DATA ERROR
-    // Secondary: Usage % descending
-    const sortedItems = sortTrackingItems(recalculatedItems);
+    // Sort items according to active TV Sort Mode (default: INDUSTRIAL_PRIORITY)
+    const sortedItems = sortTrackingItems(recalculatedItems, tvSortMode);
 
     setLineData({
       ...rawData,
@@ -181,7 +185,7 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
       reloadData();
     });
     return () => unsub();
-  }, [selectedLineId]);
+  }, [selectedLineId, tvSortMode]);
 
   // Live Clock for TV
   useEffect(() => {
@@ -302,6 +306,28 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {/* TV DISPLAY SORT ORDER SELECTOR */}
+          <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700/90 rounded-lg px-2.5 py-1 text-xs font-mono">
+            <span className="text-slate-400 font-bold hidden sm:inline">SORT:</span>
+            <select
+              value={tvSortMode}
+              onChange={(e) => {
+                const mode = e.target.value as TvSortMode;
+                setTvSortMode(mode);
+                localStorage.setItem('findie_tv_sort_mode', mode);
+              }}
+              className="bg-slate-950 text-cyan-300 font-bold px-2 py-1 rounded border border-slate-700 focus:outline-none focus:border-cyan-400 cursor-pointer"
+              title="ตั้งค่ารูปแบบการเรียงลำดับรายการในหน้า TV Dashboard"
+            >
+              <option value="INDUSTRIAL_PRIORITY">🔥 ลำดับความสำคัญวิกฤต (Priority)</option>
+              <option value="USAGE_DESC">📊 % ใช้งานสูงสุด (Usage % High-Low)</option>
+              <option value="USAGE_ASC">📈 % ใช้งานน้อยสุด (Usage % Low-High)</option>
+              <option value="REMAINING_ASC">⏳ ช็อตคงเหลือน้อยสุด (Remaining Low)</option>
+              <option value="STAGE_ORDER">🛠️ ลำดับตาม Stage (Stage Order)</option>
+              <option value="CUSTOM_SEQUENCE">🔢 ลำดับที่กำหนดเอง (Custom Sequence)</option>
+            </select>
+          </div>
+
           {/* HIGH CONTRAST TOGGLE BUTTON */}
           <button
             onClick={() => setHighContrast(!highContrast)}

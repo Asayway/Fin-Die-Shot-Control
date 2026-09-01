@@ -119,7 +119,7 @@ export const Header: React.FC<HeaderProps> = ({
                 isHmi ? 'text-green-500/80 font-mono' : 'text-slate-400 font-sans'
               }`}
             >
-              TOOLING SHOT LIFETIME & INDUSTRIAL PREVENTIVE MONITOR <span className="text-zinc-500">|</span> <span className={isHmi ? 'text-green-300/90 font-thai' : 'text-slate-300 font-thai'}>ระบบบันทึกและควบคุมช็อตแม่พิมพ์</span>
+              FIN DIE SHOT & LIFETIME MONITOR <span className="text-zinc-500">|</span> <span className={isHmi ? 'text-green-300/90 font-thai' : 'text-slate-300 font-thai'}>ระบบควบคุมช็อตแม่พิมพ์</span>
             </p>
           </div>
         </div>

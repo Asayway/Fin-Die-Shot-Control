@@ -59,49 +59,49 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const sections: NavSection[] = [
     {
-      title: 'OPERATIONAL & MONITORING',
-      titleTh: 'การทำงานและมอนิเตอร์สด',
+      title: 'OPERATIONS',
+      titleTh: 'การทำงาน',
       items: [
         {
           id: 'shot-entry',
-          label: 'Shot Entry (Manual/PLC)',
-          labelTh: 'บันทึกยอดช็อตหน้าไลน์',
+          label: 'Shot Entry',
+          labelTh: 'บันทึกช็อต',
           icon: PlusCircle,
           badge: 'HMI',
           badgeColor: 'bg-green-950 text-green-300 border-green-500'
         },
         {
           id: 'tv-monitoring',
-          label: 'TV Monitoring Wall',
-          labelTh: 'จอ TV มอนิเตอร์ช็อต',
+          label: 'TV Dashboard',
+          labelTh: 'มอนิเตอร์ช็อต',
           icon: Tv,
           badge: 'LIVE',
           badgeColor: 'bg-green-950 text-green-300 border-green-500'
         },
         {
           id: 'replacement-entry',
-          label: 'Replacement Entry',
-          labelTh: 'บันทึกเปลี่ยนอะไหล่ & ผังแม่พิมพ์ 2D',
+          label: 'Part Replacement',
+          labelTh: 'เปลี่ยนอะไหล่ & ผัง 2D',
           icon: Wrench,
           badge: 'Hub',
           badgeColor: 'bg-cyan-950 text-cyan-300 border-cyan-500'
         },
         {
           id: 'regrinding-entry',
-          label: 'Re-grinding Entry',
-          labelTh: 'ส่งเจียระไนลับคม',
+          label: 'Regrinding',
+          labelTh: 'ส่งเจียระไน',
           icon: RotateCcw
         },
       ]
     },
     {
-      title: 'ENGINEERING & SETUP',
-      titleTh: 'วิศวกรรมแม่พิมพ์และการตั้งค่า',
+      title: 'TOOLING SETUP',
+      titleTh: 'ตั้งค่าแม่พิมพ์',
       items: [
         {
           id: 'unified-tooling-setup',
-          label: 'Fin Die & Spare Master Hub',
-          labelTh: 'ศูนย์จัดการแม่พิมพ์และอะไหล่',
+          label: 'Die & Part Master',
+          labelTh: 'จัดการแม่พิมพ์/อะไหล่',
           icon: SlidersHorizontal,
           badge: 'HUB',
           badgeColor: 'bg-cyan-950 text-cyan-300 border-cyan-500'
@@ -109,25 +109,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ]
     },
     {
-      title: 'STOCK & SPARE PARTS',
-      titleTh: 'คลังอะไหล่และรายงาน',
+      title: 'REPORTS',
+      titleTh: 'รายงาน',
       items: [
         {
           id: 'reports',
-          label: 'Reports & Analytics',
-          labelTh: 'รายงานและการวิเคราะห์',
+          label: 'Reports',
+          labelTh: 'รายงานสรุป',
           icon: BarChart3
         }
       ]
     },
     {
-      title: 'SYSTEM CONFIGURATION',
-      titleTh: 'การตั้งค่าและระบบ',
+      title: 'SETTINGS',
+      titleTh: 'ตั้งค่าระบบ',
       items: [
         {
           id: 'system-settings',
-          label: 'System Settings & Apps Script',
-          labelTh: 'ตั้งค่าระบบ & ซิงค์ข้อมูล',
+          label: 'System Settings',
+          labelTh: 'ตั้งค่าระบบ',
           icon: SlidersHorizontal
         }
       ]

@@ -478,7 +478,7 @@ export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> =
                     value={cfg.dieCode || line.defaultDieCode}
                     onChange={(e) => handleFieldChange(line.id, 'dieCode', e.target.value)}
                     className="w-full bg-[#0e172a] border border-cyan-800/50 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono font-bold focus:outline-none focus:border-cyan-400"
-                    placeholder="e.g. FD-E1-07"
+                    placeholder="รหัสแม่พิมพ์..."
                   />
                 </div>
 
@@ -493,7 +493,7 @@ export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> =
                     value={cfg.defaultSpm || line.defaultSpm}
                     onChange={(e) => handleFieldChange(line.id, 'defaultSpm', Number(e.target.value) || 100)}
                     className="w-full bg-[#0e172a] border border-cyan-800/50 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-cyan-400"
-                    placeholder="e.g. 100"
+                    placeholder="ความเร็ว SPM..."
                   />
                 </div>
               </div>
@@ -631,7 +631,7 @@ export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> =
                     required
                     value={newPartData.partCode}
                     onChange={(e) => setNewPartData({ ...newPartData, partCode: e.target.value })}
-                    placeholder="e.g. P-PRC-E1-01"
+                    placeholder="รหัสอะไหล่..."
                     className="w-full bg-[#070d1a] border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-400"
                   />
                 </div>
@@ -666,7 +666,7 @@ export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> =
                     required
                     value={newPartData.partName}
                     onChange={(e) => setNewPartData({ ...newPartData, partName: e.target.value })}
-                    placeholder="e.g. Pierce Punch Ø7"
+                    placeholder="ชื่อภาษาอังกฤษ..."
                     className="w-full bg-[#070d1a] border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400"
                   />
                 </div>
@@ -680,7 +680,7 @@ export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> =
                     type="text"
                     value={newPartData.partNameTh}
                     onChange={(e) => setNewPartData({ ...newPartData, partNameTh: e.target.value })}
-                    placeholder="e.g. พั้นช์เจาะรู Ø7"
+                    placeholder="ชื่อภาษาไทย..."
                     className="w-full bg-[#070d1a] border border-slate-700 rounded-lg px-3 py-2 text-xs font-thai text-white focus:outline-none focus:border-cyan-400"
                   />
                 </div>
@@ -729,7 +729,7 @@ export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> =
                     type="text"
                     value={newPartData.drawingNumber}
                     onChange={(e) => setNewPartData({ ...newPartData, drawingNumber: e.target.value })}
-                    placeholder="e.g. DWG-FD-07-P01"
+                    placeholder="เลขที่แบบ..."
                     className="w-full bg-[#070d1a] border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-cyan-400"
                   />
                 </div>
@@ -743,7 +743,7 @@ export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> =
                     type="number"
                     value={newPartData.unitCostThb || ''}
                     onChange={(e) => setNewPartData({ ...newPartData, unitCostThb: Number(e.target.value) || 0 })}
-                    placeholder="e.g. 1500"
+                    placeholder="ราคาต่อหน่วย (บาท)..."
                     className="w-full bg-[#070d1a] border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-amber-300 focus:outline-none focus:border-cyan-400"
                   />
                 </div>
@@ -756,14 +756,14 @@ export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> =
                   onClick={() => setShowAddPartModal(false)}
                   className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-mono font-bold"
                 >
-                  CANCEL (ยกเลิก)
+                  ยกเลิก
                 </button>
                 <button
                   type="submit"
                   className="px-5 py-2 bg-cyan-400 hover:bg-cyan-300 text-slate-950 rounded-lg text-xs font-mono font-extrabold flex items-center gap-1.5 shadow-lg"
                 >
                   <Save className="w-4 h-4" />
-                  <span>บันทึกชิ้นส่วนใหม่ (SAVE PART)</span>
+                  <span>บันทึกชิ้นส่วนใหม่</span>
                 </button>
               </div>
             </form>

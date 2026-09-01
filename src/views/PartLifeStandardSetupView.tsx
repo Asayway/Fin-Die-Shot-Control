@@ -291,7 +291,7 @@ export const PartLifeStandardSetupView: React.FC = () => {
               <Search className="w-4 h-4 text-slate-400" />
               <input 
                 type="text" 
-                placeholder="Search part, code, note..." 
+                placeholder="ค้นหาชิ้นส่วน/รหัส..." 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="bg-transparent border-none text-white text-xs sm:text-sm focus:outline-none w-36 sm:w-44"
@@ -611,7 +611,7 @@ export const PartLifeStandardSetupView: React.FC = () => {
                       type="text"
                       value={currentNote}
                       onChange={(e) => handleValueChange(s.id, 'notes', e.target.value)}
-                      placeholder="เช่น เปลี่ยนทุกๆ 10-15 วัน"
+                      placeholder="ระบุหมายเหตุ..."
                       className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white focus:border-cyan-400 focus:outline-none font-thai"
                     />
                   );
@@ -653,7 +653,7 @@ export const PartLifeStandardSetupView: React.FC = () => {
                   <input
                     type="text"
                     required
-                    placeholder="เช่น P-FORM-001"
+                    placeholder="ระบุรหัสอะไหล่..."
                     value={newStd.partCode}
                     onChange={e => setNewStd({ ...newStd, partCode: e.target.value.toUpperCase() })}
                     className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-mono text-xs focus:border-cyan-500 focus:outline-none"
@@ -665,7 +665,7 @@ export const PartLifeStandardSetupView: React.FC = () => {
                   <input
                     type="text"
                     required
-                    placeholder="เช่น Forming Punch WL+"
+                    placeholder="ระบุชื่ออะไหล่..."
                     value={newStd.partName}
                     onChange={e => setNewStd({ ...newStd, partName: e.target.value })}
                     className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs focus:border-cyan-500 focus:outline-none"
@@ -754,7 +754,7 @@ export const PartLifeStandardSetupView: React.FC = () => {
                 <label className="block text-xs font-bold text-slate-300 mb-1">Note / Remark (หมายเหตุ / ความถี่เปลี่ยน)</label>
                 <input
                   type="text"
-                  placeholder="เช่น เปลี่ยนทุกๆ 10-15 วัน หรือ เจียรเมื่อครีบคมเกิน 0.05mm"
+                  placeholder="ระบุหมายเหตุ/ข้อกำหนด..."
                   value={newStd.notes}
                   onChange={e => setNewStd({ ...newStd, notes: e.target.value })}
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs focus:border-cyan-500 focus:outline-none"

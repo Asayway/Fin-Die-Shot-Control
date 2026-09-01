@@ -245,7 +245,7 @@ export const SpareStockProcurementView: React.FC = () => {
             type="text"
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            placeholder="Search Part Code, Name, Location, PR/PO, Supplier..."
+            placeholder="ค้นหาอะไหล่/PR/PO/ผู้ผลิต..."
             className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-slate-100 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
           />
         </div>
@@ -606,7 +606,7 @@ export const SpareStockProcurementView: React.FC = () => {
                           type="text"
                           value={editForm.warehouseLocation || ''}
                           onChange={e => handleFormChange('warehouseLocation', e.target.value)}
-                          placeholder="e.g. RACK-B-04-BIN-2"
+                          placeholder="ตำแหน่งจัดเก็บ..."
                           className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-slate-100"
                         />
                       </div>
@@ -659,7 +659,7 @@ export const SpareStockProcurementView: React.FC = () => {
                           type="text"
                           value={editForm.prNumber || ''}
                           onChange={e => handleFormChange('prNumber', e.target.value)}
-                          placeholder="PR-2026-089"
+                          placeholder="เลขที่ PR..."
                           className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-slate-100"
                         />
                       </div>
@@ -672,7 +672,7 @@ export const SpareStockProcurementView: React.FC = () => {
                           type="text"
                           value={editForm.poNumber || ''}
                           onChange={e => handleFormChange('poNumber', e.target.value)}
-                          placeholder="PO-26-8902"
+                          placeholder="เลขที่ PO..."
                           className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-emerald-400 font-bold"
                         />
                       </div>
@@ -683,7 +683,7 @@ export const SpareStockProcurementView: React.FC = () => {
                           type="text"
                           value={editForm.supplier || ''}
                           onChange={e => handleFormChange('supplier', e.target.value)}
-                          placeholder="e.g. SANKYO OILLESS"
+                          placeholder="ชื่อผู้ผลิต/ซัพพลายเออร์..."
                           className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-slate-100"
                         />
                       </div>
@@ -722,7 +722,7 @@ export const SpareStockProcurementView: React.FC = () => {
                       rows={2}
                       value={adjustmentReason}
                       onChange={e => setAdjustmentReason(e.target.value)}
-                      placeholder="Specify the operational purpose, physical audit finding, or purchasing update reason..."
+                      placeholder="ระบุเหตุผลในการปรับปรุง..."
                       className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-slate-100 focus:border-amber-500 focus:outline-none"
                       required
                     />
@@ -734,14 +734,14 @@ export const SpareStockProcurementView: React.FC = () => {
                       type="submit"
                       className="flex-1 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded text-xs transition-colors shadow-lg shadow-cyan-500/20"
                     >
-                      COMMIT CHANGES & AUDIT LOG
+                      ยืนยันบันทึกข้อมูล
                     </button>
                     <button
                       type="button"
                       onClick={() => setIsEditing(false)}
                       className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs transition-colors"
                     >
-                      Cancel
+                      ยกเลิก
                     </button>
                   </div>
                 </form>
@@ -789,7 +789,7 @@ export const ReplacementHistoryView: React.FC = () => {
           type="text"
           value={searchTerm}
           onChange={e => setSearchTerm(e.target.value)}
-          placeholder="Filter by part, line, reason, record ID..."
+          placeholder="ค้นหาประวัติ..."
           className="bg-slate-950 border border-slate-700 rounded px-3 py-2 text-xs font-mono text-slate-100 w-64 focus:border-cyan-500 focus:outline-none"
         />
       </div>

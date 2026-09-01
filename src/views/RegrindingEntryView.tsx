@@ -59,6 +59,8 @@ export const RegrindingEntryView: React.FC = () => {
   const [inspectionResult, setInspectionResult] = useState<'PENDING' | 'PASSED' | 'FAILED' | 'CONDITIONAL'>('PASSED');
   const [verifiedBy, setVerifiedBy] = useState<string>('K. Anan (QC Inspection Lead)');
   const [performedBy, setPerformedBy] = useState<string>(currentUser.name);
+  const [regrindReason, setRegrindReason] = useState<string>('Periodic Preventive Maintenance');
+  const [regrindDate, setRegrindDate] = useState<string>(new Date().toISOString().substring(0, 10));
   const [note, setNote] = useState<string>('');
   const [evidenceFileName, setEvidenceFileName] = useState<string | null>(null);
 
@@ -155,6 +157,21 @@ export const RegrindingEntryView: React.FC = () => {
       return;
     }
 
+    if (!performedBy || !performedBy.trim()) {
+      setNotification({ type: 'error', message: 'Mandatory User ID Check: Please specify Technician Name / ID (Performed By).' });
+      return;
+    }
+
+    if (!regrindReason || !regrindReason.trim()) {
+      setNotification({ type: 'error', message: 'Reason selection is mandatory before submission.' });
+      return;
+    }
+
+    if (!regrindDate || !regrindDate.trim()) {
+      setNotification({ type: 'error', message: 'Date selection is mandatory before submission.' });
+      return;
+    }
+
     if (isRegrindBlocked) {
       setNotification({
         type: 'error',
@@ -188,11 +205,11 @@ export const RegrindingEntryView: React.FC = () => {
       inspectionResult,
       verifiedBy,
       performedBy,
-      note,
+      note: `${note} [Reason: ${regrindReason}]`,
       evidence: evidenceFileName || undefined,
       status: previewStatus,
       isInspectionApproved: inspectionResult === 'PASSED',
-      regrindDate: new Date().toISOString().substring(0, 10)
+      regrindDate
     });
 
     if (result.success) {
@@ -333,11 +350,11 @@ export const RegrindingEntryView: React.FC = () => {
                 <RotateCcw className="w-5 h-5" />
               </span>
               <h1 className="text-xl font-bold text-white tracking-tight">
-                Re-grinding & Sharpening Control Module
+                Regrinding Control
               </h1>
             </div>
             <p className="text-sm text-slate-400 mt-1 font-thai">
-              ระบบควบคุมและบันทึกประวัติการเจียระไนลับคมชิ้นส่วนแม่พิมพ์ (ตามมาตรฐาน Excel: อัตราเจียร, ระยะเผื่อรวม, และรอบสูงสุด)
+              ระบบบันทึกประวัติเจียระไนลับคมชิ้นส่วนแม่พิมพ์
             </p>
           </div>
         </div>
@@ -355,7 +372,7 @@ export const RegrindingEntryView: React.FC = () => {
               }`}
             >
               <RotateCcw className="w-4 h-4" />
-              New Re-grinding Job Entry
+              New Entry
             </button>
             <button
               id="tab-regrind-history"
@@ -367,7 +384,7 @@ export const RegrindingEntryView: React.FC = () => {
               }`}
             >
               <History className="w-4 h-4" />
-              Recent Ledger ({Math.min(10, historyRecords.length)})
+              History ({Math.min(10, historyRecords.length)})
             </button>
             <button
               id="tab-regrind-standards"
@@ -379,7 +396,7 @@ export const RegrindingEntryView: React.FC = () => {
               }`}
             >
               <Sliders className="w-4 h-4" />
-              Master Standard Criteria
+              Standards
             </button>
           </div>
         </div>
@@ -485,7 +502,7 @@ export const RegrindingEntryView: React.FC = () => {
                       type="text"
                       value={partInstanceOrLot}
                       onChange={e => setPartInstanceOrLot(e.target.value)}
-                      placeholder="e.g. SN-LP-168-B2"
+                      placeholder="ระบุ Serial No..."
                       className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm font-mono text-slate-100 focus:border-indigo-500 focus:outline-none"
                       required
                     />
@@ -514,7 +531,7 @@ export const RegrindingEntryView: React.FC = () => {
                         type="text"
                         value={dieCode}
                         onChange={e => setDieCode(e.target.value)}
-                        placeholder="FD-E6-07"
+                        placeholder="รหัสแม่พิมพ์..."
                         className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-2 text-xs font-mono text-slate-100"
                       />
                     </div>
@@ -690,7 +707,7 @@ export const RegrindingEntryView: React.FC = () => {
                       type="text"
                       value={workOrder}
                       onChange={e => setWorkOrder(e.target.value)}
-                      placeholder="WO-RGD-2026-09"
+                      placeholder="ระบุเลข WO..."
                       className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-100 focus:border-indigo-500 focus:outline-none"
                       required
                     />
@@ -774,6 +791,64 @@ export const RegrindingEntryView: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Section 4: Accountability & Reason / Date */}
+                <div className="space-y-4 pt-4 border-t border-slate-800/80">
+                  <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <UserCheck className="w-4 h-4" />
+                    4. Accountability, Reason & Date (Mandatory Verification)
+                  </h3>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {/* Performed By (Technician Name / ID) */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1">
+                        Technician Name / ID (Performed By) <span className="text-rose-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={performedBy}
+                        onChange={e => setPerformedBy(e.target.value)}
+                        placeholder="ระบุชื่อหรือรหัสช่างเจียร..."
+                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 font-mono"
+                        required
+                      />
+                    </div>
+
+                    {/* Regrind Reason */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1">
+                        Reason for Regrinding <span className="text-rose-400">*</span>
+                      </label>
+                      <select
+                        value={regrindReason}
+                        onChange={e => setRegrindReason(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100"
+                        required
+                      >
+                        <option value="Periodic Preventive Maintenance">Periodic Preventive Maintenance</option>
+                        <option value="Punch Tip Chipped / Worn">Punch Tip Chipped / Worn</option>
+                        <option value="Burr Detected on Fin Edge">Burr Detected on Fin Edge</option>
+                        <option value="Surface Scratches / Galling">Surface Scratches / Galling</option>
+                        <option value="Emergency Corrective Grinding">Emergency Corrective Grinding</option>
+                      </select>
+                    </div>
+
+                    {/* Regrind Date */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1">
+                        Regrinding Date <span className="text-rose-400">*</span>
+                      </label>
+                      <input
+                        type="date"
+                        value={regrindDate}
+                        onChange={e => setRegrindDate(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 font-mono"
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 {/* Evidence & Note */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -820,7 +895,7 @@ export const RegrindingEntryView: React.FC = () => {
                       rows={3}
                       value={note}
                       onChange={e => setNote(e.target.value)}
-                      placeholder="e.g. CBN wheel #400 used, coolant temperature controlled, edge radius inspected under 50x microscope..."
+                      placeholder="ระบุรายละเอียดการเจียร..."
                       className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 focus:border-indigo-500 focus:outline-none"
                     />
                   </div>
@@ -837,7 +912,7 @@ export const RegrindingEntryView: React.FC = () => {
                   }}
                   className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold"
                 >
-                  Reset Dimensions
+                  ล้างค่าความยาว
                 </button>
 
                 <button
@@ -851,7 +926,7 @@ export const RegrindingEntryView: React.FC = () => {
                   }`}
                 >
                   <Check className="w-4 h-4" />
-                  Save Re-grinding Transaction Record
+                  บันทึกงานเจียระไน
                 </button>
               </div>
             </form>
@@ -859,6 +934,38 @@ export const RegrindingEntryView: React.FC = () => {
 
           {/* Right Summary Card (Col 4) */}
           <div className="lg:col-span-4 space-y-5">
+            {/* Selected Part Service History Panel */}
+            <div className="bg-slate-900 border border-slate-800 rounded-lg p-5 space-y-3">
+              <h3 className="font-bold text-white text-sm flex items-center gap-2">
+                <History className="w-4 h-4 text-cyan-400" />
+                Auto Service History ({selectedPartCode})
+              </h3>
+              <p className="text-xs text-slate-400">
+                Past regrind records for this component automatically visible to technician:
+              </p>
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                {historyRecords.filter(r => r.partCode === selectedPartCode).length === 0 ? (
+                  <p className="text-xs text-slate-500 italic py-2">No previous regrind history found for this part.</p>
+                ) : (
+                  historyRecords.filter(r => r.partCode === selectedPartCode).map(h => (
+                    <div key={h.id} className="p-2.5 bg-slate-950 border border-slate-800 rounded text-xs space-y-1">
+                      <div className="flex justify-between items-center font-mono">
+                        <span className="text-indigo-300 font-bold">{h.jobCode}</span>
+                        <span className="text-slate-400">{h.regrindDate || h.createdDateTime?.substring(0, 10)}</span>
+                      </div>
+                      <div className="flex justify-between text-slate-300">
+                        <span>Cycle: {h.regrindCountAfter || h.regrindCycleCount} / {h.maxAllowedCycles}</span>
+                        <span className="font-mono text-emerald-400">{h.currentLength} mm (-{h.actualGrindingRemovedMm || h.mmRemovedThisCycle} mm)</span>
+                      </div>
+                      <div className="text-[11px] text-slate-400">
+                        Status: <strong className="text-white">{h.status}</strong> | Tech: {h.performedBy || h.technicianName}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
             {/* Live Part Calculation Summary */}
             <div className="bg-slate-900 border border-slate-800 rounded-lg p-5 space-y-4">
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -972,7 +1079,7 @@ export const RegrindingEntryView: React.FC = () => {
                 <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Search Job, Part, Lot, WO..."
+                  placeholder="ค้นหาข้อมูลเจียร..."
                   value={historySearch}
                   onChange={e => setHistorySearch(e.target.value)}
                   className="bg-slate-950 border border-slate-700 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
@@ -1431,7 +1538,7 @@ export const RegrindingEntryView: React.FC = () => {
                   rows={2}
                   value={quickInspectNotes}
                   onChange={e => setQuickInspectNotes(e.target.value)}
-                  placeholder="Measurement verified with micrometer & optical comparator..."
+                  placeholder="ระบุผลการตรวจสอบ/ค่าที่วัดได้..."
                   className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-slate-100"
                 />
               </div>
@@ -1442,7 +1549,7 @@ export const RegrindingEntryView: React.FC = () => {
                   onClick={() => setQuickInspectRecord(null)}
                   className="px-4 py-2 bg-slate-800 text-slate-300 rounded text-xs font-semibold"
                 >
-                  Cancel
+                  ยกเลิก
                 </button>
                 <button
                   type="button"
