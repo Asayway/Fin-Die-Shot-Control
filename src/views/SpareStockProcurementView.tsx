@@ -326,6 +326,7 @@ export const SpareStockProcurementView: React.FC = () => {
             <table className="w-full text-left text-xs font-mono">
               <thead>
                 <tr className="bg-slate-950 text-slate-400 border-b border-slate-800">
+                  <th className="py-2.5 px-2 text-center w-12 font-mono">NO.</th>
                   <th className="py-2.5 px-3">PART / SPECIFICATION</th>
                   <th className="py-2.5 px-2 text-center">ON HAND</th>
                   <th className="py-2.5 px-2 text-center">RSV / QUA</th>
@@ -336,7 +337,7 @@ export const SpareStockProcurementView: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/80">
-                {filtered.map(s => {
+                {filtered.map((s, idx) => {
                   const isSelected = selectedStock?.id === s.id;
                   const available = s.availableQuantity !== undefined ? s.availableQuantity : calculateAvailableQuantity(s.onHandQuantity, s.reservedQuantity, s.quarantineQuantity);
                   const coverage = s.replacementCoverage !== undefined ? s.replacementCoverage : calculateReplacementCoverage(available, s.requiredQuantityPerFullReplacement || 1);
@@ -351,6 +352,10 @@ export const SpareStockProcurementView: React.FC = () => {
                           : 'hover:bg-slate-800/50 text-slate-300'
                       }`}
                     >
+                      <td className="py-2.5 px-2 text-center font-mono font-bold text-cyan-400/80">
+                        {idx + 1}
+                      </td>
+
                       <td className="py-2.5 px-3">
                         <div className="font-bold text-slate-100">{s.partName}</div>
                         <div className="text-[10px] text-slate-400 flex items-center gap-2">

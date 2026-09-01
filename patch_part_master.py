@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import sys
+
+content = """import React, { useState, useEffect } from 'react';
 import { 
   Database, 
   Search, 
@@ -9,7 +11,7 @@ import {
   Trash2,
   X
 } from 'lucide-react';
-import { PartMaster, TubeSizeCompat } from '../types';
+import { PartMaster, PartCategory, TubeSizeCompat } from '../types';
 import { storageService } from '../services/storageService';
 import { formatThb } from '../services/calculationService';
 import { ResizableReorderableTable } from '../components/common/ResizableReorderableTable';
@@ -17,7 +19,7 @@ import { ResizableReorderableTable } from '../components/common/ResizableReorder
 export const PartMasterView: React.FC = () => {
   const [parts, setParts] = useState<PartMaster[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<'PUNCH' | 'DIE' | 'BLADE' | 'PIN' | 'CORNER_CUT' | 'CENTER_PUNCH' | 'OTHER' | 'ALL'>('ALL');
+  const [selectedCategory, setSelectedCategory] = useState<PartCategory | 'ALL'>('ALL');
   
   const [isEditing, setIsEditing] = useState(false);
   const [editValues, setEditValues] = useState<Record<string, Partial<PartMaster>>>({});
@@ -150,10 +152,8 @@ export const PartMasterView: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Sticky Header & Tabs Container */}
-      <div className="sticky top-[130px] sm:top-[115px] z-20 space-y-4 pb-2 bg-slate-900/95 backdrop-blur-sm -mx-2 px-2">
-        {/* Header */}
-        <div className="bg-[#0F172A] border border-slate-700 rounded-lg p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-md">
+      {/* Header */}
+      <div className="bg-[#0F172A] border border-slate-700 rounded-lg p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-md">
         <div>
           <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
             <Database className="w-5 h-5 text-cyan-400" />
@@ -245,7 +245,6 @@ export const PartMasterView: React.FC = () => {
           OTHER ({stats.other})
         </button>
       </div>
-      </div>
 
       <div className="bg-[#1E293B] rounded-lg border border-slate-700 p-5 shadow-lg">
         <ResizableReorderableTable<PartMaster>
@@ -253,16 +252,6 @@ export const PartMasterView: React.FC = () => {
           keyExtractor={(p) => p.partCode}
           emptyMessage="No part master records found."
           columns={[
-            {
-              id: 'no',
-              label: 'NO.',
-              width: 55,
-              minWidth: 45,
-              align: 'center',
-              render: (_, idx) => (
-                <span className="text-cyan-400/80 font-mono font-bold text-xs">{idx + 1}</span>
-              )
-            },
             {
               id: 'partCode',
               label: 'PART CODE',
@@ -545,3 +534,8 @@ export const PartMasterView: React.FC = () => {
     </div>
   );
 };
+"""
+
+with open('src/views/PartMasterView.tsx', 'w') as f:
+    f.write(content)
+

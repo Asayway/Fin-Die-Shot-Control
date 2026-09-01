@@ -360,38 +360,38 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
       </div>
 
       {/* TOP HEADER: CLEAN INDUSTRIAL DISPLAY - flex-none */}
-      <div className="flex-none grid grid-cols-12 items-center gap-1.5 sm:gap-3 px-2 sm:px-3 py-1.5 sm:py-2 bg-[#0E172A] border border-slate-800/90 rounded-lg mb-1 sm:mb-1.5 shadow-sm">
-        {/* Center Title & Line Specs (expanded col-span to remove redundant box) */}
-        <div className="col-span-9 text-left pl-2">
+      <div className="flex-none grid grid-cols-12 items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 bg-[#0E172A] border border-slate-800/90 rounded-lg mb-1 shadow-sm">
+        {/* Center Title & Line Specs */}
+        <div className="col-span-9 text-left pl-1">
           <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 bg-cyan-950 text-cyan-300 border border-cyan-500/60 rounded font-mono font-bold text-xs sm:text-sm">
+            <span className="px-2 py-0.5 bg-cyan-950 text-cyan-300 border border-cyan-500/60 rounded font-mono font-black text-xs sm:text-sm md:text-base">
               LINE {selectedLineId}
             </span>
-            <h2 className="text-sm sm:text-base md:text-lg font-bold tracking-wide text-white uppercase font-['Plus_Jakarta_Sans'] leading-tight">
+            <h2 className="text-xs sm:text-sm md:text-base lg:text-[1.1vw] font-black tracking-wide text-white uppercase font-['Plus_Jakarta_Sans'] leading-tight">
               FIN DIE SPARE PARTS SHOT COUNT ({LINE_INFO_MAP[selectedLineId]?.nameTh || selectedLineId})
             </h2>
           </div>
-          <div className="text-[10px] sm:text-xs font-mono text-cyan-300/90 flex flex-wrap items-center justify-start gap-1.5 sm:gap-2.5 mt-0.5 sm:mt-1">
-            <span className="bg-slate-900/90 px-1.5 sm:px-2 py-0.5 rounded border border-slate-800 text-slate-300">
-              DIE: <strong className="text-white">{lineData.activeConfig?.dieCode || `FD-${selectedLineId}-07`}</strong>
+          <div className="text-[10px] sm:text-xs font-mono text-cyan-300/90 flex flex-wrap items-center justify-start gap-1.5 sm:gap-2.5 mt-0.5">
+            <span className="bg-slate-900/90 px-1.5 py-0.2 rounded border border-slate-800 text-slate-300">
+              DIE: <strong className="text-white font-extrabold">{lineData.activeConfig?.dieCode || `FD-${selectedLineId}-07`}</strong>
             </span>
-            <span className="bg-slate-900/90 px-1.5 sm:px-2 py-0.5 rounded border border-slate-800 text-slate-300">
-              TUBE: <strong className="text-white">{lineData.activeConfig?.tubeSize || 'Ø7'}</strong>
+            <span className="bg-slate-900/90 px-1.5 py-0.2 rounded border border-slate-800 text-slate-300">
+              TUBE: <strong className="text-white font-extrabold">{lineData.activeConfig?.tubeSize || 'Ø7'}</strong>
             </span>
-            <span className="bg-slate-900/90 px-1.5 sm:px-2 py-0.5 rounded border border-slate-800 text-slate-300">
-              MAT: <strong className="text-white">{lineData.activeConfig?.material || 'PCM'} ({lineData.activeConfig?.thicknessMm || 0.10}mm)</strong>
+            <span className="bg-slate-900/90 px-1.5 py-0.2 rounded border border-slate-800 text-slate-300">
+              MAT: <strong className="text-white font-extrabold">{lineData.activeConfig?.material || 'PCM'} ({lineData.activeConfig?.thicknessMm || 0.10}mm)</strong>
             </span>
-            <span className="bg-slate-900/90 px-1.5 sm:px-2 py-0.5 rounded border border-slate-800 text-slate-300 hidden sm:inline">
-              TYPE: <strong className="text-white">{lineData.activeConfig?.finType || 'Slit (half)'}</strong>
+            <span className="bg-slate-900/90 px-1.5 py-0.2 rounded border border-slate-800 text-slate-300 hidden sm:inline">
+              TYPE: <strong className="text-white font-extrabold">{lineData.activeConfig?.finType || 'Slit (half)'}</strong>
             </span>
           </div>
         </div>
 
         {/* Right Timestamp Box */}
-        <div className="col-span-3 sm:col-span-3 text-right">
-          <div className="inline-block px-2 sm:px-3 py-1 bg-slate-900/90 border border-slate-800 rounded text-right shadow-inner">
-            <div className="text-[9px] sm:text-[10px] font-mono tracking-wider text-slate-400 font-semibold">LAST UPDATE</div>
-            <div className="text-[10px] sm:text-xs md:text-sm font-mono font-bold text-slate-200">
+        <div className="col-span-3 text-right">
+          <div className="inline-block px-2 sm:px-3 py-0.5 bg-slate-900/90 border border-slate-800 rounded text-right shadow-inner">
+            <div className="text-[9px] font-mono tracking-wider text-slate-400 font-extrabold">LAST UPDATE</div>
+            <div className="text-xs sm:text-sm md:text-base font-mono font-black text-slate-100">
               {currentTime || lineData.lastUpdate}
             </div>
           </div>
@@ -399,13 +399,13 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
       </div>
 
       {/* KPI METRIC CARDS ROW - flex-none */}
-      <div className="flex-none grid grid-cols-3 sm:grid-cols-6 gap-1 sm:gap-1.5 mb-1 sm:mb-1.5">
+      <div className="flex-none grid grid-cols-3 sm:grid-cols-6 gap-1 sm:gap-1.5 mb-1">
         {/* Machine Status */}
-        <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg p-1 sm:p-1.5 text-center flex flex-col justify-center shadow-sm">
-          <div className="text-[9px] sm:text-[10px] font-sans tracking-wide text-slate-400 font-medium uppercase">
+        <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg py-1 px-1.5 text-center flex flex-col justify-center shadow-sm">
+          <div className="text-[9px] sm:text-[10px] font-sans font-extrabold tracking-wide text-slate-400 uppercase">
             STATUS
           </div>
-          <div className="flex items-center justify-center gap-1 font-bold text-xs sm:text-sm md:text-base font-mono">
+          <div className="flex items-center justify-center gap-1 font-black text-xs sm:text-sm md:text-base lg:text-[1.15vw] font-mono">
             {lineData.machineStatus === 'RUNNING' && <span className="text-emerald-400 flex items-center gap-1">🟢 RUNNING</span>}
             {lineData.machineStatus === 'IDLE' && <span className="text-amber-300 flex items-center gap-1">🟡 IDLE</span>}
             {lineData.machineStatus === 'MAINTENANCE' && <span className="text-cyan-300 flex items-center gap-1">🔧 MAINTENANCE</span>}
@@ -415,68 +415,68 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
         </div>
 
         {/* Machine Shot Total */}
-        <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg p-1 sm:p-1.5 text-center shadow-sm">
-          <div className="text-[9px] sm:text-[10px] font-sans tracking-wide text-slate-400 font-medium uppercase">
+        <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg py-1 px-1.5 text-center shadow-sm">
+          <div className="text-[9px] sm:text-[10px] font-sans font-extrabold tracking-wide text-slate-400 uppercase">
             TOTAL SHOT
           </div>
-          <div className="text-emerald-400 font-bold text-xs sm:text-sm md:text-base font-mono tracking-tight">
+          <div className="text-emerald-400 font-black text-xs sm:text-sm md:text-base lg:text-[1.2vw] font-mono tracking-tight tabular-nums">
             {formatShots(lineData.machineShotTotal)} <span className="text-[9px] font-normal text-emerald-500/70">Shot</span>
           </div>
         </div>
 
         {/* Shift Shot */}
-        <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg p-1 sm:p-1.5 text-center shadow-sm">
-          <div className="text-[9px] sm:text-[10px] font-sans tracking-wide text-slate-400 font-medium uppercase">
+        <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg py-1 px-1.5 text-center shadow-sm">
+          <div className="text-[9px] sm:text-[10px] font-sans font-extrabold tracking-wide text-slate-400 uppercase">
             SHIFT SHOT
           </div>
-          <div className="text-slate-100 font-bold text-xs sm:text-sm md:text-base font-mono">
+          <div className="text-slate-100 font-black text-xs sm:text-sm md:text-base lg:text-[1.2vw] font-mono tabular-nums">
             {formatShots(lineData.shiftShot)} <span className="text-[9px] font-normal text-slate-400">Shot</span>
           </div>
         </div>
 
         {/* Daily Shot */}
-        <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg p-1 sm:p-1.5 text-center shadow-sm">
-          <div className="text-[9px] sm:text-[10px] font-sans tracking-wide text-slate-400 font-medium uppercase">
+        <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg py-1 px-1.5 text-center shadow-sm">
+          <div className="text-[9px] sm:text-[10px] font-sans font-extrabold tracking-wide text-slate-400 uppercase">
             DAILY SHOT
           </div>
-          <div className="text-slate-100 font-bold text-xs sm:text-sm md:text-base font-mono">
+          <div className="text-slate-100 font-black text-xs sm:text-sm md:text-base lg:text-[1.2vw] font-mono tabular-nums">
             {formatShots(lineData.dailyShot)} <span className="text-[9px] font-normal text-slate-400">Shot</span>
           </div>
         </div>
 
         {/* Monthly Shot */}
-        <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg p-1 sm:p-1.5 text-center shadow-sm">
-          <div className="text-[9px] sm:text-[10px] font-sans tracking-wide text-slate-400 font-medium uppercase">
+        <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg py-1 px-1.5 text-center shadow-sm">
+          <div className="text-[9px] sm:text-[10px] font-sans font-extrabold tracking-wide text-slate-400 uppercase">
             MONTHLY SHOT
           </div>
-          <div className="text-slate-100 font-bold text-xs sm:text-sm md:text-base font-mono">
+          <div className="text-slate-100 font-black text-xs sm:text-sm md:text-base lg:text-[1.2vw] font-mono tabular-nums">
             {formatShots(lineData.monthlyShot)} <span className="text-[9px] font-normal text-slate-400">Shot</span>
           </div>
         </div>
 
         {/* Shot Signal */}
-        <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg p-1 sm:p-1.5 text-center flex flex-col justify-center shadow-sm">
-          <div className="text-[9px] sm:text-[10px] font-sans tracking-wide text-slate-400 font-medium uppercase">
+        <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg py-1 px-1.5 text-center flex flex-col justify-center shadow-sm">
+          <div className="text-[9px] sm:text-[10px] font-sans font-extrabold tracking-wide text-slate-400 uppercase">
             SIGNAL
           </div>
-          <div className="flex items-center justify-center gap-1 text-emerald-400 font-bold text-xs sm:text-sm md:text-base font-mono">
+          <div className="flex items-center justify-center gap-1 text-emerald-400 font-black text-xs sm:text-sm md:text-base lg:text-[1.2vw] font-mono">
             <span>{lineData.shotSignal}</span>
-            <Wifi className="w-3 h-3 text-emerald-400" />
+            <Wifi className="w-3.5 h-3.5 text-emerald-400" />
           </div>
         </div>
       </div>
 
       {/* TABLE SECTION TITLE - flex-none */}
-      <div className="flex-none bg-[#0C1A33] border border-slate-800 text-center py-1 rounded-t-lg text-xs sm:text-sm font-bold tracking-wider text-cyan-200 uppercase font-sans flex items-center justify-between px-3">
+      <div className="flex-none bg-[#0C1A33] border border-slate-800 text-center py-0.5 rounded-t-lg text-xs sm:text-sm font-black tracking-wider text-cyan-200 uppercase font-sans flex items-center justify-between px-3">
         <span>FIN DIE PART LIFE MONITORING - LINE {selectedLineId}</span>
-        <span className="text-[10px] text-slate-400 font-mono">กดที่ปุ่ม STATUS เพื่อดูรายละเอียดสถานะและแจ้งเตือนของแต่ละชิ้นส่วน</span>
+        <span className="text-[10px] sm:text-xs text-slate-400 font-mono">กดที่ปุ่ม STATUS เพื่อดูรายละเอียดสถานะและแจ้งเตือนของแต่ละชิ้นส่วน</span>
       </div>
 
       {/* TV MAIN MONITORING CONTAINER (FLEX-1 AUTO-STRETCH TO FILL 100% SCREEN HEIGHT) */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-[#070F1E] border-x border-b border-slate-800/90 mb-1 rounded-b-lg shadow-inner table-container">
         <div className="w-full flex-1 flex flex-col min-h-0">
           {/* Table Header Row (flex-none) */}
-          <div className="flex-none bg-[#0B172E] border-b border-slate-800 text-cyan-300 font-bold uppercase flex items-center px-1.5 py-2.5 select-none relative h-11 md:h-12 text-[11px] sm:text-xs md:text-sm lg:text-[14px] tracking-wide">
+          <div className="flex-none bg-[#0B172E] border-b border-slate-800 text-cyan-300 font-black uppercase flex items-center px-1.5 py-1.5 select-none relative h-9 sm:h-10 md:h-11 text-[11px] sm:text-xs md:text-sm lg:text-[1.1vw] tracking-wider font-mono">
             <div className="h-full flex items-center justify-center flex-shrink-0 border-r border-slate-800/70 relative whitespace-nowrap" style={{ width: `${colWidths.no}%` }}>
               <span>NO.</span>
               <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'no')} />
@@ -485,11 +485,11 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
               <span>FIN DIE SPARE PARTS</span>
               <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'stage')} />
             </div>
-            <div className="h-full flex items-center justify-end px-1.5 sm:px-2.5 border-r border-slate-800/70 flex-shrink-0 relative whitespace-nowrap" style={{ width: `${colWidths.lifeLimit}%` }}>
+            <div className="h-full flex items-center justify-end px-1.5 sm:px-2 border-r border-slate-800/70 flex-shrink-0 relative whitespace-nowrap" style={{ width: `${colWidths.lifeLimit}%` }}>
               <span>LIFE LIMIT (SHOT)</span>
               <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'lifeLimit')} />
             </div>
-            <div className="h-full flex items-center justify-end px-1.5 sm:px-2.5 border-r border-slate-800/70 flex-shrink-0 relative whitespace-nowrap" style={{ width: `${colWidths.currentShot}%` }}>
+            <div className="h-full flex items-center justify-end px-1.5 sm:px-2 border-r border-slate-800/70 flex-shrink-0 relative whitespace-nowrap" style={{ width: `${colWidths.currentShot}%` }}>
               <span>CURRENT SHOT (SHOT)</span>
               <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'currentShot')} />
             </div>
@@ -497,15 +497,15 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
               <span>USAGE %</span>
               <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'usage')} />
             </div>
-            <div className="h-full flex items-center justify-end px-1.5 sm:px-2.5 border-r border-slate-800/70 flex-shrink-0 relative whitespace-nowrap" style={{ width: `${colWidths.remaining}%` }}>
+            <div className="h-full flex items-center justify-end px-1.5 sm:px-2 border-r border-slate-800/70 flex-shrink-0 relative whitespace-nowrap" style={{ width: `${colWidths.remaining}%` }}>
               <span>REMAINING (SHOT)</span>
               <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'remaining')} />
             </div>
-            <div className="h-full flex items-center justify-center px-1.5 sm:px-2 border-r border-slate-800/70 flex-shrink-0 relative whitespace-nowrap" style={{ width: `${colWidths.progress}%` }}>
+            <div className="h-full flex items-center justify-center px-1 sm:px-2 border-r border-slate-800/70 flex-shrink-0 relative whitespace-nowrap" style={{ width: `${colWidths.progress}%` }}>
               <span>PROGRESS</span>
               <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'progress')} />
             </div>
-            <div className="h-full flex items-center justify-end px-1.5 sm:px-2.5 border-r border-slate-800/70 flex-shrink-0 relative whitespace-nowrap" style={{ width: `${colWidths.lastChange}%` }}>
+            <div className="h-full flex items-center justify-end px-1.5 sm:px-2 border-r border-slate-800/70 flex-shrink-0 relative whitespace-nowrap" style={{ width: `${colWidths.lastChange}%` }}>
               <span>LAST CHANGE (SHOT)</span>
               <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'lastChange')} />
             </div>
@@ -523,132 +523,141 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
             </div>
           </div>
 
-          {/* Table Rows Body */}
-          <div className="flex-1 flex flex-col min-h-0 overflow-y-auto divide-y divide-slate-800/70 custom-scrollbar">
+          {/* Table Rows Body (Flex-1 Evenly Distributed Fill Vertical Height) */}
+          <div className="flex-1 flex flex-col justify-between min-h-0 divide-y divide-slate-800/80 overflow-y-auto custom-scrollbar">
             {items.map((item, idx) => {
               const usedShotVal = item.usedShot !== undefined ? item.usedShot : item.currentShot;
               const shotAtLastChangeVal = item.shotAtLastChange !== undefined ? item.shotAtLastChange : item.lastChangeShot;
               const availableSpareVal = item.availableSpare !== undefined ? item.availableSpare : item.backupQty;
               const status: LifeStatus = item.lifeStatus || item.alertStatus || 'NORMAL';
 
-              let usageColor = 'text-emerald-400 font-bold';
+              let usageColor = 'text-emerald-400 font-extrabold';
               let barColor = 'bg-emerald-500';
               let barBorder = 'border-emerald-500';
               let rowHighlight = '';
 
               if (status === 'OVER_LIFE') {
-                usageColor = 'text-red-400 font-bold';
+                usageColor = 'text-red-400 font-extrabold';
                 barColor = 'bg-red-600';
                 barBorder = 'border-red-500';
-                rowHighlight = 'bg-red-950/20';
+                rowHighlight = 'bg-red-950/30';
               } else if (status === 'CRITICAL') {
-                usageColor = 'text-rose-400 font-bold';
+                usageColor = 'text-rose-400 font-extrabold';
                 barColor = 'bg-rose-500';
                 barBorder = 'border-rose-500';
-                rowHighlight = 'bg-rose-950/20';
+                rowHighlight = 'bg-rose-950/25';
               } else if (status === 'PREPARE') {
-                usageColor = 'text-amber-400 font-bold';
+                usageColor = 'text-amber-400 font-extrabold';
                 barColor = 'bg-amber-500';
                 barBorder = 'border-amber-500';
               } else if (status === 'WARNING') {
-                usageColor = 'text-yellow-300 font-bold';
+                usageColor = 'text-yellow-300 font-extrabold';
                 barColor = 'bg-yellow-400';
                 barBorder = 'border-yellow-500';
               }
 
-              let statusBadgeClass = 'bg-emerald-950/90 text-emerald-300 border-emerald-600 hover:bg-emerald-900';
+              // High-visibility block color badges for 5-10m shop floor visibility (Solid GREEN vs RED vs AMBER vs YELLOW)
+              let statusBadgeClass = 'bg-emerald-600 text-white font-extrabold border-emerald-400 shadow-md shadow-emerald-950/60 hover:bg-emerald-500';
               let statusLabel = 'NORMAL';
 
               if (status === 'OVER_LIFE') {
-                statusBadgeClass = 'bg-red-950 text-red-200 border-red-500 font-bold animate-pulse hover:bg-red-900 shadow-md shadow-red-900/40';
+                statusBadgeClass = 'bg-red-600 text-white border-red-300 font-black animate-pulse hover:bg-red-500 shadow-lg shadow-red-900/80';
                 statusLabel = 'OVER LIFE';
               } else if (status === 'CRITICAL') {
-                statusBadgeClass = 'bg-rose-950 text-rose-200 border-rose-500 font-bold hover:bg-rose-900';
+                statusBadgeClass = 'bg-rose-600 text-white border-rose-300 font-black hover:bg-rose-500 shadow-md shadow-rose-950/60';
                 statusLabel = 'CRITICAL';
               } else if (status === 'PREPARE') {
-                statusBadgeClass = 'bg-amber-950 text-amber-200 border-amber-500 font-bold hover:bg-amber-900';
+                statusBadgeClass = 'bg-amber-500 text-slate-950 border-amber-300 font-black hover:bg-amber-400 shadow-md shadow-amber-950/60';
                 statusLabel = 'PREPARE';
               } else if (status === 'WARNING') {
-                statusBadgeClass = 'bg-yellow-950 text-yellow-200 border-yellow-500 font-bold hover:bg-yellow-900';
+                statusBadgeClass = 'bg-yellow-400 text-slate-950 border-yellow-200 font-black hover:bg-yellow-300 shadow-md shadow-yellow-950/60';
                 statusLabel = 'WARNING';
               }
 
-              const rowDensityClass = 'flex-1 min-h-[42px] md:min-h-[48px] py-1.5 md:py-2';
+              const rowDensityClass = 'flex-1 py-1 px-1 sm:px-1.5 min-h-[36px] sm:min-h-[40px] md:min-h-[44px]';
               const isStdMissing = item.isStandardMissing || item.lifeLimit <= 0;
 
               return (
                 <div 
                   key={item.slotId || idx} 
-                  className={`flex items-center px-1.5 font-mono transition-colors hover:bg-cyan-950/30 ${rowHighlight} ${rowDensityClass}`}
+                  className={`flex items-center font-mono transition-colors hover:bg-cyan-950/40 ${rowHighlight} ${rowDensityClass}`}
                 >
                   {/* No. */}
-                  <div className="h-full flex items-center justify-center text-slate-200 font-bold text-sm sm:text-base md:text-lg flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap" style={{ width: `${colWidths.no}%` }}>
+                  <div className="h-full flex items-center justify-center text-slate-100 font-black text-sm sm:text-base md:text-lg lg:text-[1.2vw] flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap" style={{ width: `${colWidths.no}%` }}>
                     {idx + 1}
                   </div>
 
                   {/* Fin Die Spare Parts */}
-                  <div className="h-full flex items-center justify-start px-2 sm:px-3 font-sans font-bold text-white border-r border-slate-800/70 tracking-wide flex-shrink-0 text-sm sm:text-base md:text-lg whitespace-nowrap truncate" style={{ width: `${colWidths.stage}%` }}>
+                  <div className="h-full flex items-center justify-start px-2 sm:px-3 font-sans font-black text-white border-r border-slate-800/70 tracking-wide flex-shrink-0 text-sm sm:text-base md:text-lg lg:text-[1.25vw] whitespace-nowrap truncate" style={{ width: `${colWidths.stage}%` }}>
                     <span className="truncate">{item.stagePunchDie || item.partName}</span>
                   </div>
 
                   {/* Life Limit */}
-                  <div className="h-full flex items-center justify-end px-1.5 sm:px-2.5 text-slate-200 font-bold flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap text-sm sm:text-base md:text-lg" style={{ width: `${colWidths.lifeLimit}%` }}>
-                    {isStdMissing ? <span className="text-amber-400 text-xs sm:text-sm italic">MISSING</span> : formatShots(item.lifeLimit)}
+                  <div className="h-full flex items-center justify-end px-1.5 sm:px-2.5 text-slate-200 font-extrabold flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap text-sm sm:text-base md:text-lg lg:text-[1.2vw] tabular-nums" style={{ width: `${colWidths.lifeLimit}%` }}>
+                    {isStdMissing ? <span className="px-2 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-800 text-xs font-mono font-bold">MISSING</span> : formatShots(item.lifeLimit)}
                   </div>
 
                   {/* Used Shot */}
-                  <div className="h-full flex items-center justify-end px-1.5 sm:px-2.5 text-cyan-200 font-bold flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap text-sm sm:text-base md:text-lg tracking-tight" style={{ width: `${colWidths.currentShot}%` }}>
+                  <div className="h-full flex items-center justify-end px-1.5 sm:px-2.5 text-cyan-200 font-extrabold flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap text-sm sm:text-base md:text-lg lg:text-[1.25vw] tracking-tight tabular-nums" style={{ width: `${colWidths.currentShot}%` }}>
                     {formatShots(usedShotVal)}
                   </div>
 
                   {/* Usage % */}
-                  <div className={`h-full flex items-center justify-center px-1 font-bold flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap text-sm sm:text-base md:text-lg ${usageColor}`} style={{ width: `${colWidths.usage}%` }}>
-                    {isStdMissing ? 'N/A' : `${item.usagePercent}%`}
+                  <div className={`h-full flex items-center justify-center px-1 font-extrabold flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap text-sm sm:text-base md:text-lg lg:text-[1.25vw] tabular-nums ${usageColor}`} style={{ width: `${colWidths.usage}%` }}>
+                    {isStdMissing ? (
+                      <span className="px-2 py-0.5 rounded bg-slate-800/90 text-slate-300 border border-slate-700/80 text-xs sm:text-sm font-mono font-extrabold">-</span>
+                    ) : (
+                      `${item.usagePercent}%`
+                    )}
                   </div>
 
                   {/* Remaining Shot */}
-                  <div className={`h-full flex items-center justify-end px-1.5 sm:px-2.5 font-bold flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap text-sm sm:text-base md:text-lg tracking-tight ${
+                  <div className={`h-full flex items-center justify-end px-1.5 sm:px-2.5 font-extrabold flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap text-sm sm:text-base md:text-lg lg:text-[1.25vw] tracking-tight tabular-nums ${
                     item.remainingShot < 0 ? 'text-red-400' : 'text-slate-100'
                   }`} style={{ width: `${colWidths.remaining}%` }}>
-                    {isStdMissing ? 'N/A' : formatShots(item.remainingShot)}
+                    {isStdMissing ? (
+                      <span className="px-2 py-0.5 rounded bg-slate-800/90 text-slate-300 border border-slate-700/80 text-xs sm:text-sm font-mono font-extrabold">-</span>
+                    ) : (
+                      formatShots(item.remainingShot)
+                    )}
                   </div>
 
                   {/* Progress Bar */}
                   <div className="h-full flex items-center justify-center px-1.5 sm:px-2 flex-shrink-0 border-r border-slate-800/70" style={{ width: `${colWidths.progress}%` }}>
                     <div className={`relative w-full bg-slate-900/90 h-6 sm:h-7 md:h-8 rounded border ${barBorder} overflow-hidden flex items-center shadow-inner`}>
-                      {!isStdMissing && (
+                      {!isStdMissing ? (
                         <div
                           className={`h-full ${barColor} transition-all duration-300`}
                           style={{ width: `${Math.min(100, Math.max(0, item.usagePercent))}%` }}
                         />
-                      )}
-                      <span className="absolute inset-0 flex items-center justify-center text-xs sm:text-sm md:text-base font-mono font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
-                        {isStdMissing ? 'N/A' : `${item.usagePercent}%`}
+                      ) : null}
+                      <span className="absolute inset-0 flex items-center justify-center text-xs sm:text-sm md:text-base font-mono font-extrabold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
+                        {isStdMissing ? '-' : `${item.usagePercent}%`}
                       </span>
                     </div>
                   </div>
 
                   {/* Shot at Last Change */}
-                  <div className="h-full flex items-center justify-end px-1.5 sm:px-2.5 text-slate-200 font-bold flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap text-sm sm:text-base md:text-lg" style={{ width: `${colWidths.lastChange}%` }}>
+                  <div className="h-full flex items-center justify-end px-1.5 sm:px-2.5 text-slate-200 font-extrabold flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap text-sm sm:text-base md:text-lg lg:text-[1.2vw] tabular-nums" style={{ width: `${colWidths.lastChange}%` }}>
                     {formatShots(shotAtLastChangeVal)}
                   </div>
 
                   {/* Install Qty */}
-                  <div className="h-full flex items-center justify-center px-1 text-slate-100 font-bold flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap text-sm sm:text-base md:text-lg" style={{ width: `${colWidths.installQty}%` }}>
+                  <div className="h-full flex items-center justify-center px-1 text-slate-100 font-extrabold flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap text-sm sm:text-base md:text-lg lg:text-[1.2vw] tabular-nums" style={{ width: `${colWidths.installQty}%` }}>
                     {item.installQty}
                   </div>
 
                   {/* Available Spare */}
-                  <div className="h-full flex items-center justify-center px-1 text-slate-100 font-bold flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap text-sm sm:text-base md:text-lg" style={{ width: `${colWidths.spareQty}%` }}>
+                  <div className="h-full flex items-center justify-center px-1 text-slate-100 font-extrabold flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap text-sm sm:text-base md:text-lg lg:text-[1.2vw] tabular-nums" style={{ width: `${colWidths.spareQty}%` }}>
                     {availableSpareVal}
                   </div>
 
-                  {/* Life Status Column (Clickable to open detail modal) */}
+                  {/* Life Status Column (Solid color blocks with bold white/black text) */}
                   <div className="h-full flex items-center justify-center px-1 flex-shrink-0" style={{ width: `${colWidths.status}%` }}>
                     <button
                       type="button"
                       onClick={() => setSelectedModalItem(item)}
-                      className={`w-full py-1.5 px-1 rounded text-[11px] sm:text-xs md:text-sm font-bold font-mono border whitespace-nowrap transition-all shadow ${statusBadgeClass}`}
+                      className={`w-full py-1 sm:py-1.5 px-1 rounded text-xs sm:text-sm md:text-base lg:text-[1.1vw] font-black font-mono border whitespace-nowrap transition-all shadow-md ${statusBadgeClass}`}
                       title="กดเพื่อดูรายละเอียดสถานะและการจัดการของชิ้นส่วนนี้"
                     >
                       {statusLabel}

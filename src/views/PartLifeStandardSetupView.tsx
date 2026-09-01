@@ -11,88 +11,75 @@ import {
   Upload,
   RefreshCw,
   Plus,
-  Info
+  Info,
+  Filter,
+  Check,
+  X,
+  Factory,
+  Edit3,
+  Trash2
 } from 'lucide-react';
 import { PartLifeStandard, FinMaterial, TubeDiameter, FinType, ProductionLineId, LINE_INFO_MAP } from '../types';
 import { storageService } from '../services/storageService';
 import { formatShots, formatThb, generateCompositeKey } from '../services/calculationService';
 import { ResizableReorderableTable } from '../components/common/ResizableReorderableTable';
 
+interface LineQuickFilter {
+  id: string;
+  label: string;
+  subLabel: string;
+  tube: string;
+  material: string;
+  finType: string;
+  paths: string;
+}
+
+const LINE_QUICK_FILTERS: LineQuickFilter[] = [
+  { id: 'ALL', label: 'ALL LINES', subLabel: 'ทุกสายการผลิต (E1-E6)', tube: 'ALL', material: 'ALL', finType: 'ALL', paths: '-' },
+  { id: 'E1', label: 'E1', subLabel: 'Ø7 Slit, PCM', tube: 'Ø7', material: 'PCM', finType: 'Slit Old', paths: '4P (Pitch)' },
+  { id: 'E2', label: 'E2', subLabel: 'Ø5 Slit, GOLD', tube: 'Ø5', material: 'GOLD', finType: 'Slit Old', paths: '4P (Pitch)' },
+  { id: 'E3-1', label: 'E3-1', subLabel: 'Slit 3P, PCM', tube: 'Ø7', material: 'PCM', finType: 'New Slit', paths: '3P (Pitch)' },
+  { id: 'E3-2', label: 'E3-2', subLabel: 'WL+ 4P, GOLD', tube: 'Ø7', material: 'GOLD', finType: 'Wide Louver', paths: '4P (Pitch)' },
+  { id: 'E3-3', label: 'E3-3', subLabel: 'Corr 4P, GOLD', tube: 'Ø7', material: 'GOLD', finType: 'Corrugate', paths: '4P (Pitch)' },
+  { id: 'E4', label: 'E4', subLabel: 'Ø5 Slit, BARE', tube: 'Ø5', material: 'BARE', finType: 'Slit Old', paths: '3P (Pitch)' },
+  { id: 'E5', label: 'E5', subLabel: 'Ø5 Slit, BARE', tube: 'Ø5', material: 'BARE', finType: 'New Slit', paths: '3P (Pitch)' },
+  { id: 'E6', label: 'E6', subLabel: 'Ø7 Louver, PCM', tube: 'Ø7', material: 'PCM', finType: 'Louver', paths: '3P (Pitch)' },
+];
+
 export const PartLifeStandardSetupView: React.FC = () => {
   const [standards, setStandards] = useState<PartLifeStandard[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [selectedLine, setSelectedLine] = useState<string>('ALL');
   const [selectedMaterial, setSelectedMaterial] = useState<string>('ALL');
   const [selectedTube, setSelectedTube] = useState<string>('ALL');
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [showImportModal, setShowImportModal] = useState<boolean>(false);
-  const [importStatus, setImportStatus] = useState<string | null>(null);
+  
+  const [isEditing, setIsEditing] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+  
+  // Maps standard.id -> { field: value } (supports number, boolean, string)
+  const [editValues, setEditValues] = useState<Record<string, Record<string, number | boolean | string>>>({});
 
-  // Form State for Life Standard Editor (10 Parameters + Grinding Specs)
-  const [formData, setFormData] = useState({
-    id: 'STD-E6-BUCK-P',
-    partName: 'Bucking Punch',
-    stagePunchDie: 'Bucking Punch',
-    line: 'E6',
-    configCode: 'CFG-E6-001',
-    dieCode: 'FD-E6-07',
-    finType: 'Slit (half)',
+  // New Standard Form State
+  const [newStd, setNewStd] = useState({
+    partName: '',
+    partCode: '',
+    stagePunchDie: '',
+    lineId: 'ALL',
     material: 'PCM',
-    foilThickness: 0.10,
     tubeSize: 'Ø7',
-    partCode: 'P-BUCK-001',
-    subOption: 'ALL',
-    effectiveDate: '2025-01-31',
-    lifeLimitShots: 18000000,
-    estimatedCostThb: 8500,
-    changeIntervalNotes: 'Standard change upon burr > 0.035mm',
-
-    // Re-grinding & Shim Specifications
-    maxTotalGrindingLimit: 3.00,
+    thicknessMm: 0.10,
+    lifeLimitShots: 1500000,
     regrindDepthPerTime: 0.20,
+    maxTotalGrindingLimit: 3.00,
     standardShimThickness: 0.20,
-    maxRegrindCount: 4,
-    disposeAfterUse: false
+    disposeAfterUse: false,
+    notes: 'Change every 10-15 Day (เปลี่ยนทุกๆ 10-15 วัน)'
   });
-
-  const [compositeKey, setCompositeKey] = useState<string>('');
 
   const reload = () => {
     const data = storageService.getLifeStandards();
     setStandards(data);
-    if (data.length > 0) {
-      const first = data[0];
-      populateFormFromStandard(first);
-    }
-  };
-
-  const populateFormFromStandard = (std: PartLifeStandard) => {
-    const maxGrind = std.maxTotalGrindingLimit ?? std.regrindStandard?.totalRegrindMm ?? 3.00;
-    const depthPerTime = std.regrindDepthPerTime ?? (typeof std.regrindStandard?.oneTimeRegrindMm === 'number' ? std.regrindStandard.oneTimeRegrindMm : parseFloat(std.regrindStandard?.oneTimeRegrindMm || '0.20') || 0.20);
-    const shim = std.standardShimThickness ?? 0.20;
-
-    setFormData({
-      id: std.id,
-      partName: std.partName,
-      stagePunchDie: std.stagePunchDie || std.partName,
-      line: (std.configKey.lineId as string) || 'ALL',
-      configCode: std.configKey.configurationId || 'CFG-E6-001',
-      dieCode: std.configKey.dieCode || 'FD-E6-07',
-      finType: std.configKey.finType || 'Slit (half)',
-      material: std.configKey.material || 'PCM',
-      foilThickness: typeof std.configKey.thicknessMm === 'number' ? std.configKey.thicknessMm : 0.10,
-      tubeSize: std.configKey.tubeSize || 'Ø7',
-      partCode: std.configKey.partCode || 'P-BUCK-001',
-      subOption: std.configKey.position || 'ALL',
-      effectiveDate: std.configKey.effectiveDate || '2025-01-31',
-      lifeLimitShots: std.lifeLimitShots || 18000000,
-      estimatedCostThb: std.estimatedCostThb || 8500,
-      changeIntervalNotes: std.changeIntervalNotes || '',
-      maxTotalGrindingLimit: maxGrind,
-      regrindDepthPerTime: depthPerTime,
-      standardShimThickness: shim,
-      maxRegrindCount: std.regrindStandard?.maxRegrindCount ?? 4,
-      disposeAfterUse: !!std.regrindStandard?.disposeAfterUse
-    });
   };
 
   useEffect(() => {
@@ -101,592 +88,715 @@ export const PartLifeStandardSetupView: React.FC = () => {
     return () => unsub();
   }, []);
 
-  // 2. Real-time Auto-Key Generator Effect
-  useEffect(() => {
-    const thicknessFormatted = Number(formData.foilThickness || 0.10).toFixed(2);
-    const key = `${formData.line}|${formData.configCode}|${formData.dieCode}|${formData.finType}|${formData.material}|${thicknessFormatted}mm|${formData.tubeSize}|${formData.partCode}|${formData.subOption}|${formData.effectiveDate}`;
-    setCompositeKey(key);
-  }, [formData]);
+  const handleEditClick = () => {
+    const currentVals: Record<string, Record<string, number | boolean | string>> = {};
+    standards.forEach(std => {
+      currentVals[std.id] = {
+        material: std.configKey?.material || 'PCM',
+        tubeSize: std.configKey?.tubeSize || 'Ø7',
+        lifeLimitShots: std.lifeLimitShots,
+        regrindDepthPerTime: std.regrindDepthPerTime ?? (parseFloat(std.regrindStandard?.oneTimeRegrindMm || '0.20') || 0.20),
+        maxTotalGrindingLimit: std.maxTotalGrindingLimit ?? std.regrindStandard?.totalRegrindMm ?? 3.00,
+        standardShimThickness: std.standardShimThickness ?? 0.20,
+        disposeAfterUse: !!std.regrindStandard?.disposeAfterUse,
+        notes: std.notes || std.regrindStandard?.regrindIntervalNote || std.changeIntervalNotes || ''
+      };
+    });
+    setEditValues(currentVals);
+    setIsEditing(true);
+  };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value, type } = e.target;
-    if (type === 'checkbox') {
-      const checked = (e.target as HTMLInputElement).checked;
-      setFormData(prev => ({
+  const handleCancelClick = () => {
+    setEditValues({});
+    setIsEditing(false);
+  };
+
+  const handleSaveClick = () => {
+    standards.forEach(std => {
+      const updates = editValues[std.id];
+      if (updates) {
+        if (updates.material) {
+          std.configKey.material = updates.material as any;
+        }
+        if (updates.tubeSize) {
+          std.configKey.tubeSize = updates.tubeSize as any;
+        }
+        std.lifeLimitShots = updates.lifeLimitShots as number;
+        std.regrindDepthPerTime = updates.regrindDepthPerTime as number;
+        std.maxTotalGrindingLimit = updates.maxTotalGrindingLimit as number;
+        std.standardShimThickness = updates.standardShimThickness as number;
+        std.notes = (updates.notes as string) || '';
+        
+        if (std.regrindStandard) {
+          std.regrindStandard.disposeAfterUse = updates.disposeAfterUse as boolean;
+          std.regrindStandard.oneTimeRegrindMm = (std.regrindDepthPerTime || 0.20).toFixed(2);
+          std.regrindStandard.totalRegrindMm = std.maxTotalGrindingLimit;
+          std.regrindStandard.maxTotalGrindingLimit = std.maxTotalGrindingLimit;
+          std.regrindStandard.regrindDepthPerTime = std.regrindDepthPerTime;
+          std.regrindStandard.standardShimThickness = std.standardShimThickness;
+          std.regrindStandard.regrindIntervalNote = std.notes;
+        }
+        
+        std.updatedAt = new Date().toISOString();
+        storageService.saveLifeStandard(std);
+      }
+    });
+    setIsEditing(false);
+    setSaveSuccessMsg('บันทึกการแก้ไขเกณฑ์มาตรฐานเรียบร้อยแล้ว (Matrix Saved Successfully)');
+    setTimeout(() => setSaveSuccessMsg(null), 3500);
+    reload();
+  };
+
+  const handleValueChange = (stdId: string, field: string, value: string | boolean | number) => {
+    setEditValues(prev => {
+      const current = prev[stdId] || {};
+      let parsedVal: any = value;
+      if (field === 'lifeLimitShots' || field === 'maxTotalGrindingLimit' || field === 'regrindDepthPerTime' || field === 'standardShimThickness') {
+        parsedVal = typeof value === 'string' ? (value === '' ? 0 : parseFloat(value) || 0) : value;
+      }
+      return {
         ...prev,
-        [name]: checked
-      }));
+        [stdId]: {
+          ...current,
+          [field]: parsedVal
+        }
+      };
+    });
+  };
+
+  const handleAddSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newStd.partName.trim() || !newStd.partCode.trim()) {
+      alert('กรุณากรอก Part Name และ Part Code');
       return;
     }
 
-    setFormData(prev => ({
-      ...prev,
-      [name]: name.includes('Thickness') || name.includes('Limit') || name.includes('Depth') || name.includes('Cost') || name.includes('Shots') || name.includes('Count')
-        ? (value === '' ? 0 : parseFloat(value) || 0)
-        : value
-    }));
-  };
-
-  const handleSelectStandard = (std: PartLifeStandard) => {
-    populateFormFromStandard(std);
-  };
-
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const updatedStandard: PartLifeStandard = {
-      id: formData.id || `STD-${formData.line}-${formData.partCode}`,
-      partName: formData.partName,
-      stagePunchDie: formData.stagePunchDie,
-      compositeKeyString: compositeKey,
+    const newId = `STD-${newStd.material}-${newStd.partCode.replace(/[^A-Z0-9]/gi, '')}-${Date.now().toString().slice(-4)}`;
+    const createdStandard: PartLifeStandard = {
+      id: newId,
       configKey: {
-        lineId: formData.line as ProductionLineId | 'ALL',
-        configurationId: formData.configCode,
-        dieCode: formData.dieCode,
-        finType: formData.finType as FinType,
-        material: formData.material as FinMaterial,
-        thicknessMm: formData.foilThickness,
-        tubeSize: formData.tubeSize as TubeDiameter,
-        partCode: formData.partCode,
-        position: formData.subOption,
-        effectiveDate: formData.effectiveDate
+        lineId: newStd.lineId,
+        configurationId: `CFG-${newStd.lineId}-${newStd.material}`,
+        dieCode: `FD-${newStd.lineId}`,
+        finType: 'Slit (half)',
+        material: newStd.material as any,
+        thicknessMm: 0.10,
+        tubeSize: newStd.tubeSize as any,
+        partCode: newStd.partCode.trim(),
+        position: 'ALL',
+        effectiveDate: new Date().toISOString().substring(0, 10)
       },
-      lifeLimitShots: formData.lifeLimitShots,
-      maxTotalGrindingLimit: formData.maxTotalGrindingLimit,
-      regrindDepthPerTime: formData.regrindDepthPerTime,
-      standardShimThickness: formData.standardShimThickness,
-      estimatedCostThb: formData.estimatedCostThb,
-      changeIntervalNotes: formData.changeIntervalNotes,
+      compositeKeyString: `${newStd.lineId}|${newStd.material}|0.10mm|${newStd.tubeSize}|${newStd.partCode}`,
+      partName: newStd.partName.trim(),
+      stagePunchDie: newStd.stagePunchDie.trim() || newStd.partName.trim(),
+      lifeLimitShots: Number(newStd.lifeLimitShots) || 1500000,
+      regrindDepthPerTime: Number(newStd.regrindDepthPerTime) || 0.20,
+      maxTotalGrindingLimit: Number(newStd.maxTotalGrindingLimit) || 3.00,
+      standardShimThickness: Number(newStd.standardShimThickness) || 0.20,
+      notes: newStd.notes.trim(),
       regrindStandard: {
-        oneTimeRegrindMm: formData.regrindDepthPerTime.toFixed(2),
-        totalRegrindMm: formData.maxTotalGrindingLimit,
-        maxRegrindCount: formData.maxRegrindCount,
-        maxTotalGrindingLimit: formData.maxTotalGrindingLimit,
-        regrindDepthPerTime: formData.regrindDepthPerTime,
-        standardShimThickness: formData.standardShimThickness,
-        disposeAfterUse: formData.disposeAfterUse,
-        regrindIntervalNote: formData.disposeAfterUse ? 'Dispose after 1 use' : `Regrind ${formData.regrindDepthPerTime}mm with ${formData.standardShimThickness}mm shim compensation`
+        oneTimeRegrindMm: (Number(newStd.regrindDepthPerTime) || 0.20).toFixed(2),
+        totalRegrindMm: Number(newStd.maxTotalGrindingLimit) || 3.00,
+        maxRegrindCount: 7,
+        disposeAfterUse: newStd.disposeAfterUse,
+        regrindIntervalNote: newStd.notes.trim()
       },
-      createdBy: storageService.getCurrentUser().name,
+      createdBy: 'Die Engineer Admin',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
 
-    storageService.saveLifeStandard(updatedStandard);
-    setSuccessMsg(`Life Standard saved & composite key committed: ${formData.partCode} (${formatShots(formData.lifeLimitShots)} shots)`);
-    setTimeout(() => setSuccessMsg(null), 4000);
+    storageService.saveLifeStandard(createdStandard);
+    setShowAddModal(false);
+    setSaveSuccessMsg(`เพิ่มเกณฑ์มาตรฐานสำหรับ ${newStd.partName} สำเร็จแล้ว`);
+    setTimeout(() => setSaveSuccessMsg(null), 3500);
+    reload();
   };
 
-  const handleExportTemplate = () => {
-    const jsonStr = JSON.stringify(standards, null, 2);
-    const blob = new Blob([jsonStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Life_Standard_Template_31.01_${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleImportClick = () => {
-    setShowImportModal(true);
-    setImportStatus(null);
-  };
-
-  const handleExecuteImport = () => {
-    setImportStatus('Verifying 31.01.2025 Standard Matrix and applying grinding limits...');
-    setTimeout(() => {
-      storageService.resetToSeedData();
-      reload();
-      setImportStatus('Successfully synchronized with official Excel 31.01.2025 standard matrix.');
-      setTimeout(() => {
-        setShowImportModal(false);
-        setImportStatus(null);
-      }, 1500);
-    }, 800);
-  };
-
+  // Filter standards by Line, Search, Material, Tube
   const filtered = standards.filter(s => {
     const matchSearch = 
       s.partName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.configKey.partCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (s.stagePunchDie && s.stagePunchDie.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchMat = selectedMaterial === 'ALL' || s.configKey.material.toUpperCase() === selectedMaterial.toUpperCase();
+      (s.stagePunchDie && s.stagePunchDie.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (s.notes && s.notes.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    // Line matching
+    let matchLine = true;
+    if (selectedLine !== 'ALL') {
+      const lineOpt = LINE_QUICK_FILTERS.find(f => f.id === selectedLine);
+      if (lineOpt) {
+        // If standard has matching lineId or matches line's tube and material
+        const stdLine = s.configKey?.lineId || 'ALL';
+        const stdMat = (s.configKey?.material || '').toUpperCase();
+        const stdTube = s.configKey?.tubeSize;
+
+        if (stdLine === selectedLine) {
+          matchLine = true;
+        } else if (stdLine === 'ALL') {
+          const matchTube = lineOpt.tube === 'ALL' || stdTube === lineOpt.tube;
+          const matchMat = lineOpt.material === 'ALL' || stdMat.includes(lineOpt.material);
+          matchLine = matchTube && matchMat;
+        } else {
+          matchLine = false;
+        }
+      }
+    }
+
+    const mat = (s.configKey.material || '').toUpperCase();
+    const matchMat = 
+      selectedMaterial === 'ALL' || 
+      mat === selectedMaterial.toUpperCase() ||
+      mat.includes(selectedMaterial.toUpperCase());
+
     const matchTube = selectedTube === 'ALL' || s.configKey.tubeSize === selectedTube;
-    return matchSearch && matchMat && matchTube;
+
+    return matchSearch && matchLine && matchMat && matchTube;
   });
 
+  const activeLineFilterObj = LINE_QUICK_FILTERS.find(f => f.id === selectedLine) || LINE_QUICK_FILTERS[0];
+
   return (
-    <div className="space-y-6">
-      {/* Header Section */}
-      <div className="bg-[#0F172A] border border-slate-700 rounded-lg p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-md">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-cyan-400 flex items-center gap-2">
-            <Sliders className="w-6 h-6 text-cyan-400" />
-            Fin Die Part Life Standard Setup
-          </h1>
-          <p className="text-sm text-slate-400 mt-1 font-thai">
-            กำหนดเกณฑ์อายุการใช้งานชิ้นส่วนแม่พิมพ์ (10 Composite Keys) และพารามิเตอร์การเจียร Re-grinding & Shim
-          </p>
-        </div>
-
-        {/* Quick Filter Bar */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              placeholder="Search part name / code..."
-              className="bg-[#1E293B] border border-slate-700 rounded pl-9 pr-3 py-2 text-xs font-mono text-slate-100 w-52 focus:border-cyan-500 focus:outline-none"
-            />
+    <div className="space-y-4">
+      {/* Toast Notification */}
+      {saveSuccessMsg && (
+        <div className="p-3 bg-emerald-900/90 border border-emerald-500 text-emerald-200 rounded-lg flex items-center justify-between shadow-xl animate-fadeIn text-sm">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+            <span className="font-thai font-medium">{saveSuccessMsg}</span>
           </div>
-
-          <select
-            value={selectedMaterial}
-            onChange={e => setSelectedMaterial(e.target.value)}
-            className="bg-[#1E293B] border border-slate-700 rounded px-3 py-2 text-xs font-mono text-slate-200 focus:border-cyan-500 focus:outline-none"
-          >
-            <option value="ALL">All Materials (วัสดุทั้งหมด)</option>
-            <option value="PCM">PCM</option>
-            <option value="GOLD">GOLD</option>
-            <option value="BARE">BARE</option>
-          </select>
-
-          <select
-            value={selectedTube}
-            onChange={e => setSelectedTube(e.target.value)}
-            className="bg-[#1E293B] border border-slate-700 rounded px-3 py-2 text-xs font-mono text-slate-200 focus:border-cyan-500 focus:outline-none"
-          >
-            <option value="ALL">All Tubes (ขนาดท่อทั้งหมด)</option>
-            <option value="Ø5">Ø5</option>
-            <option value="Ø7">Ø7</option>
-            <option value="Ø9.52">Ø9.52</option>
-          </select>
-        </div>
-      </div>
-
-      {successMsg && (
-        <div className="p-3.5 bg-emerald-950/90 border border-emerald-500 text-emerald-300 rounded-lg text-sm flex items-center gap-2 shadow-md animate-fadeIn">
-          <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-emerald-400" />
-          <span className="font-semibold">{successMsg}</span>
+          <button onClick={() => setSaveSuccessMsg(null)} className="text-emerald-400 hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 
-      {/* Master-Detail Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* LEFT PANEL: Standard Registry (Table) */}
-        <div className="lg:col-span-7 bg-[#1E293B] rounded-lg border border-slate-700 overflow-hidden flex flex-col shadow-lg">
-          <div className="p-4 border-b border-slate-700 flex flex-wrap justify-between items-center bg-[#0F172A]/70 gap-2">
-            <div>
-              <h2 className="font-semibold text-slate-100 text-sm sm:text-base flex items-center gap-2">
-                <span>Standard Registry</span>
-                <span className="text-xs font-mono font-normal text-slate-400 bg-slate-800 px-2 py-0.5 rounded">
-                  {filtered.length} Items
-                </span>
-              </h2>
-              <div className="text-[11px] text-slate-400 font-thai">คลิกที่แถวเพื่อเลือกและแก้ไขพารามิเตอร์</div>
-            </div>
-
-            {/* Requested 2 Action Buttons */}
-            <div className="flex gap-2 text-xs">
-              <button 
-                onClick={handleExportTemplate}
-                className="px-3 py-2 text-slate-300 hover:text-white hover:bg-slate-700/80 rounded transition-colors flex items-center gap-1.5 border border-transparent hover:border-slate-600"
-                title="ส่งออกแม่แบบมาตรฐาน JSON/Excel (Export Template)"
-              >
-                <Download className="w-3.5 h-3.5 text-slate-400" />
-                <span>Export Template</span>
-              </button>
-              <button 
-                onClick={handleImportClick}
-                className="px-3 py-2 bg-cyan-600/20 text-cyan-300 border border-cyan-500/40 rounded hover:bg-cyan-600/30 hover:border-cyan-400 transition-colors flex items-center gap-1.5 font-semibold"
-                title="นำเข้าไฟล์มาตรฐาน 31.01 (Import Excel 31.01)"
-              >
-                <Upload className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Import Excel (31.01)</span>
-              </button>
-            </div>
+      {/* Sticky Header Section */}
+      <div className="sticky top-[130px] sm:top-[115px] z-20 pb-1 bg-slate-900/95 backdrop-blur-sm -mx-2 px-2 space-y-3">
+        {/* Header & Action Bar */}
+        <div className="bg-[#0F172A] border border-slate-700 rounded-lg p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-md">
+          <div>
+            <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight flex items-center gap-2">
+              <Sliders className="w-5 h-5 text-cyan-400" />
+              <span>Fin Die Part Life Standard Matrix</span>
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-400 mt-0.5 font-thai">
+              เกณฑ์อายุการใช้งานชิ้นส่วนแม่พิมพ์และพารามิเตอร์การเจียรตามมาตรฐานวัสดุ (PCM, BARE, GOLD ความหนา 0.1mm)
+            </p>
           </div>
+          
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            {/* Search */}
+            <div className="flex items-center gap-2 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5">
+              <Search className="w-4 h-4 text-slate-400" />
+              <input 
+                type="text" 
+                placeholder="Search part, code, note..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="bg-transparent border-none text-white text-xs sm:text-sm focus:outline-none w-36 sm:w-44"
+              />
+            </div>
+            
+            {/* Material Filter */}
+            <select 
+              value={selectedMaterial}
+              onChange={(e) => setSelectedMaterial(e.target.value)}
+              className="bg-slate-900 border border-slate-700 text-cyan-300 text-xs sm:text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-cyan-500 font-thai font-bold"
+            >
+              <option value="ALL">All Materials (ทุกวัสดุ)</option>
+              <option value="PCM">PCM (0.1mm)</option>
+              <option value="BARE">BARE (0.1mm)</option>
+              <option value="GOLD">GOLD (0.1mm)</option>
+            </select>
+            
+            {/* Tube Filter */}
+            <select 
+              value={selectedTube}
+              onChange={(e) => setSelectedTube(e.target.value)}
+              className="bg-slate-900 border border-slate-700 text-cyan-300 text-xs sm:text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-cyan-500 font-thai font-bold"
+            >
+              <option value="ALL">All Tubes (ท่อทั้งหมด)</option>
+              <option value="Ø5">Ø5</option>
+              <option value="Ø7">Ø7</option>
+            </select>
 
-          <div className="p-3">
-            <ResizableReorderableTable<PartLifeStandard>
-              data={filtered}
-              keyExtractor={(s) => s.id}
-              emptyMessage="ไม่พบข้อมูลเกณฑ์มาตรฐานอายุการใช้งาน"
-              columns={[
-                {
-                  id: 'part',
-                  label: 'STAGE / PART',
-                  width: 170,
-                  render: (s) => (
-                    <div 
-                      onClick={() => handleSelectStandard(s)}
-                      className="cursor-pointer space-y-0.5"
-                    >
-                      <div className="font-bold text-slate-100">{s.partName}</div>
-                      <div className="text-[11px] text-cyan-400 font-mono">{s.configKey.partCode}</div>
-                      <div className="text-[10px] text-slate-400">{s.stagePunchDie || s.partName}</div>
-                    </div>
-                  )
-                },
-                {
-                  id: 'material',
-                  label: 'MAT',
-                  width: 90,
-                  align: 'center',
-                  render: (s) => (
-                    <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                      s.configKey.material === 'PCM' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
-                      s.configKey.material === 'GOLD' ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30' :
-                      'bg-slate-700 text-slate-200'
-                    }`}>
-                      {s.configKey.material}
-                    </span>
-                  )
-                },
-                {
-                  id: 'tubeSize',
-                  label: 'TUBE',
-                  width: 80,
-                  align: 'center',
-                  render: (s) => (
-                    <span className="text-cyan-300 font-bold font-mono text-xs">
-                      {s.configKey.tubeSize}
-                    </span>
-                  )
-                },
-                {
-                  id: 'lifeLimitShots',
-                  label: 'LIFE LIMIT',
-                  width: 120,
-                  align: 'right',
-                  render: (s) => (
-                    <span className="font-mono font-bold text-green-400 text-xs">
-                      {formatShots(s.lifeLimitShots)}
-                    </span>
-                  )
-                },
-                {
-                  id: 'regrind',
-                  label: 'REGRIND (Max mm)',
-                  width: 140,
-                  align: 'right',
-                  render: (s) => {
-                    const maxGrind = s.maxTotalGrindingLimit ?? s.regrindStandard?.totalRegrindMm ?? 3.00;
-                    const cycles = s.regrindStandard?.maxRegrindCount ?? 4;
-                    const is1Use = s.regrindStandard?.disposeAfterUse;
+            {/* Add New Standard Button */}
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-600 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Add Standard</span>
+            </button>
 
-                    return is1Use ? (
-                      <span className="text-rose-400 text-[11px] font-semibold">1-Use (Dispose)</span>
-                    ) : (
-                      <div className="text-xs">
-                        <span className="font-semibold text-slate-200">{cycles}x</span>{' '}
-                        <span className="text-cyan-400 font-mono">({maxGrind.toFixed(2)}mm)</span>
-                      </div>
-                    );
-                  }
-                }
-              ]}
-            />
+            {/* Edit / Save Action */}
+            {isEditing ? (
+              <div className="flex items-center gap-2">
+                <button onClick={handleCancelClick} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-bold transition-colors">
+                  Cancel
+                </button>
+                <button onClick={handleSaveClick} className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-lg shadow-emerald-950">
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Save Matrix</span>
+                </button>
+              </div>
+            ) : (
+              <button onClick={handleEditClick} className="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-lg shadow-cyan-950">
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>Edit Matrix</span>
+              </button>
+            )}
           </div>
         </div>
 
-        {/* RIGHT PANEL: Life Standard Editor (Form) */}
-        <div className="lg:col-span-5 bg-[#1E293B] rounded-lg border border-slate-700 p-5 space-y-5 shadow-lg flex flex-col justify-between">
-          <div className="space-y-5">
-            <div className="flex justify-between items-center border-b border-slate-700 pb-3">
-              <div>
-                <h2 className="font-semibold text-slate-100 text-base">Life Standard Editor</h2>
-                <div className="text-xs text-slate-400 font-thai">แก้ไขเกณฑ์มาตรฐานชิ้นส่วนและ Re-grinding</div>
-              </div>
-              <span className="text-xs font-mono font-bold text-cyan-300 bg-cyan-950/80 border border-cyan-800 px-2.5 py-1 rounded">
-                {formData.partCode}
-              </span>
+        {/* Line Quick Selection Buttons (แถบเลือก Line เหมือนหน้า Line Die Specification) */}
+        <div className="bg-[#0B1528] border border-slate-800 rounded-lg p-2 flex flex-wrap items-center gap-1.5 shadow-inner">
+          <span className="text-[11px] font-mono font-bold text-slate-400 px-2 flex items-center gap-1">
+            <Factory className="w-3.5 h-3.5 text-cyan-400" />
+            <span>LINE:</span>
+          </span>
+
+          {LINE_QUICK_FILTERS.map(lf => {
+            const isSelected = selectedLine === lf.id;
+            return (
+              <button
+                key={lf.id}
+                onClick={() => setSelectedLine(lf.id)}
+                className={`px-3 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 border ${
+                  isSelected
+                    ? 'bg-cyan-400 text-slate-950 border-cyan-300 shadow-md font-extrabold scale-105 z-10'
+                    : 'bg-slate-900/80 text-slate-300 hover:text-white hover:bg-slate-800 border-slate-700/80'
+                }`}
+              >
+                <span>{lf.label}</span>
+                <span className={`text-[10px] ${isSelected ? 'text-slate-800 font-semibold' : 'text-slate-400'}`}>
+                  ({lf.subLabel})
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Selected Line Profile Banner */}
+        {selectedLine !== 'ALL' && (
+          <div className="bg-slate-800/60 border border-slate-700 rounded-lg px-3 py-1.5 flex flex-wrap items-center justify-between text-xs text-slate-300">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-cyan-300 font-mono">SELECTED LINE: {activeLineFilterObj.label}</span>
+              <span className="text-slate-400">|</span>
+              <span>Tube: <strong className="text-white font-mono">{activeLineFilterObj.tube}</strong></span>
+              <span className="text-slate-400">|</span>
+              <span>Material: <strong className="text-amber-300 font-mono">{activeLineFilterObj.material} (0.1mm)</strong></span>
+              <span className="text-slate-400">|</span>
+              <span>Fin Type: <strong className="text-slate-200">{activeLineFilterObj.finType}</strong></span>
+              <span className="text-slate-400">|</span>
+              <span>Paths: <strong className="text-slate-200">{activeLineFilterObj.paths}</strong></span>
             </div>
-
-            {/* Auto-Generated Key Display */}
-            <div className="space-y-1 bg-[#0F172A] p-3 rounded-md border border-slate-700">
-              <div className="flex items-center justify-between">
-                <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                  <Info className="w-3 h-3 text-cyan-400" />
-                  10 Composite Key String (Auto-Generated)
-                </label>
-                <span className="text-[10px] text-emerald-400 font-mono">Real-time</span>
-              </div>
-              <div className="w-full bg-[#070D18] border border-slate-800 rounded p-2.5 font-mono text-xs text-emerald-400 break-all select-all shadow-inner">
-                {compositeKey}
-              </div>
+            <div className="text-[11px] text-slate-400">
+              พบ {filtered.length} รายการมาตรฐาน
             </div>
+          </div>
+        )}
+      </div>
 
-            <form id="lifeStandardForm" onSubmit={handleSave} className="space-y-4 text-xs font-mono">
-              {/* Group 1: General Info */}
-              <div className="space-y-3">
-                <div className="text-xs font-bold text-cyan-400 uppercase tracking-wider border-b border-slate-800 pb-1">
-                  1. General & Tooling Information
+      {/* Main Matrix Table Container */}
+      <div className="bg-[#1E293B] rounded-lg border border-slate-700 p-4 shadow-lg">
+        <ResizableReorderableTable<PartLifeStandard>
+          data={filtered}
+          keyExtractor={(s) => s.id}
+          emptyMessage="ไม่พบข้อมูลเกณฑ์มาตรฐานอายุการใช้งานที่ตรงกับเงื่อนไขการค้นหา"
+          columns={[
+            {
+              id: 'no',
+              label: 'NO.',
+              width: 55,
+              minWidth: 45,
+              align: 'center',
+              render: (_, idx) => (
+                <span className="text-cyan-400/80 font-mono font-bold text-xs">{idx + 1}</span>
+              )
+            },
+            {
+              id: 'part',
+              label: 'STAGE / PART NAME',
+              width: 200,
+              minWidth: 150,
+              render: (s) => (
+                <div className="space-y-0.5">
+                  <div className="font-bold text-slate-100 truncate" title={s.partName}>{s.partName}</div>
+                  <div className="text-[11px] text-cyan-400 font-mono">{s.configKey.partCode}</div>
+                  <div className="text-[10px] text-slate-400 truncate">{s.stagePunchDie || s.partName}</div>
                 </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-slate-400 font-bold">Line ID</label>
+              )
+            },
+            {
+              id: 'material',
+              label: 'MAT / THICK',
+              width: 140,
+              minWidth: 120,
+              align: 'center',
+              render: (s) => {
+                const currentMat = (editValues[s.id]?.material as string) ?? s.configKey.material ?? 'PCM';
+                
+                if (isEditing) {
+                  return (
                     <select
-                      name="line"
-                      value={formData.line}
-                      onChange={handleChange}
-                      className="w-full bg-[#0F172A] border border-slate-700 rounded px-2.5 py-2 text-slate-200 focus:border-cyan-500 focus:outline-none"
+                      value={currentMat}
+                      onChange={(e) => handleValueChange(s.id, 'material', e.target.value)}
+                      className="bg-slate-900 border border-cyan-500/80 text-cyan-300 font-bold font-mono rounded px-2 py-1 text-xs focus:border-cyan-400 focus:outline-none w-full"
                     >
-                      <option value="ALL">ALL (ทุกไลน์)</option>
-                      <option value="E1">E1</option>
-                      <option value="E2">E2</option>
-                      <option value="E3-1">E3-1</option>
-                      <option value="E3-2">E3-2</option>
-                      <option value="E3-3">E3-3</option>
-                      <option value="E4">E4</option>
-                      <option value="E5">E5</option>
-                      <option value="E6">E6</option>
+                      <option value="PCM">PCM (0.1mm)</option>
+                      <option value="BARE">BARE (0.1mm)</option>
+                      <option value="GOLD">GOLD (0.1mm)</option>
                     </select>
-                  </div>
+                  );
+                }
 
-                  <div className="space-y-1">
-                    <label className="text-slate-400 font-bold">Die Code</label>
-                    <input
-                      type="text"
-                      name="dieCode"
-                      value={formData.dieCode}
-                      onChange={handleChange}
-                      className="w-full bg-[#0F172A] border border-slate-700 rounded px-2.5 py-2 text-slate-200 focus:border-cyan-500 focus:outline-none"
-                    />
-                  </div>
-                </div>
+                const mat = currentMat.toUpperCase();
+                const isPcm = mat.includes('PCM');
+                const isGold = mat.includes('GOLD');
+                const isBare = mat.includes('BARE');
+                const isHydro = mat.includes('HYDRO');
+                const thick = s.configKey.thicknessMm ? `${s.configKey.thicknessMm}mm` : '0.1mm';
 
-                <div className="space-y-1">
-                  <label className="text-slate-400 font-bold">Part Name</label>
-                  <input
-                    type="text"
-                    name="partName"
-                    value={formData.partName}
-                    onChange={handleChange}
-                    className="w-full bg-[#0F172A] border border-slate-700 rounded px-2.5 py-2 text-slate-100 font-sans font-medium focus:border-cyan-500 focus:outline-none"
-                    required
-                  />
-                </div>
-
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="space-y-1">
-                    <label className="text-slate-400 font-bold">Material</label>
+                return (
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold font-mono ${
+                    isPcm ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' :
+                    isGold ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' :
+                    isBare ? 'bg-slate-500/25 text-slate-200 border border-slate-500/40' :
+                    isHydro ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' :
+                    'bg-slate-700 text-slate-200'
+                  }`}>
+                    <span>{isPcm ? 'PCM' : isGold ? 'GOLD' : isBare ? 'BARE' : isHydro ? 'HYDRO' : mat}</span>
+                    <span className="opacity-75 text-[10px]">({thick})</span>
+                  </span>
+                );
+              }
+            },
+            {
+              id: 'tubeSize',
+              label: 'TUBE',
+              width: 80,
+              minWidth: 60,
+              align: 'center',
+              render: (s) => {
+                const currentTube = (editValues[s.id]?.tubeSize as string) ?? s.configKey.tubeSize ?? 'Ø7';
+                if (isEditing) {
+                  return (
                     <select
-                      name="material"
-                      value={formData.material}
-                      onChange={handleChange}
-                      className="w-full bg-[#0F172A] border border-slate-700 rounded px-2 py-2 text-amber-300 focus:border-cyan-500 focus:outline-none font-bold"
-                    >
-                      <option value="PCM">PCM</option>
-                      <option value="GOLD">GOLD</option>
-                      <option value="BARE">BARE</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-slate-400 font-bold">Tube Size</label>
-                    <select
-                      name="tubeSize"
-                      value={formData.tubeSize}
-                      onChange={handleChange}
-                      className="w-full bg-[#0F172A] border border-slate-700 rounded px-2 py-2 text-cyan-300 focus:border-cyan-500 focus:outline-none font-bold"
+                      value={currentTube}
+                      onChange={(e) => handleValueChange(s.id, 'tubeSize', e.target.value)}
+                      className="bg-slate-900 border border-slate-600 text-cyan-300 font-bold font-mono rounded px-1.5 py-1 text-xs focus:border-cyan-400 focus:outline-none"
                     >
                       <option value="Ø5">Ø5</option>
                       <option value="Ø7">Ø7</option>
-                      <option value="Ø9.52">Ø9.52</option>
                     </select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-slate-400 font-bold">Foil Thk (mm)</label>
+                  );
+                }
+                return (
+                  <span className="text-cyan-300 font-bold font-mono text-xs">
+                    {currentTube}
+                  </span>
+                );
+              }
+            },
+            {
+              id: 'lifeLimitShots',
+              label: 'LIFE LIMIT (SHOTS)',
+              width: 145,
+              minWidth: 110,
+              align: 'right',
+              render: (s) => isEditing ? (
+                <input
+                  type="number"
+                  value={editValues[s.id]?.lifeLimitShots as number}
+                  onChange={(e) => handleValueChange(s.id, 'lifeLimitShots', e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-right text-white font-mono text-xs focus:border-cyan-400 focus:outline-none"
+                />
+              ) : (
+                <span className="font-mono font-bold text-emerald-400 text-xs">
+                  {formatShots(s.lifeLimitShots)}
+                </span>
+              )
+            },
+            {
+              id: 'regrindDepth',
+              label: '1 TIME / REGRIND (MM)',
+              width: 135,
+              minWidth: 95,
+              align: 'right',
+              render: (s) => isEditing ? (
+                <input
+                  type="number"
+                  step="0.01"
+                  value={editValues[s.id]?.regrindDepthPerTime as number}
+                  onChange={(e) => handleValueChange(s.id, 'regrindDepthPerTime', e.target.value)}
+                  className="w-20 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-right text-white font-mono text-xs focus:border-cyan-400 focus:outline-none"
+                />
+              ) : (
+                <span className="font-mono text-slate-300 text-xs">
+                  {(s.regrindDepthPerTime ?? (parseFloat(s.regrindStandard?.oneTimeRegrindMm || '0.20') || 0.20)).toFixed(2)}
+                </span>
+              )
+            },
+            {
+              id: 'maxRegrind',
+              label: 'MAX REGRIND (MM)',
+              width: 130,
+              minWidth: 90,
+              align: 'right',
+              render: (s) => isEditing ? (
+                <input
+                  type="number"
+                  step="0.1"
+                  value={editValues[s.id]?.maxTotalGrindingLimit as number}
+                  onChange={(e) => handleValueChange(s.id, 'maxTotalGrindingLimit', e.target.value)}
+                  className="w-20 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-right text-white font-mono text-xs focus:border-cyan-400 focus:outline-none"
+                />
+              ) : (
+                <span className="font-mono text-slate-300 text-xs">
+                  {(s.maxTotalGrindingLimit ?? s.regrindStandard?.totalRegrindMm ?? 3.0).toFixed(2)}
+                </span>
+              )
+            },
+            {
+              id: 'shimThickness',
+              label: 'SHIM (MM)',
+              width: 100,
+              minWidth: 80,
+              align: 'right',
+              render: (s) => isEditing ? (
+                <input
+                  type="number"
+                  step="0.01"
+                  value={editValues[s.id]?.standardShimThickness as number}
+                  onChange={(e) => handleValueChange(s.id, 'standardShimThickness', e.target.value)}
+                  className="w-20 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-right text-white font-mono text-xs focus:border-cyan-400 focus:outline-none"
+                />
+              ) : (
+                <span className="font-mono text-slate-300 text-xs">
+                  {(s.standardShimThickness ?? 0.20).toFixed(2)}
+                </span>
+              )
+            },
+            {
+              id: 'dispose',
+              label: '1-USE (DISPOSE)',
+              width: 100,
+              minWidth: 80,
+              align: 'center',
+              render: (s) => isEditing ? (
+                <input
+                  type="checkbox"
+                  checked={editValues[s.id]?.disposeAfterUse as boolean}
+                  onChange={(e) => handleValueChange(s.id, 'disposeAfterUse', e.target.checked)}
+                  className="w-4 h-4 rounded bg-slate-900 border-slate-600 text-cyan-500 focus:ring-cyan-500 focus:ring-offset-slate-900"
+                />
+              ) : (
+                <span className={`text-[11px] font-bold ${s.regrindStandard?.disposeAfterUse ? 'text-rose-400' : 'text-slate-500'}`}>
+                  {s.regrindStandard?.disposeAfterUse ? 'YES' : 'NO'}
+                </span>
+              )
+            },
+            {
+              id: 'notes',
+              label: 'NOTE / REMARK',
+              width: 240,
+              minWidth: 150,
+              render: (s) => {
+                const currentNote = (editValues[s.id]?.notes as string) ?? (s.notes || s.regrindStandard?.regrindIntervalNote || s.changeIntervalNotes || '');
+                if (isEditing) {
+                  return (
                     <input
-                      type="number"
-                      step="0.01"
-                      name="foilThickness"
-                      value={formData.foilThickness}
-                      onChange={handleChange}
-                      className="w-full bg-[#0F172A] border border-slate-700 rounded px-2 py-2 text-slate-100 focus:border-cyan-500 focus:outline-none"
+                      type="text"
+                      value={currentNote}
+                      onChange={(e) => handleValueChange(s.id, 'notes', e.target.value)}
+                      placeholder="เช่น เปลี่ยนทุกๆ 10-15 วัน"
+                      className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs text-white focus:border-cyan-400 focus:outline-none font-thai"
                     />
-                  </div>
-                </div>
-              </div>
-
-              {/* Group 2: Life Limits */}
-              <div className="space-y-3 pt-2">
-                <div className="text-xs font-bold text-cyan-400 uppercase tracking-wider border-b border-slate-800 pb-1">
-                  2. Shot Life Limit & Financials
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-slate-400 font-bold flex justify-between">
-                      <span>Life Limit (Shots) *</span>
-                      <span className="text-slate-500 text-[10px]">Max shots</span>
-                    </label>
-                    <input
-                      type="number"
-                      name="lifeLimitShots"
-                      value={formData.lifeLimitShots}
-                      onChange={handleChange}
-                      className="w-full bg-[#0F172A] border border-slate-700 rounded px-2.5 py-2 font-bold text-emerald-400 text-sm focus:border-cyan-500 focus:outline-none"
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-slate-400 font-bold">Part Cost (THB)</label>
-                    <input
-                      type="number"
-                      name="estimatedCostThb"
-                      value={formData.estimatedCostThb}
-                      onChange={handleChange}
-                      className="w-full bg-[#0F172A] border border-slate-700 rounded px-2.5 py-2 text-slate-100 focus:border-cyan-500 focus:outline-none"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Group 3: Re-grinding & Shim Specifications (Requested Section) */}
-              <div className="space-y-3 pt-2 border-t border-slate-700/80">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold text-cyan-400 uppercase tracking-wider">
-                    3. Re-grinding & Shim Specifications
-                  </h3>
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="checkbox"
-                      id="disposeCheck"
-                      name="disposeAfterUse"
-                      checked={formData.disposeAfterUse}
-                      onChange={handleChange}
-                      className="rounded bg-slate-900 border-slate-700 text-cyan-500 focus:ring-0"
-                    />
-                    <label htmlFor="disposeCheck" className="text-[11px] text-rose-300 font-normal cursor-pointer">
-                      Dispose (ห้ามเจียรซ้ำ)
-                    </label>
-                  </div>
-                </div>
-
-                {!formData.disposeAfterUse && (
-                  <div className="space-y-3 bg-[#0F172A] p-3 rounded-md border border-slate-800">
-                    <div className="space-y-1">
-                      <label className="text-slate-400 flex justify-between font-bold">
-                        <span>Max Total Grinding Limit (mm)</span>
-                        <span className="text-cyan-400 text-[10px]">Max depth allowable</span>
-                      </label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        name="maxTotalGrindingLimit"
-                        value={formData.maxTotalGrindingLimit}
-                        onChange={handleChange}
-                        className="w-full bg-[#070D18] border border-slate-700 rounded px-2.5 py-2 text-sm text-cyan-300 font-bold focus:border-cyan-500 focus:outline-none"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <label className="text-slate-400 font-bold">Grind Depth / Time</label>
-                        <div className="relative">
-                          <input
-                            type="number"
-                            step="0.05"
-                            name="regrindDepthPerTime"
-                            value={formData.regrindDepthPerTime}
-                            onChange={handleChange}
-                            className="w-full bg-[#070D18] border border-slate-700 rounded px-2.5 py-2 pr-8 text-sm text-slate-200 focus:border-cyan-500 focus:outline-none"
-                          />
-                          <span className="absolute right-3 top-2 text-xs text-slate-500 font-sans">mm</span>
-                        </div>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-slate-400 font-bold">Standard Shim</label>
-                        <div className="relative">
-                          <input
-                            type="number"
-                            step="0.05"
-                            name="standardShimThickness"
-                            value={formData.standardShimThickness}
-                            onChange={handleChange}
-                            className="w-full bg-[#070D18] border border-slate-700 rounded px-2.5 py-2 pr-8 text-sm text-slate-200 focus:border-cyan-500 focus:outline-none"
-                          />
-                          <span className="absolute right-3 top-2 text-xs text-slate-500 font-sans">mm</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </form>
-          </div>
-
-          {/* Submit Button */}
-          <button
-            type="submit"
-            form="lifeStandardForm"
-            className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-semibold py-3 px-4 rounded-md transition-colors mt-4 shadow-lg shadow-cyan-900/50 flex items-center justify-center gap-2 text-sm"
-          >
-            <Save className="w-4 h-4" />
-            <span>Save Standard (บันทึกมาตรฐาน)</span>
-          </button>
-        </div>
+                  );
+                }
+                return currentNote ? (
+                  <span className="text-xs text-slate-300 font-thai line-clamp-2" title={currentNote}>
+                    {currentNote}
+                  </span>
+                ) : (
+                  <span className="text-xs text-slate-600 italic">-</span>
+                );
+              }
+            }
+          ]}
+        />
       </div>
 
-      {/* Import Modal */}
-      {showImportModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#1E293B] border border-slate-700 rounded-lg max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center gap-3 text-cyan-400">
-              <FileSpreadsheet className="w-6 h-6" />
-              <h3 className="text-lg font-bold text-white">Import Excel (31.01.2025)</h3>
-            </div>
-            <p className="text-xs text-slate-300 font-thai leading-relaxed">
-              นำเข้าและอัปเดตเกณฑ์มาตรฐานอายุการใช้งานและพารามิเตอร์ Re-grinding & Shim จากไฟล์มาตรฐานแม่พิมพ์ประจำโรงงาน Fin Die Shop
-            </p>
-
-            <div className="bg-[#0F172A] p-3 rounded border border-slate-700 text-xs font-mono space-y-1 text-slate-400">
-              <div>Source: 0. Control shot Spare Parts FIN DIES__31.01.2025.xlsx</div>
-              <div>Revision: 2025.01.31-REV1</div>
-              <div>Target Records: 48 Standard Rules</div>
-            </div>
-
-            {importStatus && (
-              <div className="p-3 bg-cyan-950/80 border border-cyan-700 text-cyan-300 rounded text-xs flex items-center gap-2">
-                <RefreshCw className="w-4 h-4 animate-spin text-cyan-400 flex-shrink-0" />
-                <span>{importStatus}</span>
+      {/* Modal: Add New Part Life Standard */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-[#0F172A] border border-slate-700 rounded-xl p-6 max-w-xl w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Sliders className="w-5 h-5 text-cyan-400" />
+                <h3 className="text-lg font-bold text-white">เพิ่มเกณฑ์มาตรฐานอายุการใช้งาน (Add Part Life Standard)</h3>
               </div>
-            )}
-
-            <div className="flex justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowImportModal(false)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs"
+              <button 
+                onClick={() => setShowAddModal(false)}
+                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
               >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleExecuteImport}
-                className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded text-xs shadow-md shadow-cyan-900/50 flex items-center gap-1.5"
-              >
-                <Upload className="w-4 h-4" />
-                <span>Execute Import</span>
+                <X className="w-5 h-5" />
               </button>
             </div>
+
+            <form onSubmit={handleAddSubmit} className="space-y-4 font-thai text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">Part Code (รหัสชิ้นส่วน) *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="เช่น P-FORM-001"
+                    value={newStd.partCode}
+                    onChange={e => setNewStd({ ...newStd, partCode: e.target.value.toUpperCase() })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-mono text-xs focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">Part Name (ชื่อชิ้นส่วน) *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="เช่น Forming Punch WL+"
+                    value={newStd.partName}
+                    onChange={e => setNewStd({ ...newStd, partName: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">Line (สายการผลิต)</label>
+                  <select
+                    value={newStd.lineId}
+                    onChange={e => setNewStd({ ...newStd, lineId: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-cyan-300 font-bold text-xs focus:border-cyan-500 focus:outline-none"
+                  >
+                    <option value="ALL">ALL (ทุกไลน์)</option>
+                    <option value="E1">E1 (Ø7 Slit, PCM)</option>
+                    <option value="E2">E2 (Ø5 Slit, GOLD)</option>
+                    <option value="E3-1">E3-1 (Slit 3P, PCM)</option>
+                    <option value="E3-2">E3-2 (WL+ 4P, GOLD)</option>
+                    <option value="E3-3">E3-3 (Corr 4P, GOLD)</option>
+                    <option value="E4">E4 (Ø5 Slit, BARE)</option>
+                    <option value="E5">E5 (Ø5 Slit, BARE)</option>
+                    <option value="E6">E6 (Ø7 Louver, PCM)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">Material (ประเภทวัสดุ)</label>
+                  <select
+                    value={newStd.material}
+                    onChange={e => setNewStd({ ...newStd, material: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-cyan-300 font-bold text-xs focus:border-cyan-500 focus:outline-none"
+                  >
+                    <option value="PCM">PCM (0.1mm)</option>
+                    <option value="BARE">BARE (0.1mm)</option>
+                    <option value="GOLD">GOLD (0.1mm)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">Tube Size (ขนาดท่อ)</label>
+                  <select
+                    value={newStd.tubeSize}
+                    onChange={e => setNewStd({ ...newStd, tubeSize: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-cyan-300 font-bold text-xs focus:border-cyan-500 focus:outline-none"
+                  >
+                    <option value="Ø7">Ø7</option>
+                    <option value="Ø5">Ø5</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">Life Limit (Shots เกณฑ์อายุ)</label>
+                  <input
+                    type="number"
+                    step="100000"
+                    value={newStd.lifeLimitShots}
+                    onChange={e => setNewStd({ ...newStd, lifeLimitShots: Number(e.target.value) })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-mono text-xs focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">1 Time Regrind (mm/ครั้ง)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={newStd.regrindDepthPerTime}
+                    onChange={e => setNewStd({ ...newStd, regrindDepthPerTime: Number(e.target.value) })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-mono text-xs focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">Max Regrind Limit (mm รวม)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={newStd.maxTotalGrindingLimit}
+                    onChange={e => setNewStd({ ...newStd, maxTotalGrindingLimit: Number(e.target.value) })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-mono text-xs focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">Note / Remark (หมายเหตุ / ความถี่เปลี่ยน)</label>
+                <input
+                  type="text"
+                  placeholder="เช่น เปลี่ยนทุกๆ 10-15 วัน หรือ เจียรเมื่อครีบคมเกิน 0.05mm"
+                  value={newStd.notes}
+                  onChange={e => setNewStd({ ...newStd, notes: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs focus:border-cyan-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="chk-dispose"
+                  checked={newStd.disposeAfterUse}
+                  onChange={e => setNewStd({ ...newStd, disposeAfterUse: e.target.checked })}
+                  className="w-4 h-4 rounded bg-slate-900 border-slate-600 text-cyan-500 focus:ring-cyan-500"
+                />
+                <label htmlFor="chk-dispose" className="text-xs text-slate-300 cursor-pointer">
+                  Single Use / Dispose after use (ชิ้นส่วนใช้ครั้งเดียวทิ้ง ไม่นำกลับมาเจียร)
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition-colors"
+                >
+                  ยกเลิก (Cancel)
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded-lg text-xs font-extrabold transition-colors shadow-lg shadow-cyan-950 flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>บันทึกเพิ่มเกณฑ์มาตรฐาน</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
     </div>
   );
 };
-
 
 export const InstallQuantitySetupView: React.FC = () => {
   const [lines, setLines] = useState<any[]>([]);
@@ -790,37 +900,40 @@ export const InstallQuantitySetupView: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="bg-[#0F172A] border border-slate-700 rounded-lg p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-md">
-        <div>
-          <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-            <Layers className="w-5 h-5 text-cyan-400" />
-            Fin Die Installed Part Quantity Matrix
-          </h2>
-          <p className="text-sm text-slate-400 mt-1 font-thai">
-            ตารางจำนวนชิ้นส่วนที่ติดตั้งในแม่พิมพ์แต่ละสายการผลิต (สามารถแก้ไขจำนวนติดตั้งต่อไลน์ได้)
-          </p>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <div className="bg-[#1E293B] px-4 py-2 rounded border border-slate-700 font-mono text-right">
-            <div className="text-[10px] text-slate-400 font-bold">TOTAL ACTIVE TOOLING</div>
-            <div className="text-base font-bold text-cyan-300">{grandTotal.toLocaleString()} EA (All Lines)</div>
+      {/* Sticky Header Container */}
+      <div className="sticky top-[130px] sm:top-[115px] z-20 pb-2 bg-slate-900/95 backdrop-blur-sm -mx-2 px-2">
+        <div className="bg-[#0F172A] border border-slate-700 rounded-lg p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-md">
+          <div>
+            <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+              <Layers className="w-5 h-5 text-cyan-400" />
+              Fin Die Installed Part Quantity Matrix
+            </h2>
+            <p className="text-sm text-slate-400 mt-1 font-thai">
+              ตารางจำนวนชิ้นส่วนที่ติดตั้งในแม่พิมพ์แต่ละสายการผลิต (สามารถแก้ไขจำนวนติดตั้งต่อไลน์ได้)
+            </p>
           </div>
-          
-          {isEditing ? (
-            <div className="flex items-center gap-2">
-              <button onClick={handleCancelClick} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded text-sm font-bold transition-colors">
-                Cancel
-              </button>
-              <button onClick={handleSaveClick} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-sm font-bold transition-colors">
-                Save Matrix
-              </button>
+
+          <div className="flex items-center gap-4">
+            <div className="bg-[#1E293B] px-4 py-2 rounded border border-slate-700 font-mono text-right">
+              <div className="text-[10px] text-slate-400 font-bold">TOTAL ACTIVE TOOLING</div>
+              <div className="text-base font-bold text-cyan-300">{grandTotal.toLocaleString()} EA (All Lines)</div>
             </div>
-          ) : (
-            <button onClick={handleEditClick} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-sm font-bold transition-colors">
-              Edit Matrix
-            </button>
-          )}
+            
+            {isEditing ? (
+              <div className="flex items-center gap-2">
+                <button onClick={handleCancelClick} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded text-sm font-bold transition-colors">
+                  Cancel
+                </button>
+                <button onClick={handleSaveClick} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-sm font-bold transition-colors">
+                  Save Matrix
+                </button>
+              </div>
+            ) : (
+              <button onClick={handleEditClick} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-sm font-bold transition-colors">
+                Edit Matrix
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -832,10 +945,11 @@ export const InstallQuantitySetupView: React.FC = () => {
           columns={[
             {
               id: 'no',
-              label: 'No.',
-              width: 50,
+              label: 'NO.',
+              width: 55,
+              minWidth: 45,
               align: 'center',
-              render: (row) => <span className="text-slate-500 font-bold">{row.no}</span>
+              render: (row) => <span className="text-cyan-400/80 font-mono font-bold text-xs">{row.no}</span>
             },
             {
               id: 'part',

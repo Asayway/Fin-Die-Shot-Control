@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import { 
   BarChart3, 
   Download, 
@@ -23,7 +24,9 @@ import {
   Activity,
   History,
   Check,
-  ChevronDown
+  ChevronDown,
+  Sparkles,
+  ArrowRight
 } from 'lucide-react';
 import { 
   AuditLogEntry, 
@@ -41,6 +44,7 @@ import { storageService } from '../services/storageService';
 import { formatShots, formatThb } from '../services/calculationService';
 import { getRolePermissions } from '../services/authService';
 import { LineFilterSelector } from '../components/common/LineFilterSelector';
+import { DateRangeFilter, isDateInSelectedRange } from '../components/common/DateRangeFilter';
 
 export const ReportsView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'ANALYTICS' | 'PRODUCTION' | 'MAINTENANCE' | 'REGRIND'>('ANALYTICS');
@@ -50,6 +54,9 @@ export const ReportsView: React.FC = () => {
   const [inspections, setInspections] = useState<ConditionInspectionRecord[]>([]);
   const [lineConfigs, setLineConfigs] = useState<any[]>([]);
   const [selectedLineFilter, setSelectedLineFilter] = useState<string>('ALL');
+  const [selectedExportCategory, setSelectedExportCategory] = useState<'ALL' | 'PRODUCTION' | 'MAINTENANCE' | 'REGRIND'>('ALL');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [exportNotification, setExportNotification] = useState<string | null>(null);
 
@@ -67,238 +74,283 @@ export const ReportsView: React.FC = () => {
     return () => unsub();
   }, []);
 
-  // Helper to trigger UTF-8 BOM CSV download for Excel compatibility
-  const downloadCSV = (filename: string, csvContent: string) => {
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-    
-    setExportNotification(`Exported "${filename}" successfully!`);
+  // Helper to trigger XLSX workbook file download
+  const downloadWorkbook = (workbook: XLSX.WorkBook, filename: string) => {
+    XLSX.writeFile(workbook, filename, { bookType: 'xlsx' });
+    setExportNotification(`ดาวน์โหลดไฟล์ Excel "${filename}" สำเร็จ!`);
     setTimeout(() => setExportNotification(null), 4000);
   };
 
-  // 1. Export Production Shot History CSV
-  const handleExportProductionCSV = () => {
-    const data = selectedLineFilter === 'ALL' 
+  // 1. Export Production Shot History Excel (.xlsx)
+  const handleExportProductionExcel = () => {
+    const data = (selectedLineFilter === 'ALL' 
       ? shotLogs 
-      : shotLogs.filter(s => s.lineId === selectedLineFilter);
+      : shotLogs.filter(s => s.lineId === selectedLineFilter)
+    ).map((s, idx) => ({
+      'No.': idx + 1,
+      'Record ID': s.id,
+      'Production Line': `Line ${s.lineId}`,
+      'Production Date': s.productionDate || (s.timestamp ? s.timestamp.slice(0, 10) : ''),
+      'Shift': s.shift || 'N/A',
+      'Input Method': s.inputMethod || 'MANUAL',
+      'Entry Type': s.entryType,
+      'Previous Machine Shot': s.previousTotal ?? 0,
+      'Shots Added (Increment)': s.shotsAdded ?? 0,
+      'New Total Machine Shot': s.newTotal ?? 0,
+      'Operator Name': s.operatorName || 'N/A',
+      'Operator ID': s.operatorId || '',
+      'Entry Reason / Cause': s.entryReason || '-',
+      'Notes / Die Code': s.notes || s.dieCode || '-',
+      'Recorded Timestamp': s.timestamp ? new Date(s.timestamp).toLocaleString('th-TH') : '',
+      'Status': s.status || 'SUBMITTED'
+    }));
 
-    const headers = [
-      'Record ID',
-      'Production Line',
-      'Production Date',
-      'Shift',
-      'Input Method',
-      'Entry Type',
-      'Previous Machine Shot',
-      'Shots Added (Increment)',
-      'New Total Machine Shot',
-      'Operator Name',
-      'Operator ID',
-      'Entry Reason',
-      'Notes / Die Code',
-      'Timestamp',
-      'Status'
-    ].map(h => `"${h}"`).join(',') + '\n';
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    worksheet['!cols'] = [
+      { wch: 6 }, { wch: 20 }, { wch: 14 }, { wch: 16 }, { wch: 12 },
+      { wch: 16 }, { wch: 18 }, { wch: 20 }, { wch: 20 }, { wch: 22 },
+      { wch: 20 }, { wch: 14 }, { wch: 26 }, { wch: 24 }, { wch: 22 }, { wch: 14 }
+    ];
 
-    const rows = data.map(s => [
-      `"${s.id}"`,
-      `"Line ${s.lineId}"`,
-      `"${s.productionDate || s.timestamp.slice(0, 10)}"`,
-      `"${s.shift}"`,
-      `"${s.inputMethod || 'MANUAL'}"`,
-      `"${s.entryType}"`,
-      s.previousTotal,
-      s.shotsAdded,
-      s.newTotal,
-      `"${(s.operatorName || '').replace(/"/g, '""')}"`,
-      `"${s.operatorId || ''}"`,
-      `"${(s.entryReason || '').replace(/"/g, '""')}"`,
-      `"${(s.notes || s.dieCode || '').replace(/"/g, '""')}"`,
-      `"${s.timestamp}"`,
-      `"${s.status || 'SUBMITTED'}"`
-    ].join(',')).join('\n');
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Shot Production History');
 
     const dateStr = new Date().toISOString().slice(0, 10);
-    downloadCSV(`FinDie_Production_History_${selectedLineFilter}_${dateStr}.csv`, headers + rows);
+    downloadWorkbook(workbook, `FinDie_Shot_Production_History_${selectedLineFilter}_${dateStr}.xlsx`);
   };
 
-  // 2. Export Maintenance & Replacement History CSV
-  const handleExportMaintenanceCSV = () => {
-    const data = selectedLineFilter === 'ALL'
+  // 2. Export Maintenance & Replacement History Excel (.xlsx)
+  const handleExportMaintenanceExcel = () => {
+    const data = (selectedLineFilter === 'ALL'
       ? replacements
-      : replacements.filter(r => r.lineId === selectedLineFilter);
+      : replacements.filter(r => r.lineId === selectedLineFilter)
+    ).map((r, idx) => ({
+      'No.': idx + 1,
+      'Replacement ID': r.id,
+      'Work Order No': r.workOrderNumber || '-',
+      'Production Line': `Line ${r.lineId}`,
+      'Die Code': r.dieCode || '-',
+      'Part Code': r.partCode,
+      'Part Name': r.partName || '-',
+      'Stage / Function': r.stageName || '-',
+      'Position / Slot': r.position || 'ALL',
+      'Replacement Type': r.replacementType,
+      'Total Installed Qty': r.installedQuantity || (r as any).installQtyTotal || 1,
+      'Replaced Qty': r.changedQuantity || (r as any).replacedQty || 1,
+      'Machine Shot At Change': r.machineShotAtReplacement || (r as any).shotAtReplacement || 0,
+      'Part Used Shot': r.removedPartUsedShot || (r as any).partAccumulatedShots || 0,
+      'Regrind Cycle Count': r.removedPartRegrindCount || (r as any).regrindCount || 0,
+      'New Part Lot No': r.newPartLotNumber || '-',
+      'Technician / Changed By': r.changedBy || (r as any).technicianName || 'N/A',
+      'Verified By': r.verifiedBy || (r as any).approverName || '-',
+      'Reason / Note': r.replacementReason || (r as any).reason || '-',
+      'Date & Time': r.timestamp ? new Date(r.timestamp).toLocaleString('th-TH') : '',
+      'Status': r.approvalStatus || 'APPROVED'
+    }));
 
-    const headers = [
-      'Replacement ID',
-      'Timestamp',
-      'Production Line',
-      'Die Code',
-      'Part Code',
-      'Part Name',
-      'Stage / Function',
-      'Position / Slot',
-      'Replacement Type',
-      'Installed Qty',
-      'Replaced Qty',
-      'Machine Shot At Change',
-      'Part Used Shot',
-      'Regrind Count',
-      'New Part Lot No',
-      'Work Order No',
-      'Technician / Changed By',
-      'Verified / Approved By',
-      'Reason / Note',
-      'Approval Status'
-    ].map(h => `"${h}"`).join(',') + '\n';
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    worksheet['!cols'] = [
+      { wch: 6 }, { wch: 20 }, { wch: 16 }, { wch: 14 }, { wch: 16 },
+      { wch: 16 }, { wch: 24 }, { wch: 20 }, { wch: 16 }, { wch: 20 },
+      { wch: 14 }, { wch: 14 }, { wch: 22 }, { wch: 18 }, { wch: 14 },
+      { wch: 18 }, { wch: 22 }, { wch: 18 }, { wch: 28 }, { wch: 22 }, { wch: 14 }
+    ];
 
-    const rows = data.map(r => [
-      `"${r.id}"`,
-      `"${r.timestamp || r.replacementDateTime || ''}"`,
-      `"Line ${r.lineId}"`,
-      `"${r.dieCode || ''}"`,
-      `"${r.partCode}"`,
-      `"${(r.partName || '').replace(/"/g, '""')}"`,
-      `"${(r.stageName || '').replace(/"/g, '""')}"`,
-      `"${(r.position || '').replace(/"/g, '""')}"`,
-      `"${r.replacementType}"`,
-      r.installedQuantity || r.installQtyTotal || 0,
-      r.changedQuantity || r.replacedQty || 0,
-      r.machineShotAtReplacement || r.shotAtReplacement || r.shotAtChange || 0,
-      r.removedPartUsedShot || r.partAccumulatedShots || 0,
-      r.removedPartRegrindCount || r.regrindCount || r.regrindCycleCount || 0,
-      `"${(r.newPartLotNumber || '').replace(/"/g, '""')}"`,
-      `"${(r.workOrderNumber || '').replace(/"/g, '""')}"`,
-      `"${(r.changedBy || r.technicianName || r.operatorName || '').replace(/"/g, '""')}"`,
-      `"${(r.verifiedBy || r.approverName || '').replace(/"/g, '""')}"`,
-      `"${(r.replacementReason || r.reason || r.note || '').replace(/"/g, '""')}"`,
-      `"${r.approvalStatus || 'APPROVED'}"`
-    ].join(',')).join('\n');
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Tooling Replacements');
 
     const dateStr = new Date().toISOString().slice(0, 10);
-    downloadCSV(`FinDie_Maintenance_Replacements_${selectedLineFilter}_${dateStr}.csv`, headers + rows);
+    downloadWorkbook(workbook, `FinDie_Maintenance_Replacements_${selectedLineFilter}_${dateStr}.xlsx`);
   };
 
-  // 3. Export Regrinding Workshop CSV
-  const handleExportRegrindingCSV = () => {
-    const data = selectedLineFilter === 'ALL'
+  // 3. Export Regrinding Workshop Excel (.xlsx)
+  const handleExportRegrindingExcel = () => {
+    const data = (selectedLineFilter === 'ALL'
       ? regrindRecords
-      : regrindRecords.filter(g => (g.lineId === selectedLineFilter || g.lineLastUsed === selectedLineFilter));
+      : regrindRecords.filter(g => (g.lineId === selectedLineFilter || (g as any).lineLastUsed === selectedLineFilter))
+    ).map((g, idx) => ({
+      'No.': idx + 1,
+      'Job ID / Code': g.jobCode || g.id,
+      'Date': g.regrindDate || (g as any).date || '',
+      'Production Line': `Line ${g.lineId || (g as any).lineLastUsed || 'E1'}`,
+      'Die Code': g.dieCode || (g as any).finDie || '-',
+      'Part Code': g.partCode,
+      'Part Name': g.partName || '-',
+      'Regrind Cycle Count': g.regrindCountAfter || 1,
+      'Previous Length (mm)': g.previousLength ?? 0,
+      'Current Length (mm)': g.currentLength ?? 0,
+      'Grinding Removed (mm)': g.actualGrindingRemovedMm ? `-${g.actualGrindingRemovedMm}` : '0.00',
+      'Inspection Result': g.inspectionResult || 'PASSED',
+      'Supplier / Workshop': g.supplierOrInternalProcess || 'INTERNAL_TOOL_ROOM',
+      'Technician / Vendor Name': g.vendorName || (g as any).technicianName || '-',
+      'Notes': g.id || ''
+    }));
 
-    const headers = [
-      'Job ID / Code',
-      'Date',
-      'Production Line',
-      'Die Code',
-      'Part Code',
-      'Part Name',
-      'Regrind Cycle',
-      'Previous Length (mm)',
-      'Current Length (mm)',
-      'Grinding Removed (mm)',
-      'Inspection Result',
-      'Supplier / Process',
-      'Technician / Vendor Name',
-      'Notes'
-    ].map(h => `"${h}"`).join(',') + '\n';
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    worksheet['!cols'] = [
+      { wch: 6 }, { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 16 },
+      { wch: 16 }, { wch: 24 }, { wch: 14 }, { wch: 18 }, { wch: 18 },
+      { wch: 18 }, { wch: 16 }, { wch: 22 }, { wch: 22 }, { wch: 24 }
+    ];
 
-    const rows = data.map(g => [
-      `"${g.jobCode || g.id}"`,
-      `"${g.regrindDate || ''}"`,
-      `"Line ${g.lineId || g.lineLastUsed || 'E1'}"`,
-      `"${g.dieCode || g.finDie || ''}"`,
-      `"${g.partCode}"`,
-      `"${(g.partName || '').replace(/"/g, '""')}"`,
-      g.regrindCountAfter || 1,
-      g.previousLength || 0,
-      g.currentLength || 0,
-      g.actualGrindingRemovedMm || 0,
-      `"${g.inspectionResult || 'PASSED'}"`,
-      `"${g.supplierOrInternalProcess || 'INTERNAL_TOOL_ROOM'}"`,
-      `"${(g.vendorName || '').replace(/"/g, '""')}"`,
-      `"${g.id}"`
-    ].join(',')).join('\n');
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Regrinding Ledger');
 
     const dateStr = new Date().toISOString().slice(0, 10);
-    downloadCSV(`FinDie_Regrinding_History_${selectedLineFilter}_${dateStr}.csv`, headers + rows);
+    downloadWorkbook(workbook, `FinDie_Regrinding_Ledger_${selectedLineFilter}_${dateStr}.xlsx`);
   };
 
-  // 4. Export Comprehensive Combined Full Master Report (Excel-Ready Multi-Section CSV)
-  const handleExportCombinedFullMaster = () => {
+  // 4. Export Comprehensive All-in-One Master Report (.xlsx Multi-Sheet Workbook)
+  const handleExportAllInOneMasterExcel = () => {
+    const workbook = XLSX.utils.book_new();
+
+    // Sheet 1: Line & Die Active Status
+    const lineData = lineConfigs.map((cfg, idx) => ({
+      'No.': idx + 1,
+      'Production Line': `Line ${cfg.lineId}`,
+      'Machine Status': cfg.machineStatus || (cfg.isActive ? 'RUNNING' : 'IDLE'),
+      'Die Code': cfg.dieCode || '-',
+      'Die Model Name': cfg.dieName || cfg.mainFinDie || '-',
+      'Tube Size': cfg.tubeSize || 'Ø7',
+      'Fin Profile': cfg.finType || 'Slit Old',
+      'Pitch / Paths': cfg.pathsCount || '3P (Pitch)',
+      'Material / Thickness': `${cfg.material || 'PCM'} (${cfg.finThickness || 0.10}mm)`,
+      'Current Machine Shot': cfg.currentAccumShots ?? 0,
+      'Last Updated': cfg.lastUpdated ? new Date(cfg.lastUpdated).toLocaleString('th-TH') : '-'
+    }));
+    const wsLine = XLSX.utils.json_to_sheet(lineData);
+    wsLine['!cols'] = [
+      { wch: 6 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 26 },
+      { wch: 12 }, { wch: 16 }, { wch: 14 }, { wch: 20 }, { wch: 20 }, { wch: 22 }
+    ];
+    XLSX.utils.book_append_sheet(workbook, wsLine, 'Line & Die Overview');
+
+    // Sheet 2: Shot Production History
+    const prodData = (selectedLineFilter === 'ALL' ? shotLogs : shotLogs.filter(s => s.lineId === selectedLineFilter))
+      .map((s, idx) => ({
+        'No.': idx + 1,
+        'Record ID': s.id,
+        'Line': `Line ${s.lineId}`,
+        'Date': s.productionDate || (s.timestamp ? s.timestamp.slice(0, 10) : ''),
+        'Shift': s.shift || 'N/A',
+        'Method': s.inputMethod || 'MANUAL',
+        'Previous Shot': s.previousTotal ?? 0,
+        'Added Shot': s.shotsAdded ?? 0,
+        'New Total Shot': s.newTotal ?? 0,
+        'Operator': s.operatorName || 'N/A',
+        'Reason / Notes': s.entryReason || s.notes || '-'
+      }));
+    const wsProd = XLSX.utils.json_to_sheet(prodData);
+    wsProd['!cols'] = [
+      { wch: 6 }, { wch: 18 }, { wch: 12 }, { wch: 14 }, { wch: 10 },
+      { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 20 }, { wch: 26 }
+    ];
+    XLSX.utils.book_append_sheet(workbook, wsProd, 'Production Shots');
+
+    // Sheet 3: Tooling Maintenance & Replacement
+    const maintData = (selectedLineFilter === 'ALL' ? replacements : replacements.filter(r => r.lineId === selectedLineFilter))
+      .map((r, idx) => ({
+        'No.': idx + 1,
+        'Replacement ID': r.id,
+        'Line': `Line ${r.lineId}`,
+        'Die Code': r.dieCode || '-',
+        'Part Code': r.partCode,
+        'Part Name': r.partName || '-',
+        'Stage': r.stageName || '-',
+        'Position': r.position || 'ALL',
+        'Type': r.replacementType,
+        'Qty': r.changedQuantity || (r as any).replacedQty || 1,
+        'Machine Shot At Change': r.machineShotAtReplacement || (r as any).shotAtReplacement || 0,
+        'Part Used Shot': r.removedPartUsedShot || (r as any).partAccumulatedShots || 0,
+        'Regrind Cycle': r.removedPartRegrindCount || 0,
+        'Technician': r.changedBy || (r as any).technicianName || 'N/A',
+        'Reason': r.replacementReason || (r as any).reason || '-'
+      }));
+    const wsMaint = XLSX.utils.json_to_sheet(maintData);
+    wsMaint['!cols'] = [
+      { wch: 6 }, { wch: 18 }, { wch: 12 }, { wch: 14 }, { wch: 16 },
+      { wch: 22 }, { wch: 18 }, { wch: 14 }, { wch: 18 }, { wch: 8 },
+      { wch: 20 }, { wch: 18 }, { wch: 12 }, { wch: 20 }, { wch: 26 }
+    ];
+    XLSX.utils.book_append_sheet(workbook, wsMaint, 'Tooling Maintenance');
+
+    // Sheet 4: Regrinding & Resharpening
+    const regrindData = (selectedLineFilter === 'ALL' ? regrindRecords : regrindRecords.filter(g => g.lineId === selectedLineFilter || (g as any).lineLastUsed === selectedLineFilter))
+      .map((g, idx) => ({
+        'No.': idx + 1,
+        'Job Code': g.jobCode || g.id,
+        'Date': g.regrindDate || (g as any).date || '',
+        'Line': `Line ${g.lineId || (g as any).lineLastUsed || 'E1'}`,
+        'Part Code': g.partCode,
+        'Part Name': g.partName || '-',
+        'Cycle': g.regrindCountAfter || 1,
+        'Previous Length (mm)': g.previousLength ?? 0,
+        'Current Length (mm)': g.currentLength ?? 0,
+        'Removed (mm)': g.actualGrindingRemovedMm ? `-${g.actualGrindingRemovedMm}` : '0.00',
+        'Inspection': g.inspectionResult || 'PASSED',
+        'Workshop': g.supplierOrInternalProcess || 'INTERNAL_TOOL_ROOM'
+      }));
+    const wsRegrind = XLSX.utils.json_to_sheet(regrindData);
+    wsRegrind['!cols'] = [
+      { wch: 6 }, { wch: 16 }, { wch: 14 }, { wch: 12 }, { wch: 16 },
+      { wch: 22 }, { wch: 10 }, { wch: 16 }, { wch: 16 }, { wch: 14 },
+      { wch: 14 }, { wch: 22 }
+    ];
+    XLSX.utils.book_append_sheet(workbook, wsRegrind, 'Regrinding Ledger');
+
     const dateStr = new Date().toISOString().slice(0, 10);
-    const nowStr = new Date().toLocaleString('en-GB');
+    downloadWorkbook(workbook, `FinDie_Master_All_In_One_Report_${selectedLineFilter}_${dateStr}.xlsx`);
+  };
 
-    let content = `=== FIN DIE TOOLING & PRODUCTION FULL MASTER REPORT ===\n`;
-    content += `"Generated Date:","${nowStr}"\n`;
-    content += `"Target Line Scope:","${selectedLineFilter}"\n`;
-    content += `"Total Tool Changeover Events:",${replacements.length}\n`;
-    content += `"Total Shot Entry Records:",${shotLogs.length}\n`;
-    content += `"Total Regrinding Workshop Records:",${regrindRecords.length}\n\n`;
-
-    // Section 1: Production History
-    content += `=== SECTION 1: PRODUCTION SHOT HISTORY LOGS ===\n`;
-    content += `"Record ID","Line","Date","Shift","Method","Entry Type","Previous Total","Shots Added","New Total","Operator","Reason","Timestamp"\n`;
-    const prodRows = shotLogs
-      .filter(s => selectedLineFilter === 'ALL' || s.lineId === selectedLineFilter)
-      .map(s => `"${s.id}","Line ${s.lineId}","${s.productionDate || s.timestamp.slice(0, 10)}","${s.shift}","${s.inputMethod || 'MANUAL'}","${s.entryType}",${s.previousTotal},${s.shotsAdded},${s.newTotal},"${(s.operatorName || '').replace(/"/g, '""')}","${(s.entryReason || '').replace(/"/g, '""')}","${s.timestamp}"`)
-      .join('\n');
-    content += prodRows + '\n\n';
-
-    // Section 2: Maintenance Replacements
-    content += `=== SECTION 2: TOOLING MAINTENANCE & REPLACEMENTS ===\n`;
-    content += `"Replacement ID","Timestamp","Line","Die Code","Part Code","Part Name","Stage","Position","Type","Replaced Qty","Machine Shot At Change","Part Used Shot","Regrind Count","Technician","Reason"\n`;
-    const maintRows = replacements
-      .filter(r => selectedLineFilter === 'ALL' || r.lineId === selectedLineFilter)
-      .map(r => `"${r.id}","${r.timestamp || r.replacementDateTime || ''}","Line ${r.lineId}","${r.dieCode || ''}","${r.partCode}","${(r.partName || '').replace(/"/g, '""')}","${(r.stageName || '').replace(/"/g, '""')}","${(r.position || '').replace(/"/g, '""')}","${r.replacementType}",${r.changedQuantity || r.replacedQty || 0},${r.machineShotAtReplacement || r.shotAtReplacement || 0},${r.removedPartUsedShot || r.partAccumulatedShots || 0},${r.removedPartRegrindCount || 0},"${(r.changedBy || r.technicianName || '').replace(/"/g, '""')}","${(r.replacementReason || r.reason || '').replace(/"/g, '""')}"`)
-      .join('\n');
-    content += maintRows + '\n\n';
-
-    // Section 3: Regrinding
-    content += `=== SECTION 3: REGRINDING & RESHARPENING WORKSHOP ===\n`;
-    content += `"Job Code","Date","Line","Die Code","Part Code","Part Name","Regrind Count","Previous Length (mm)","Current Length (mm)","Grind Removed (mm)","Inspection Result"\n`;
-    const regrindRows = regrindRecords
-      .filter(g => selectedLineFilter === 'ALL' || g.lineId === selectedLineFilter || g.lineLastUsed === selectedLineFilter)
-      .map(g => `"${g.jobCode || g.id}","${g.regrindDate || ''}","Line ${g.lineId || g.lineLastUsed || 'E1'}","${g.dieCode || g.finDie || ''}","${g.partCode}","${(g.partName || '').replace(/"/g, '""')}",${g.regrindCountAfter || 1},${g.previousLength || 0},${g.currentLength || 0},${g.actualGrindingRemovedMm || 0},"${g.inspectionResult || 'PASSED'}"`)
-      .join('\n');
-    content += regrindRows + '\n';
-
-    downloadCSV(`FinDie_Comprehensive_Master_Report_${selectedLineFilter}_${dateStr}.csv`, content);
+  // Master Category Dispatcher
+  const handleExportByCategory = (category: 'ALL' | 'PRODUCTION' | 'MAINTENANCE' | 'REGRIND') => {
+    switch (category) {
+      case 'ALL':
+        handleExportAllInOneMasterExcel();
+        break;
+      case 'PRODUCTION':
+        handleExportProductionExcel();
+        break;
+      case 'MAINTENANCE':
+        handleExportMaintenanceExcel();
+        break;
+      case 'REGRIND':
+        handleExportRegrindingExcel();
+        break;
+    }
   };
 
   // Filtered lists for UI preview
   const filteredShotLogs = shotLogs.filter(s => {
     const matchLine = selectedLineFilter === 'ALL' || s.lineId === selectedLineFilter;
+    const matchDate = isDateInSelectedRange(s.productionDate || s.timestamp, startDate, endDate);
     const matchSearch = !searchTerm || 
       (s.id && s.id.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (s.operatorName && s.operatorName.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (s.entryReason && s.entryReason.toLowerCase().includes(searchTerm.toLowerCase()));
-    return matchLine && matchSearch;
+    return matchLine && matchDate && matchSearch;
   });
 
   const filteredReplacements = replacements.filter(r => {
     const matchLine = selectedLineFilter === 'ALL' || r.lineId === selectedLineFilter;
+    const matchDate = isDateInSelectedRange(r.timestamp || r.replacementDateTime, startDate, endDate);
     const matchSearch = !searchTerm ||
       (r.id && r.id.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (r.partCode && r.partCode.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (r.partName && r.partName.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (r.changedBy && r.changedBy.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (r.reason && r.reason.toLowerCase().includes(searchTerm.toLowerCase()));
-    return matchLine && matchSearch;
+    return matchLine && matchDate && matchSearch;
   });
 
   const filteredRegrinds = regrindRecords.filter(g => {
     const matchLine = selectedLineFilter === 'ALL' || g.lineId === selectedLineFilter || g.lineLastUsed === selectedLineFilter;
+    const matchDate = isDateInSelectedRange(g.regrindDate || (g as any).date, startDate, endDate);
     const matchSearch = !searchTerm ||
       (g.jobCode && g.jobCode.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (g.partCode && g.partCode.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (g.partName && g.partName.toLowerCase().includes(searchTerm.toLowerCase()));
-    return matchLine && matchSearch;
+    return matchLine && matchDate && matchSearch;
   });
 
   return (
@@ -331,7 +383,7 @@ export const ReportsView: React.FC = () => {
         {/* Action Export Buttons */}
         <div className="flex items-center gap-2.5 flex-wrap">
           <button
-            onClick={handleExportCombinedFullMaster}
+            onClick={handleExportAllInOneMasterExcel}
             className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black rounded-lg text-xs sm:text-sm transition-all shadow-lg font-mono border border-emerald-400/40"
             title="Download full comprehensive Excel/CSV master file"
           >
@@ -396,6 +448,17 @@ export const ReportsView: React.FC = () => {
 
         {/* Filter Controls */}
         <div className="flex items-center gap-3 w-full md:w-auto flex-wrap">
+          {/* Calendar Date Range Selector */}
+          <DateRangeFilter
+            startDate={startDate}
+            endDate={endDate}
+            onChangeRange={(start, end) => {
+              setStartDate(start);
+              setEndDate(end);
+            }}
+            maxDaysAllowed={31}
+          />
+
           {/* Production Line Selector */}
           <LineFilterSelector
             selectedLine={selectedLineFilter}
@@ -489,11 +552,11 @@ export const ReportsView: React.FC = () => {
                   </p>
                 </div>
                 <button
-                  onClick={handleExportProductionCSV}
+                  onClick={handleExportProductionExcel}
                   className="w-full py-2 px-3 bg-emerald-700/80 hover:bg-emerald-600 text-white rounded-md text-xs font-mono font-bold flex items-center justify-center gap-2 transition-colors shadow"
                 >
                   <Download className="w-3.5 h-3.5" />
-                  <span>EXPORT SHOT CSV</span>
+                  <span>EXPORT SHOT EXCEL</span>
                 </button>
               </div>
 
@@ -508,11 +571,11 @@ export const ReportsView: React.FC = () => {
                   </p>
                 </div>
                 <button
-                  onClick={handleExportMaintenanceCSV}
+                  onClick={handleExportMaintenanceExcel}
                   className="w-full py-2 px-3 bg-amber-700/80 hover:bg-amber-600 text-white rounded-md text-xs font-mono font-bold flex items-center justify-center gap-2 transition-colors shadow"
                 >
                   <Download className="w-3.5 h-3.5" />
-                  <span>EXPORT REPLACEMENT CSV</span>
+                  <span>EXPORT REPLACEMENT EXCEL</span>
                 </button>
               </div>
 
@@ -527,11 +590,11 @@ export const ReportsView: React.FC = () => {
                   </p>
                 </div>
                 <button
-                  onClick={handleExportRegrindingCSV}
+                  onClick={handleExportRegrindingExcel}
                   className="w-full py-2 px-3 bg-cyan-700/80 hover:bg-cyan-600 text-white rounded-md text-xs font-mono font-bold flex items-center justify-center gap-2 transition-colors shadow"
                 >
                   <Download className="w-3.5 h-3.5" />
-                  <span>EXPORT REGRIND CSV</span>
+                  <span>EXPORT REGRIND EXCEL</span>
                 </button>
               </div>
 
@@ -546,7 +609,7 @@ export const ReportsView: React.FC = () => {
                   </p>
                 </div>
                 <button
-                  onClick={handleExportCombinedFullMaster}
+                  onClick={handleExportAllInOneMasterExcel}
                   className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-md text-xs font-mono font-black flex items-center justify-center gap-2 transition-colors shadow-lg"
                 >
                   <Download className="w-3.5 h-3.5" />
@@ -625,11 +688,11 @@ export const ReportsView: React.FC = () => {
             </div>
 
             <button
-              onClick={handleExportProductionCSV}
+              onClick={handleExportProductionExcel}
               className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xs font-mono transition-colors shadow"
             >
               <Download className="w-4 h-4" />
-              <span>EXPORT PRODUCTION (CSV)</span>
+              <span>EXPORT PRODUCTION (EXCEL)</span>
             </button>
           </div>
 
@@ -699,11 +762,11 @@ export const ReportsView: React.FC = () => {
             </div>
 
             <button
-              onClick={handleExportMaintenanceCSV}
+              onClick={handleExportMaintenanceExcel}
               className="flex items-center gap-2 px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-slate-950 font-black rounded-lg text-xs font-mono transition-colors shadow"
             >
               <Download className="w-4 h-4" />
-              <span>EXPORT REPLACEMENTS (CSV)</span>
+              <span>EXPORT REPLACEMENTS (EXCEL)</span>
             </button>
           </div>
 
@@ -781,11 +844,11 @@ export const ReportsView: React.FC = () => {
             </div>
 
             <button
-              onClick={handleExportRegrindingCSV}
+              onClick={handleExportRegrindingExcel}
               className="flex items-center gap-2 px-3.5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-lg text-xs font-mono transition-colors shadow"
             >
               <Download className="w-4 h-4" />
-              <span>EXPORT REGRIND (CSV)</span>
+              <span>EXPORT REGRIND (EXCEL)</span>
             </button>
           </div>
 

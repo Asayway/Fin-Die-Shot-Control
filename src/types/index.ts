@@ -90,12 +90,23 @@ export const LINE_INFO_MAP: Record<ProductionLineId, LineInfoDetails> = {
 };
 
 export type AluminumMaterial = 'PCM' | 'GOLD' | 'BARE' | string;
-export type FinMaterial = AluminumMaterial;
+export type FinMaterial = 'PCM' | 'GOLD' | 'BARE' | string;
 
 export type TubeSize = 'Ø5' | 'Ø7' | string;
 export type TubeDiameter = TubeSize;
 
-export type FinType = 'Slit (half)' | 'Slit (full)' | 'Lover' | 'Wide +' | 'Standard' | string;
+export type FinType = 
+  | 'Slit Old' 
+  | 'Slit (half)' 
+  | 'New Slit' 
+  | 'Slit (Full)' 
+  | 'Louver' 
+  | 'Wide Louver' 
+  | 'New Corrugate' 
+  | 'Corrugate' 
+  | string;
+
+export type PitchOption = '3P (Pitch)' | '4P (Pitch)' | string;
 
 export type MachineStatus = 'RUNNING' | 'IDLE' | 'STOPPED' | 'MAINTENANCE' | 'CHANGEOVER';
 
@@ -159,11 +170,19 @@ export interface RegrindMasterStandard {
   stagePunchDie?: string;
   nominalLengthMm: number; // e.g. 45.00 mm
   grindingAmountPerTimeMm: number; // e.g. 0.10 or 0.25 mm
+  grindMinMm?: number;
+  grindMaxMm?: number;
   totalGrindingAllowanceMm: number; // e.g. 1.00 or 1.50 mm
   minAllowedLengthMm: number; // nominalLengthMm - totalGrindingAllowanceMm
   maxRegrindCount: number; // e.g. 4, 8, 15
+  regrindMinCount?: number;
+  regrindMaxCount?: number;
   regrindAllowed: boolean; // true/false
   disposeAfterOneUse: boolean; // true/false
+  maintenancePolicy?: string;
+  changeIntervalMinDays?: number;
+  changeIntervalMaxDays?: number;
+  maxUseCount?: number;
   inspectionRequirements: string;
   notes?: string;
 }
@@ -241,13 +260,21 @@ export interface LifeStandardConfigKey {
 
 export interface RegrindStandard {
   oneTimeRegrindMm: string; // e.g. "0.25-0.35", "0.10", "0.15-0.20"
+  grindMinMm?: number;
+  grindMaxMm?: number;
   totalRegrindMm: number; // e.g. 1.00, 1.50, 1.40
   maxRegrindCount: number; // e.g. 4, 15, 8, 0 (0 = Dispose after 1 use)
+  regrindMinCount?: number;
+  regrindMaxCount?: number;
   maxTotalGrindingLimit?: number; // unit: mm (Max depth allowable e.g. 3.00, 1.50)
   regrindDepthPerTime?: number; // unit: mm (Grind depth per cycle e.g. 0.20)
   standardShimThickness?: number; // unit: mm (Standard shim compensation e.g. 0.20)
   regrindIntervalNote?: string; // e.g. "Change every 10-15 Day (เปลี่ยนทุกๆ 10-15 วัน)"
   disposeAfterUse?: boolean;
+  maintenancePolicy?: string; // "DISPOSE_AFTER_ONE_USE" | "PERIODIC_REPLACEMENT" | "SHOT_AND_REGRINDING_CONTROL"
+  changeIntervalMinDays?: number;
+  changeIntervalMaxDays?: number;
+  maxUseCount?: number;
 }
 
 export interface PartLifeStandard {

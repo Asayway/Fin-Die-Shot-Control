@@ -1,26 +1,23 @@
-import React, { useState } from 'react';
+content = """import React, { useState } from 'react';
 import { 
   Sliders, 
   Box, 
   Layers,
-  DatabaseZap,
-  Settings2,
-  Factory
+  DatabaseZap
 } from 'lucide-react';
 import { PartLifeStandardSetupView, InstallQuantitySetupView } from './PartLifeStandardSetupView';
 import { PartMasterView } from './PartMasterView';
-import { LineDieSpecificationView } from './LineDieSpecificationView';
 import { storageService } from '../services/storageService';
 import { EmbeddedMigrationModal } from '../components/migration/EmbeddedMigrationModal';
 
 interface UnifiedToolingMasterViewProps {
-  initialTab?: 'specs' | 'standards' | 'master' | 'install';
+  initialTab?: 'standards' | 'master' | 'install';
 }
 
 export const UnifiedToolingMasterView: React.FC<UnifiedToolingMasterViewProps> = ({
-  initialTab = 'specs'
+  initialTab = 'install'
 }) => {
-  const [activeTab, setActiveTab] = useState<'specs' | 'standards' | 'master' | 'install'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'standards' | 'master' | 'install'>(initialTab);
   const [showMigrationModal, setShowMigrationModal] = useState(false);
 
   // System Settings & HMI Theme
@@ -31,7 +28,7 @@ export const UnifiedToolingMasterView: React.FC<UnifiedToolingMasterViewProps> =
     <div className="space-y-3 animate-fadeIn font-sans text-slate-100 pb-6">
       
       {/* Top Header & Sub-Tabs Navigation Bar (Sticky Locked at Top) */}
-      <div className={`sticky top-[-1rem] lg:top-[-1.5rem] z-30 backdrop-blur-md rounded-xl p-3 sm:p-4 shadow-2xl space-y-3 border ${
+      <div className={`sticky top-0 z-30 backdrop-blur-md rounded-xl p-3 sm:p-4 shadow-2xl space-y-3 border ${
         isHmi 
           ? 'bg-black/95 border-2 border-green-500 text-green-400' 
           : 'bg-[#0E172A]/95 border-slate-800/90 text-slate-100'
@@ -45,7 +42,7 @@ export const UnifiedToolingMasterView: React.FC<UnifiedToolingMasterViewProps> =
               <span>FIN DIE TOOLING & SPARE MASTER HUB</span>
             </span>
             <span className="hidden md:inline text-slate-400 text-xs font-thai">
-              ศูนย์จัดการสเปกไลน์ผลิต (E1-E6), สเปก FIN DIE, มาตรฐานช็อต และแคตตาล็อกอะไหล่
+              ศูนย์จัดการมาตรฐานแม่พิมพ์ สเปก และแคตตาล็อกอะไหล่ (E1 - E6)
             </span>
           </div>
           
@@ -60,26 +57,8 @@ export const UnifiedToolingMasterView: React.FC<UnifiedToolingMasterViewProps> =
 
         {/* Row 2: Sub-Tabs Bar */}
         <div className="flex flex-wrap items-center gap-2 pt-1">
-          
-          <button
-            id="tab-specs"
-            onClick={() => setActiveTab('specs')}
-            className={`px-3.5 py-2 rounded-lg font-bold text-xs sm:text-sm transition-all flex items-center gap-1.5 border ${
-              activeTab === 'specs'
-                ? isHmi
-                  ? 'bg-green-500 text-black border-green-400 shadow-md font-extrabold'
-                  : 'bg-cyan-400 text-slate-950 border-cyan-300 shadow-md font-bold'
-                : isHmi
-                  ? 'bg-zinc-950 text-green-400 border-green-900 hover:bg-zinc-900'
-                  : 'bg-slate-900 text-slate-300 hover:text-white border-slate-700'
-            }`}
-          >
-            <Factory className="w-4 h-4" />
-            <span>0. LINE & DIE SPECIFICATIONS (สเปกไลน์ & FIN DIE)</span>
-          </button>
 
           <button
-            id="tab-standards"
             onClick={() => setActiveTab('standards')}
             className={`px-3.5 py-2 rounded-lg font-bold text-xs sm:text-sm transition-all flex items-center gap-1.5 border ${
               activeTab === 'standards'
@@ -96,7 +75,6 @@ export const UnifiedToolingMasterView: React.FC<UnifiedToolingMasterViewProps> =
           </button>
 
           <button
-            id="tab-master"
             onClick={() => setActiveTab('master')}
             className={`px-3.5 py-2 rounded-lg font-bold text-xs sm:text-sm transition-all flex items-center gap-1.5 border ${
               activeTab === 'master'
@@ -113,7 +91,6 @@ export const UnifiedToolingMasterView: React.FC<UnifiedToolingMasterViewProps> =
           </button>
 
           <button
-            id="tab-install"
             onClick={() => setActiveTab('install')}
             className={`px-3.5 py-2 rounded-lg font-bold text-xs sm:text-sm transition-all flex items-center gap-1.5 border ${
               activeTab === 'install'
@@ -132,12 +109,6 @@ export const UnifiedToolingMasterView: React.FC<UnifiedToolingMasterViewProps> =
       </div>
 
       {/* TAB CONTENTS */}
-
-      {activeTab === 'specs' && (
-        <div className="pt-2">
-          <LineDieSpecificationView onAddNewPartClick={() => setActiveTab('master')} />
-        </div>
-      )}
 
       {activeTab === 'standards' && (
         <div className="pt-2">
@@ -161,3 +132,7 @@ export const UnifiedToolingMasterView: React.FC<UnifiedToolingMasterViewProps> =
     </div>
   );
 };
+"""
+
+with open('src/views/UnifiedToolingMasterView.tsx', 'w') as f:
+    f.write(content)

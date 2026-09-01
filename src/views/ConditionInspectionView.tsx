@@ -319,6 +319,7 @@ export const ConditionInspectionView: React.FC = () => {
           <table className="w-full text-left text-xs font-mono">
             <thead>
               <tr className="bg-slate-950 text-slate-400 border-b border-slate-800">
+                <th className="py-2.5 px-2 text-center w-12 font-mono">NO.</th>
                 <th className="py-2.5 px-3">TIMESTAMP</th>
                 <th className="py-2.5 px-3">LINE</th>
                 <th className="py-2.5 px-3">STAGE</th>
@@ -330,8 +331,9 @@ export const ConditionInspectionView: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/80">
-              {inspections.map(i => (
+              {inspections.map((i, idx) => (
                 <tr key={i.id} className="hover:bg-slate-800/50">
+                  <td className="py-2 px-2 text-center font-mono font-bold text-cyan-400/80">{idx + 1}</td>
                   <td className="py-2 px-3 text-slate-400">{i.timestamp}</td>
                   <td className="py-2 px-3 font-bold text-cyan-300">Line {i.lineId}</td>
                   <td className="py-2 px-3 font-medium text-slate-200">{i.stageName}</td>

@@ -10,11 +10,12 @@ import { ShotEntryView } from './views/ShotEntryView';
 import { ReplacementEntryView } from './views/ReplacementEntryView';
 import { RegrindingEntryView } from './views/RegrindingEntryView';
 import { LockPositionView } from './views/LockPositionView';
-import { LineConfigurationView } from './views/LineConfigurationView';
+import { InteractiveDieLayoutView } from './views/InteractiveDieLayoutView';
+
 import { PartMasterView } from './views/PartMasterView';
 import { PartLifeStandardSetupView, InstallQuantitySetupView } from './views/PartLifeStandardSetupView';
 import { UnifiedToolingMasterView } from './views/UnifiedToolingMasterView';
-import { SpareStockProcurementView, ReplacementHistoryView } from './views/SpareStockProcurementView';
+import { SpareStockProcurementView } from './views/SpareStockProcurementView';
 import { ReportsView } from './views/ReportsView';
 import { SystemSettingsView, LoginView } from './views/SystemSettingsView';
 
@@ -83,15 +84,15 @@ export default function App() {
       case 'shot-entry':
         return <ShotEntryView initialLineId={targetLineId} />;
       case 'replacement-entry':
+      case 'lock-position':
+      case 'die-layout':
         return <ReplacementEntryView initialLineId={targetLineId} />;
       case 'regrinding-entry':
         return <RegrindingEntryView />;
-      case 'lock-position':
-        return <LockPositionView initialLineId={targetLineId} />;
       case 'line-configuration':
-        return <UnifiedToolingMasterView initialTab="unified-settings" />;
+        return <UnifiedToolingMasterView initialTab="install" />;
       case 'unified-tooling-setup':
-        return <UnifiedToolingMasterView initialTab="unified-settings" />;
+        return <UnifiedToolingMasterView initialTab="install" />;
       case 'part-master':
         return <UnifiedToolingMasterView initialTab="master" />;
       case 'life-standard-setup':
@@ -99,9 +100,8 @@ export default function App() {
       case 'install-quantity-setup':
         return <UnifiedToolingMasterView initialTab="install" />;
       case 'spare-stock':
-        return <UnifiedToolingMasterView initialTab="unified-settings" />;
+        return <UnifiedToolingMasterView initialTab="install" />;
       case 'replacement-history':
-        return <ReplacementHistoryView />;
       case 'reports':
         return <ReportsView />;
       case 'system-settings':

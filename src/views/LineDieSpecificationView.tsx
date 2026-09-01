@@ -1,0 +1,775 @@
+import React, { useState, useEffect } from 'react';
+import {
+  Settings,
+  Sliders,
+  CheckCircle2,
+  AlertTriangle,
+  Power,
+  Wrench,
+  PauseCircle,
+  PlayCircle,
+  Plus,
+  Layers,
+  Sparkles,
+  Save,
+  Info,
+  Check,
+  X,
+  Cpu,
+  Factory,
+  Database
+} from 'lucide-react';
+import { 
+  ProductionLineId, 
+  LineActiveConfiguration, 
+  MachineStatus, 
+  TubeSize, 
+  FinType, 
+  AluminumMaterial,
+  PartMaster
+} from '../types';
+import { storageService } from '../services/storageService';
+
+interface LineDieSpecificationViewProps {
+  onAddNewPartClick?: () => void;
+}
+
+interface LineOption {
+  id: ProductionLineId;
+  label: string;
+  tag: string;
+  defaultTube: TubeSize;
+  defaultFin: string;
+  defaultPitch: string;
+  defaultMaterial: string;
+  defaultDieCode: string;
+  defaultSpm: number;
+}
+
+const ALL_LINE_OPTIONS: LineOption[] = [
+  { id: 'E1', label: 'E1', tag: 'Ø7 Slit', defaultTube: 'Ø7', defaultFin: 'Slit Old', defaultPitch: '4P (Pitch)', defaultMaterial: 'PCM (0.1mm)', defaultDieCode: 'FD-E1-07', defaultSpm: 100 },
+  { id: 'E2', label: 'E2', tag: 'Ø5 Slit', defaultTube: 'Ø5', defaultFin: 'Slit Old', defaultPitch: '4P (Pitch)', defaultMaterial: 'GOLD (0.1mm)', defaultDieCode: 'FD-E2-05', defaultSpm: 100 },
+  { id: 'E3-1', label: 'E3', tag: 'Slit 3P', defaultTube: 'Ø7', defaultFin: 'New Slit', defaultPitch: '3P (Pitch)', defaultMaterial: 'PCM (0.1mm)', defaultDieCode: 'FD-E31-07', defaultSpm: 100 },
+  { id: 'E3-2', label: 'E3', tag: 'WL+ 4P', defaultTube: 'Ø7', defaultFin: 'Wide Louver', defaultPitch: '4P (Pitch)', defaultMaterial: 'GOLD (0.1mm)', defaultDieCode: 'FD-E32-07', defaultSpm: 100 },
+  { id: 'E3-3', label: 'E3', tag: 'Corr 4P', defaultTube: 'Ø7', defaultFin: 'Corrugate', defaultPitch: '4P (Pitch)', defaultMaterial: 'GOLD (0.1mm)', defaultDieCode: 'FD-E33-07', defaultSpm: 100 },
+  { id: 'E4', label: 'E4', tag: 'Ø5 Slit', defaultTube: 'Ø5', defaultFin: 'Slit Old', defaultPitch: '3P (Pitch)', defaultMaterial: 'BARE (0.1mm)', defaultDieCode: 'FD-E4-05', defaultSpm: 100 },
+  { id: 'E5', label: 'E5', tag: 'Ø5 Slit', defaultTube: 'Ø5', defaultFin: 'New Slit', defaultPitch: '3P (Pitch)', defaultMaterial: 'BARE (0.1mm)', defaultDieCode: 'FD-E5-05', defaultSpm: 100 },
+  { id: 'E6', label: 'E6', tag: 'Ø7 Louver', defaultTube: 'Ø7', defaultFin: 'Louver', defaultPitch: '3P (Pitch)', defaultMaterial: 'PCM (0.1mm)', defaultDieCode: 'FD-E6-07', defaultSpm: 100 },
+];
+
+export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> = ({
+  onAddNewPartClick
+}) => {
+  const [selectedLineFilter, setSelectedLineFilter] = useState<string>('E1');
+  const [lineConfigs, setLineConfigs] = useState<Record<string, LineActiveConfiguration>>({});
+  const [lineStatuses, setLineStatuses] = useState<Record<string, MachineStatus>>({});
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Add Part Modal state
+  const [showAddPartModal, setShowAddPartModal] = useState<boolean>(false);
+  const [newPartData, setNewPartData] = useState<PartMaster>({
+    partCode: '',
+    partName: '',
+    partNameTh: '',
+    stageName: 'Stage 1: Piercing & Burring',
+    category: 'PUNCH',
+    drawingNumber: '',
+    unit: 'PCS',
+    unitCostThb: 0,
+    tubeSizeCompat: 'BOTH'
+  });
+
+  const loadData = () => {
+    const rawConfigs = storageService.getLineConfigs();
+    const configMap: Record<string, LineActiveConfiguration> = {};
+    const statusMap: Record<string, MachineStatus> = {};
+
+    ALL_LINE_OPTIONS.forEach(opt => {
+      const found = rawConfigs.find(c => c.lineId === opt.id);
+      const liveData = storageService.getLineMonitoring(opt.id);
+      const machineStatus = liveData?.machineStatus || (opt.id === 'E5' || opt.id === 'E6' ? 'STOPPED' : 'RUNNING');
+      
+      statusMap[opt.id] = machineStatus;
+
+      if (found) {
+        configMap[opt.id] = {
+          ...found,
+          pathsCount: found.pathsCount || opt.defaultPitch,
+          dieCode: found.dieCode || opt.defaultDieCode,
+          defaultSpm: found.defaultSpm || opt.defaultSpm
+        };
+      } else {
+        configMap[opt.id] = {
+          id: `CFG-${opt.id}-AUTO`,
+          lineId: opt.id,
+          lineName: `Fin Press Line ${opt.id}`,
+          dieCode: opt.defaultDieCode,
+          dieName: `Fin Die ${opt.id} (${opt.tag})`,
+          tubeSize: opt.defaultTube,
+          finType: opt.defaultFin as any,
+          material: opt.defaultMaterial as any,
+          thicknessMm: 0.10,
+          effectiveFrom: new Date().toISOString(),
+          isActive: machineStatus === 'RUNNING',
+          status: machineStatus === 'RUNNING' ? 'ACTIVE' : 'INACTIVE',
+          defaultSpm: opt.defaultSpm,
+          pathsCount: opt.defaultPitch,
+          installedPartQuantities: {}
+        };
+      }
+    });
+
+    setLineConfigs(configMap);
+    setLineStatuses(statusMap);
+  };
+
+  useEffect(() => {
+    loadData();
+    const unsub = storageService.subscribe(loadData);
+    return () => unsub();
+  }, []);
+
+  const handleFieldChange = (lineId: ProductionLineId, field: keyof LineActiveConfiguration, value: any) => {
+    const current = lineConfigs[lineId];
+    if (!current) return;
+
+    const updated: LineActiveConfiguration = {
+      ...current,
+      [field]: value
+    };
+
+    setLineConfigs(prev => ({
+      ...prev,
+      [lineId]: updated
+    }));
+
+    storageService.saveLineConfig(updated);
+    showToast(`อัปเดตสเปก ${field.toString()} ของไลน์ ${lineId} เรียบร้อยแล้ว`);
+  };
+
+  const handleStatusChange = (lineId: ProductionLineId, status: MachineStatus) => {
+    setLineStatuses(prev => ({
+      ...prev,
+      [lineId]: status
+    }));
+
+    storageService.updateLineMachineStatus(lineId, status);
+    
+    // Also sync config active status
+    const current = lineConfigs[lineId];
+    if (current) {
+      const updatedConfig: LineActiveConfiguration = {
+        ...current,
+        isActive: status === 'RUNNING',
+        status: status === 'RUNNING' ? 'ACTIVE' : 'INACTIVE'
+      };
+      storageService.saveLineConfig(updatedConfig);
+    }
+
+    showToast(`เปลี่ยนสถานะไลน์ ${lineId} เป็น [${status}] เรียบร้อยแล้ว`);
+  };
+
+  const showToast = (msg: string) => {
+    setFeedback({ type: 'success', message: msg });
+    setTimeout(() => {
+      setFeedback(null);
+    }, 3000);
+  };
+
+  const handleSaveNewPart = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPartData.partCode.trim() || !newPartData.partName.trim()) {
+      alert('กรุณากรอกรหัสอะไหล่ (Part Code) และชื่ออะไหล่ (Part Name)');
+      return;
+    }
+
+    const currentParts = storageService.getPartMasters();
+    if (currentParts.some(p => p.partCode.toUpperCase() === newPartData.partCode.toUpperCase())) {
+      alert(`รหัสชิ้นส่วน ${newPartData.partCode} มีอยู่ในระบบแล้ว`);
+      return;
+    }
+
+    const created: PartMaster = {
+      ...newPartData,
+      partCode: newPartData.partCode.toUpperCase().trim(),
+      partName: newPartData.partName.trim(),
+      partNameTh: newPartData.partNameTh?.trim() || newPartData.partName.trim(),
+      drawingNumber: newPartData.drawingNumber?.trim() || '-',
+      unit: newPartData.unit || 'PCS',
+      unitCostThb: Number(newPartData.unitCostThb) || 0
+    };
+
+    storageService.savePartMaster(created);
+    setShowAddPartModal(false);
+    showToast(`เพิ่มชิ้นส่วนใหม่ ${created.partCode} เข้าระบบแคตตาล็อกเรียบร้อยแล้ว`);
+    
+    // Reset form
+    setNewPartData({
+      partCode: '',
+      partName: '',
+      partNameTh: '',
+      stageName: 'Stage 1: Piercing & Burring',
+      category: 'PUNCH',
+      drawingNumber: '',
+      unit: 'PCS',
+      unitCostThb: 0,
+      tubeSizeCompat: 'BOTH'
+    });
+  };
+
+  const displayedLines = selectedLineFilter === 'ALL' 
+    ? ALL_LINE_OPTIONS 
+    : ALL_LINE_OPTIONS.filter(l => l.id === selectedLineFilter);
+
+  return (
+    <div className="space-y-4 font-sans text-slate-100 animate-fadeIn">
+      {/* Toast Notification */}
+      {feedback && (
+        <div className="fixed top-5 right-5 z-50 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-cyan-950/95 border border-cyan-400 text-cyan-200 text-xs font-bold shadow-2xl backdrop-blur-md animate-bounce">
+          <CheckCircle2 className="w-4 h-4 text-cyan-400" />
+          <span>{feedback.message}</span>
+        </div>
+      )}
+
+      {/* TOP BAR: LINE SELECTION PILLS & ADD NEW PART BUTTON */}
+      <div className="bg-[#0b1329] border border-cyan-900/50 rounded-xl p-3 shadow-xl flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-mono font-extrabold text-cyan-400 tracking-wider flex items-center gap-1.5 mr-1">
+            <Factory className="w-4 h-4" />
+            <span>LINE:</span>
+          </span>
+
+          {/* ALL LINES PILL */}
+          <button
+            id="pill-all-lines"
+            onClick={() => setSelectedLineFilter('ALL')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all border ${
+              selectedLineFilter === 'ALL'
+                ? 'bg-cyan-400 text-slate-950 border-cyan-300 font-extrabold shadow-lg shadow-cyan-950/50 scale-105'
+                : 'bg-slate-900 text-slate-300 border-slate-700 hover:border-slate-500 hover:text-white'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>ALL LINES (E1-E6)</span>
+          </button>
+
+          {/* INDIVIDUAL LINE PILLS */}
+          {ALL_LINE_OPTIONS.map(line => {
+            const isSelected = selectedLineFilter === line.id;
+            const status = lineStatuses[line.id] || 'RUNNING';
+            const isOff = status === 'STOPPED';
+
+            return (
+              <button
+                key={line.id}
+                id={`pill-line-${line.id}`}
+                onClick={() => setSelectedLineFilter(line.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all border ${
+                  isSelected
+                    ? 'bg-cyan-400 text-slate-950 border-cyan-300 font-extrabold shadow-lg shadow-cyan-950/50 scale-105'
+                    : isOff
+                    ? 'bg-[#150a10] text-rose-300 border-rose-900/60 hover:border-rose-700'
+                    : 'bg-slate-900 text-slate-300 border-slate-700 hover:border-slate-500 hover:text-white'
+                }`}
+              >
+                {/* Status Dot */}
+                <span className={`w-2 h-2 rounded-full ${
+                  isSelected 
+                    ? 'bg-slate-950' 
+                    : isOff 
+                    ? 'bg-rose-500 animate-pulse' 
+                    : 'bg-emerald-400'
+                }`} />
+                <span>{line.label}</span>
+                <span className={`text-[10px] font-mono px-1 py-0.2 rounded ${
+                  isSelected 
+                    ? 'bg-slate-950/20 text-slate-900 font-extrabold' 
+                    : isOff 
+                    ? 'bg-rose-950 text-rose-300' 
+                    : 'bg-slate-800 text-slate-400'
+                }`}>
+                  {line.tag}
+                </span>
+                {isOff && (
+                  <span className={`text-[9px] font-extrabold px-1 rounded ${
+                    isSelected ? 'bg-rose-950 text-rose-300' : 'bg-rose-600 text-white'
+                  }`}>
+                    OFF
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ADD NEW PART BUTTON */}
+        <button
+          id="btn-add-new-part"
+          onClick={() => {
+            if (onAddNewPartClick) {
+              onAddNewPartClick();
+            } else {
+              setShowAddPartModal(true);
+            }
+          }}
+          className="px-4 py-2 bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95 font-mono ml-auto"
+        >
+          <Plus className="w-4 h-4 text-slate-950" />
+          <span>+ เพิ่มชิ้นส่วนใหม่ (ADD NEW PART)</span>
+        </button>
+      </div>
+
+      {/* SUB-HEADER BREADCRUMB */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="px-2.5 py-1 rounded bg-cyan-950/80 border border-cyan-500 text-cyan-300 font-mono text-[11px] font-bold">
+            UNIFIED LINE & DIE SETTING
+          </span>
+          <span className="text-slate-400 font-thai">
+            | ตั้งค่าสเปกไลน์ผลิตและสถานะเปิด/ปิดการทำงาน
+          </span>
+        </div>
+        <div className="text-slate-400 font-mono text-xs">
+          กำลังตั้งค่า: <span className="text-cyan-300 font-bold">{selectedLineFilter === 'ALL' ? 'ALL LINES (E1-E6)' : `LINE ${selectedLineFilter}`}</span>
+        </div>
+      </div>
+
+      {/* LINE SPEC CARDS */}
+      <div className="space-y-4">
+        {displayedLines.map(line => {
+          const cfg = lineConfigs[line.id] || {
+            dieCode: line.defaultDieCode,
+            tubeSize: line.defaultTube,
+            finType: line.defaultFin as any,
+            material: line.defaultMaterial as any,
+            pathsCount: line.defaultPitch,
+            defaultSpm: line.defaultSpm
+          };
+          const currentStatus = lineStatuses[line.id] || 'RUNNING';
+          const isRunning = currentStatus === 'RUNNING';
+          const isStopped = currentStatus === 'STOPPED';
+          const isIdle = currentStatus === 'IDLE';
+          const isMaintenance = currentStatus === 'MAINTENANCE';
+
+          return (
+            <div 
+              key={line.id}
+              className="bg-[#0b1426] border border-cyan-900/40 rounded-2xl p-5 shadow-2xl space-y-5 relative overflow-hidden transition-all hover:border-cyan-700/60"
+            >
+              {/* Card Header */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+                <div className="flex items-center gap-3">
+                  {/* Line Circle Badge */}
+                  <div className="w-11 h-11 rounded-xl bg-cyan-950 border border-cyan-500 flex items-center justify-center font-mono font-extrabold text-cyan-300 text-sm shadow-inner">
+                    {line.label}
+                    {line.id.includes('-') && (
+                      <span className="text-[9px] -ml-0.5">{line.id.substring(2)}</span>
+                    )}
+                  </div>
+
+                  <div>
+                    <div className="flex items-center gap-2.5">
+                      <h3 className="text-sm sm:text-base font-bold text-white font-mono tracking-wide">
+                        สเปกและสถานะสายการผลิต (LINE SPEC & STATUS) - ไลน์ {line.label} ({line.tag})
+                      </h3>
+                      <span className={`px-2.5 py-0.5 rounded text-[11px] font-mono font-extrabold border ${
+                        isRunning 
+                          ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500' 
+                          : isStopped
+                          ? 'bg-rose-950/80 text-rose-300 border-rose-500'
+                          : isIdle
+                          ? 'bg-amber-950/80 text-amber-300 border-amber-500'
+                          : 'bg-blue-950/80 text-blue-300 border-blue-500'
+                      }`}>
+                        {currentStatus}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 font-thai mt-0.5">
+                      ปรับสเปกขนาดท่อ, ลายฟิน, Pitch, ชนิดวัสดุ และกำหนดสถานะเปิด/ปิดการทำงานของไลน์ผลิต
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Form Grid (6 Spec Fields) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+                {/* 1. TUBE SIZE */}
+                <div className="space-y-1.5 bg-[#070d1a] border border-slate-800/90 p-2.5 rounded-xl">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">
+                    1. TUBE SIZE (ขนาดท่อ)
+                  </label>
+                  <select
+                    id={`tube-size-${line.id}`}
+                    value={cfg.tubeSize || line.defaultTube}
+                    onChange={(e) => handleFieldChange(line.id, 'tubeSize', e.target.value as TubeSize)}
+                    className="w-full bg-[#0e172a] border border-cyan-800/50 rounded-lg px-2.5 py-1.5 text-xs text-cyan-200 font-bold focus:outline-none focus:border-cyan-400 cursor-pointer"
+                  >
+                    <option value="Ø7">Ø7 (ท่อ 7 มม.)</option>
+                    <option value="Ø5">Ø5 (ท่อ 5 มม.)</option>
+                    <option value="Ø9.52">Ø9.52 (ท่อ 3/8")</option>
+                    <option value="Ø8">Ø8 (ท่อ 8 มม.)</option>
+                    <option value="Ø6.35">Ø6.35 (ท่อ 1/4")</option>
+                  </select>
+                </div>
+
+                {/* 2. FIN TYPE */}
+                <div className="space-y-1.5 bg-[#070d1a] border border-slate-800/90 p-2.5 rounded-xl">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">
+                    2. FIN TYPE (ลายฟิน)
+                  </label>
+                  <select
+                    id={`fin-type-${line.id}`}
+                    value={cfg.finType || line.defaultFin}
+                    onChange={(e) => handleFieldChange(line.id, 'finType', e.target.value as FinType)}
+                    className="w-full bg-[#0e172a] border border-cyan-800/50 rounded-lg px-2.5 py-1.5 text-xs text-white font-medium focus:outline-none focus:border-cyan-400 cursor-pointer"
+                  >
+                    <option value="Slit Old">Slit Old</option>
+                    <option value="Slit (half)">Slit (half)</option>
+                    <option value="New Slit">New Slit</option>
+                    <option value="Slit (Full)">Slit (Full)</option>
+                    <option value="Louver">Louver</option>
+                    <option value="Wide Louver">Wide Louver</option>
+                    <option value="New Corrugate">New Corrugate</option>
+                    <option value="Corrugate">Corrugate</option>
+                  </select>
+                </div>
+
+                {/* 3. DIE SPEC / PITCH */}
+                <div className="space-y-1.5 bg-[#070d1a] border border-slate-800/90 p-2.5 rounded-xl">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">
+                    3. DIE SPEC / PITCH
+                  </label>
+                  <select
+                    id={`die-spec-${line.id}`}
+                    value={cfg.pathsCount || line.defaultPitch}
+                    onChange={(e) => handleFieldChange(line.id, 'pathsCount', e.target.value)}
+                    className="w-full bg-[#0e172a] border border-cyan-800/50 rounded-lg px-2.5 py-1.5 text-xs text-white font-medium focus:outline-none focus:border-cyan-400 cursor-pointer"
+                  >
+                    <option value="3P (Pitch)">3P (Pitch)</option>
+                    <option value="4P (Pitch)">4P (Pitch)</option>
+                  </select>
+                </div>
+
+                {/* 4. FIN MATERIAL */}
+                <div className="space-y-1.5 bg-[#070d1a] border border-slate-800/90 p-2.5 rounded-xl">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">
+                    4. FIN MATERIAL (ชนิดวัสดุ)
+                  </label>
+                  <select
+                    id={`fin-material-${line.id}`}
+                    value={cfg.material || line.defaultMaterial}
+                    onChange={(e) => handleFieldChange(line.id, 'material', e.target.value as AluminumMaterial)}
+                    className="w-full bg-[#0e172a] border border-cyan-800/50 rounded-lg px-2.5 py-1.5 text-xs text-amber-300 font-bold focus:outline-none focus:border-cyan-400 cursor-pointer font-mono"
+                  >
+                    <option value="PCM (0.1mm)">PCM (0.1mm)</option>
+                    <option value="BARE (0.1mm)">BARE (0.1mm)</option>
+                    <option value="GOLD (0.1mm)">GOLD (0.1mm)</option>
+                  </select>
+                </div>
+
+                {/* 5. DIE CODE & DIE NAME */}
+                <div className="space-y-1.5 bg-[#070d1a] border border-slate-800/90 p-2.5 rounded-xl">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">
+                    5. DIE CODE & DIE NAME
+                  </label>
+                  <input
+                    id={`die-code-${line.id}`}
+                    type="text"
+                    value={cfg.dieCode || line.defaultDieCode}
+                    onChange={(e) => handleFieldChange(line.id, 'dieCode', e.target.value)}
+                    className="w-full bg-[#0e172a] border border-cyan-800/50 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono font-bold focus:outline-none focus:border-cyan-400"
+                    placeholder="e.g. FD-E1-07"
+                  />
+                </div>
+
+                {/* 6. DEFAULT SPM */}
+                <div className="space-y-1.5 bg-[#070d1a] border border-slate-800/90 p-2.5 rounded-xl">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">
+                    6. DEFAULT SPM
+                  </label>
+                  <input
+                    id={`default-spm-${line.id}`}
+                    type="number"
+                    value={cfg.defaultSpm || line.defaultSpm}
+                    onChange={(e) => handleFieldChange(line.id, 'defaultSpm', Number(e.target.value) || 100)}
+                    className="w-full bg-[#0e172a] border border-cyan-800/50 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-cyan-400"
+                    placeholder="e.g. 100"
+                  />
+                </div>
+              </div>
+
+              {/* OPERATIONAL STATUS SECTION */}
+              <div className="space-y-2.5 bg-[#070d1c] border border-cyan-950/80 p-4 rounded-xl">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Power className="w-4 h-4 text-cyan-400" />
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-200 font-mono">
+                        กำหนดสถานะการเปิด/ปิดไลน์ผลิต (LINE OPERATIONAL & PRODUCTION STATUS)
+                      </h4>
+                      <p className="text-[11px] text-slate-400 font-thai">
+                        เลือกสถานะไลน์ผลิต หากไลน์ไม่มีแผนผลิต ให้ตั้งค่าเป็น IDLE หรือ STOPPED (ปิดไลน์) ระบบจะแสดงสัญลักษณ์และแจ้งเตือนพนักงาน
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-mono font-bold text-slate-400">STATUS:</span>
+                    <span className={`px-2 py-0.5 rounded text-[11px] font-mono font-extrabold border ${
+                      isRunning
+                        ? 'bg-emerald-950 text-emerald-300 border-emerald-500'
+                        : isStopped
+                        ? 'bg-rose-950 text-rose-300 border-rose-500'
+                        : isIdle
+                        ? 'bg-amber-950 text-amber-300 border-amber-500'
+                        : 'bg-blue-950 text-blue-300 border-blue-500'
+                    }`}>
+                      {isRunning ? '🟢 RUNNING' : isStopped ? '🔴 STOPPED' : isIdle ? '🟡 IDLE' : '🔧 MAINTENANCE'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 4 Status Action Buttons */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1">
+                  {/* RUNNING BUTTON */}
+                  <button
+                    id={`btn-status-running-${line.id}`}
+                    onClick={() => handleStatusChange(line.id, 'RUNNING')}
+                    className={`py-2.5 px-3 rounded-xl font-mono text-xs font-extrabold flex items-center justify-center gap-2 transition-all border ${
+                      isRunning
+                        ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 border-emerald-300 shadow-lg shadow-emerald-900/40 ring-2 ring-emerald-400/50'
+                        : 'bg-[#0a141c] text-emerald-400/80 border-slate-800 hover:border-emerald-700/50 hover:bg-emerald-950/20'
+                    }`}
+                  >
+                    <span className={`w-2.5 h-2.5 rounded-full ${isRunning ? 'bg-slate-950 animate-ping' : 'bg-emerald-500'}`} />
+                    <span>RUNNING (เปิดผลิตปกติ)</span>
+                  </button>
+
+                  {/* IDLE BUTTON */}
+                  <button
+                    id={`btn-status-idle-${line.id}`}
+                    onClick={() => handleStatusChange(line.id, 'IDLE')}
+                    className={`py-2.5 px-3 rounded-xl font-mono text-xs font-extrabold flex items-center justify-center gap-2 transition-all border ${
+                      isIdle
+                        ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 border-amber-300 shadow-lg shadow-amber-900/40 ring-2 ring-amber-400/50'
+                        : 'bg-[#14120a] text-amber-400/80 border-slate-800 hover:border-amber-700/50 hover:bg-amber-950/20'
+                    }`}
+                  >
+                    <span className={`w-2.5 h-2.5 rounded-full ${isIdle ? 'bg-slate-950' : 'bg-amber-500'}`} />
+                    <span>IDLE (พักสาย/ไม่มีแผน)</span>
+                  </button>
+
+                  {/* MAINTENANCE BUTTON */}
+                  <button
+                    id={`btn-status-maint-${line.id}`}
+                    onClick={() => handleStatusChange(line.id, 'MAINTENANCE')}
+                    className={`py-2.5 px-3 rounded-xl font-mono text-xs font-extrabold flex items-center justify-center gap-2 transition-all border ${
+                      isMaintenance
+                        ? 'bg-blue-500 hover:bg-blue-400 text-slate-950 border-blue-300 shadow-lg shadow-blue-900/40 ring-2 ring-blue-400/50'
+                        : 'bg-[#0a121c] text-blue-400/80 border-slate-800 hover:border-blue-700/50 hover:bg-blue-950/20'
+                    }`}
+                  >
+                    <Wrench className="w-3.5 h-3.5" />
+                    <span>MAINTENANCE (ซ่อมบำรุง)</span>
+                  </button>
+
+                  {/* STOPPED BUTTON */}
+                  <button
+                    id={`btn-status-stopped-${line.id}`}
+                    onClick={() => handleStatusChange(line.id, 'STOPPED')}
+                    className={`py-2.5 px-3 rounded-xl font-mono text-xs font-extrabold flex items-center justify-center gap-2 transition-all border ${
+                      isStopped
+                        ? 'bg-rose-600 hover:bg-rose-500 text-white border-rose-400 shadow-lg shadow-rose-900/50 ring-2 ring-rose-500/50'
+                        : 'bg-[#180a0e] text-rose-400/80 border-slate-800 hover:border-rose-700/50 hover:bg-rose-950/20'
+                    }`}
+                  >
+                    <Power className="w-3.5 h-3.5" />
+                    <span>STOPPED (ปิดไลน์ผลิต)</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ADD NEW PART MODAL */}
+      {showAddPartModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0b1426] border border-cyan-500/50 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-5 animate-scaleUp">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-cyan-950 text-cyan-400 rounded-xl border border-cyan-500">
+                  <Plus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white font-mono">
+                    เพิ่มชิ้นส่วนใหม่ (ADD NEW PART MASTER)
+                  </h3>
+                  <p className="text-xs text-slate-400 font-thai">
+                    ลงทะเบียนรหัสอะไหล่ใหม่เข้าสู่ฐานข้อมูลกลาง Part Master Catalog
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowAddPartModal(false)}
+                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveNewPart} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {/* Part Code */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-300 font-mono">
+                    PART CODE (รหัสอะไหล่) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newPartData.partCode}
+                    onChange={(e) => setNewPartData({ ...newPartData, partCode: e.target.value })}
+                    placeholder="e.g. P-PRC-E1-01"
+                    className="w-full bg-[#070d1a] border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-400"
+                  />
+                </div>
+
+                {/* Category */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-300 font-mono">
+                    CATEGORY (หมวดหมู่) *
+                  </label>
+                  <select
+                    value={newPartData.category}
+                    onChange={(e) => setNewPartData({ ...newPartData, category: e.target.value as any })}
+                    className="w-full bg-[#070d1a] border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400 cursor-pointer"
+                  >
+                    <option value="PUNCH">PUNCH (พั้นช์/เข็มเจาะ)</option>
+                    <option value="DIE">DIE (ดาย/แม่พิมพ์)</option>
+                    <option value="BLADE">BLADE (ใบมีดตัด)</option>
+                    <option value="PIN">PIN (พินนำ/พินประคอง)</option>
+                    <option value="CORNER_CUT">CORNER CUT (มีดตัดมุม)</option>
+                    <option value="CENTER_PUNCH">CENTER PUNCH</option>
+                    <option value="OTHER">OTHER (อื่นๆ)</option>
+                  </select>
+                </div>
+
+                {/* Part Name EN */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-300 font-mono">
+                    PART NAME (EN) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newPartData.partName}
+                    onChange={(e) => setNewPartData({ ...newPartData, partName: e.target.value })}
+                    placeholder="e.g. Pierce Punch Ø7"
+                    className="w-full bg-[#070d1a] border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400"
+                  />
+                </div>
+
+                {/* Part Name TH */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-300 font-mono">
+                    PART NAME (TH)
+                  </label>
+                  <input
+                    type="text"
+                    value={newPartData.partNameTh}
+                    onChange={(e) => setNewPartData({ ...newPartData, partNameTh: e.target.value })}
+                    placeholder="e.g. พั้นช์เจาะรู Ø7"
+                    className="w-full bg-[#070d1a] border border-slate-700 rounded-lg px-3 py-2 text-xs font-thai text-white focus:outline-none focus:border-cyan-400"
+                  />
+                </div>
+
+                {/* Stage */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-300 font-mono">
+                    STAGE (สเตจ)
+                  </label>
+                  <select
+                    value={newPartData.stageName}
+                    onChange={(e) => setNewPartData({ ...newPartData, stageName: e.target.value })}
+                    className="w-full bg-[#070d1a] border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400 cursor-pointer"
+                  >
+                    <option value="Stage 1: Piercing & Burring">Stage 1: Piercing & Burring</option>
+                    <option value="Stage 2: Louver & Ironing">Stage 2: Louver & Ironing</option>
+                    <option value="Stage 3: Slit & Reflaire">Stage 3: Slit & Reflaire</option>
+                    <option value="Stage 4: Cut Off & Corner Cut">Stage 4: Cut Off & Corner Cut</option>
+                    <option value="Row Slit & Side Cut">Row Slit & Side Cut</option>
+                    <option value="Guide & Pilot Section">Guide & Pilot Section</option>
+                  </select>
+                </div>
+
+                {/* Tube Size Compat */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-300 font-mono">
+                    TUBE COMPATIBILITY
+                  </label>
+                  <select
+                    value={newPartData.tubeSizeCompat}
+                    onChange={(e) => setNewPartData({ ...newPartData, tubeSizeCompat: e.target.value as any })}
+                    className="w-full bg-[#070d1a] border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400 cursor-pointer"
+                  >
+                    <option value="BOTH">BOTH (ใช้ได้ทั้ง Ø5 และ Ø7)</option>
+                    <option value="Ø7">Ø7 Only</option>
+                    <option value="Ø5">Ø5 Only</option>
+                  </select>
+                </div>
+
+                {/* Drawing No */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-300 font-mono">
+                    DRAWING NUMBER
+                  </label>
+                  <input
+                    type="text"
+                    value={newPartData.drawingNumber}
+                    onChange={(e) => setNewPartData({ ...newPartData, drawingNumber: e.target.value })}
+                    placeholder="e.g. DWG-FD-07-P01"
+                    className="w-full bg-[#070d1a] border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-cyan-400"
+                  />
+                </div>
+
+                {/* Unit Cost THB */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-300 font-mono">
+                    ESTIMATED UNIT COST (THB)
+                  </label>
+                  <input
+                    type="number"
+                    value={newPartData.unitCostThb || ''}
+                    onChange={(e) => setNewPartData({ ...newPartData, unitCostThb: Number(e.target.value) || 0 })}
+                    placeholder="e.g. 1500"
+                    className="w-full bg-[#070d1a] border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-amber-300 focus:outline-none focus:border-cyan-400"
+                  />
+                </div>
+              </div>
+
+              {/* Modal Actions */}
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowAddPartModal(false)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-mono font-bold"
+                >
+                  CANCEL (ยกเลิก)
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-cyan-400 hover:bg-cyan-300 text-slate-950 rounded-lg text-xs font-mono font-extrabold flex items-center gap-1.5 shadow-lg"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>บันทึกชิ้นส่วนใหม่ (SAVE PART)</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

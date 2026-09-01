@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { DateRangeFilter, isDateInSelectedRange } from '../components/common/DateRangeFilter';
 import { 
   RotateCcw, 
   CheckCircle2, 
@@ -66,6 +67,8 @@ export const RegrindingEntryView: React.FC = () => {
   const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'warning'; message: string } | null>(null);
   const [historySearch, setHistorySearch] = useState<string>('');
   const [historyStatusFilter, setHistoryStatusFilter] = useState<string>('ALL');
+  const [historyStartDate, setHistoryStartDate] = useState<string>('');
+  const [historyEndDate, setHistoryEndDate] = useState<string>('');
   const [editingStandard, setEditingStandard] = useState<RegrindMasterStandard | null>(null);
   const [inspectModalRecord, setInspectModalRecord] = useState<RegrindingRecord | null>(null);
   const [quickInspectRecord, setQuickInspectRecord] = useState<RegrindingRecord | null>(null);
@@ -256,9 +259,10 @@ export const RegrindingEntryView: React.FC = () => {
         (rec.partInstanceOrLot && rec.partInstanceOrLot.toLowerCase().includes(historySearch.toLowerCase())) ||
         (rec.workOrder && rec.workOrder.toLowerCase().includes(historySearch.toLowerCase()));
       const matchesStatus = historyStatusFilter === 'ALL' || rec.status === historyStatusFilter;
-      return matchesSearch && matchesStatus;
+      const matchesDate = isDateInSelectedRange(rec.regrindDate || rec.createdDateTime || (rec as any).date, historyStartDate, historyEndDate);
+      return matchesSearch && matchesStatus && matchesDate;
     });
-  }, [historyRecords, historySearch, historyStatusFilter]);
+  }, [historyRecords, historySearch, historyStatusFilter, historyStartDate, historyEndDate]);
 
   // Export CSV
   const handleExportCSV = () => {
@@ -363,7 +367,7 @@ export const RegrindingEntryView: React.FC = () => {
               }`}
             >
               <History className="w-4 h-4" />
-              Re-grind Transaction Ledger ({historyRecords.length})
+              Recent Ledger ({Math.min(10, historyRecords.length)})
             </button>
             <button
               id="tab-regrind-standards"
@@ -938,16 +942,31 @@ export const RegrindingEntryView: React.FC = () => {
         <div className="bg-slate-900 border border-slate-800 rounded-lg p-5 space-y-4">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
             <div>
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                <History className="w-5 h-5 text-indigo-400" />
-                Re-grinding Historical Audit Ledger
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <History className="w-5 h-5 text-indigo-400" />
+                  Re-grinding Historical Audit Ledger
+                </h2>
+                <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-indigo-950 text-indigo-300 border border-indigo-800 font-mono">
+                  10 RECENT LOGS
+                </span>
+              </div>
               <p className="text-xs text-slate-400 mt-1 font-thai">
-                สมุดบัญชีประวัติงานเจียระไนลับคม (บันทึกถาวรตามกฎข้อ 6 & 7 ไม่มีการเขียนทับ)
+                สมุดบัญชีประวัติงานเจียระไนลับคม 10 รายการล่าสุดสำหรับอ้างอิงหน้างาน
               </p>
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
+              <DateRangeFilter
+                startDate={historyStartDate}
+                endDate={historyEndDate}
+                onChangeRange={(start, end) => {
+                  setHistoryStartDate(start);
+                  setHistoryEndDate(end);
+                }}
+                maxDaysAllowed={31}
+              />
+
               {/* Search */}
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
@@ -973,15 +992,16 @@ export const RegrindingEntryView: React.FC = () => {
                 <option value="SCRAP">SCRAP</option>
                 <option value="HOLD">HOLD</option>
               </select>
+            </div>
+          </div>
 
-              {/* Export */}
-              <button
-                onClick={handleExportCSV}
-                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
-              >
-                <Download className="w-3.5 h-3.5 text-indigo-400" />
-                Export CSV
-              </button>
+          {/* Single Source of Truth Notice Banner */}
+          <div className="p-3 bg-slate-950 border border-slate-800 rounded-lg flex items-center justify-between gap-3 text-xs text-slate-300 font-thai">
+            <div className="flex items-center gap-2">
+              <span className="flex h-2 w-2 rounded-full bg-indigo-400 animate-pulse"></span>
+              <span>
+                แสดงประวัติล่าสุด <strong>10 รายการ</strong> เพื่อความสะดวกรวดเร็วหน้างาน • สำหรับประวัติย้อนหลังทั้งหมดและส่งออกรายงาน Excel ให้ไปที่เมนู <strong>Reports & Analytics</strong>
+              </span>
             </div>
           </div>
 
@@ -990,6 +1010,7 @@ export const RegrindingEntryView: React.FC = () => {
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-950 text-slate-400 font-mono border-b border-slate-800">
+                  <th className="p-3 text-center w-12">NO.</th>
                   <th className="p-3">Job Code / WO</th>
                   <th className="p-3">Component</th>
                   <th className="p-3">Instance / Lot</th>
@@ -1005,13 +1026,16 @@ export const RegrindingEntryView: React.FC = () => {
               <tbody className="divide-y divide-slate-800">
                 {filteredHistory.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="p-8 text-center text-slate-500">
+                    <td colSpan={11} className="p-8 text-center text-slate-500">
                       No re-grinding transaction records found matching filter.
                     </td>
                   </tr>
                 ) : (
-                  filteredHistory.map(rec => (
+                  filteredHistory.slice(0, 10).map((rec, idx) => (
                     <tr key={rec.id} className="hover:bg-slate-800/40 transition-colors">
+                      <td className="p-3 text-center font-mono font-bold text-cyan-400/80">
+                        {idx + 1}
+                      </td>
                       <td className="p-3 font-mono">
                         <span className="font-bold text-indigo-300 block">{rec.jobCode}</span>
                         <span className="text-[11px] text-slate-500">{rec.workOrder || 'N/A'}</span>

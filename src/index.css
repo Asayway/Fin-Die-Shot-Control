@@ -113,3 +113,27 @@
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #475569;
 }
+
+/* Custom AG Grid Dark Theme Overrides for Fin Die Control */
+.ag-theme-alpine-dark.fin-die-theme {
+  --ag-background-color: #0F172A; /* Tailwind slate-900 */
+  --ag-header-background-color: #1E293B; /* Tailwind slate-800 */
+  --ag-odd-row-background-color: #0F172A; 
+  --ag-border-color: #334155; /* Tailwind slate-700 */
+  --ag-row-border-color: #334155;
+  --ag-header-foreground-color: #94A3B8; /* Tailwind slate-400 */
+  --ag-data-color: #F1F5F9; /* Tailwind slate-100 */
+  --ag-control-panel-background-color: #0E172A;
+  --ag-active-color: #22D3EE; /* Tailwind cyan-400 */
+  --ag-selected-row-background-color: rgba(34, 211, 238, 0.1);
+  --ag-row-hover-color: rgba(51, 65, 85, 0.5);
+  font-family: inherit;
+}
+
+/* Highlight Edited Cells awaiting Batch Save */
+.dirty-cell {
+  background-color: rgba(234, 179, 8, 0.15) !important;
+  border: 1px solid #EAB308 !important;
+  color: #FDE047 !important;
+  transition: all 0.2s ease;
+}

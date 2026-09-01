@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { DateRangeFilter, isDateInSelectedRange } from '../components/common/DateRangeFilter';
 import { 
   Wrench, 
   RotateCcw, 
@@ -39,6 +40,7 @@ import {
 import { storageService } from '../services/storageService';
 import { formatShots } from '../services/calculationService';
 import { LineFilterSelector } from '../components/common/LineFilterSelector';
+import { InteractiveDieLayoutView } from './InteractiveDieLayoutView';
 
 interface ReplacementEntryViewProps {
   initialLineId?: ProductionLineId;
@@ -89,12 +91,14 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
 
   // UI state
-  const [activeTab, setActiveTab] = useState<'entry' | 'history' | 'drafts'>('entry');
+  const [activeTab, setActiveTab] = useState<'layout' | 'entry' | 'history' | 'drafts'>('layout');
   const [showPreviewModal, setShowPreviewModal] = useState<boolean>(false);
   const [previewData, setPreviewData] = useState<any | null>(null);
   const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'warning'; message: string } | null>(null);
   const [historySearch, setHistorySearch] = useState<string>('');
   const [historyTypeFilter, setHistoryTypeFilter] = useState<string>('ALL');
+  const [historyStartDate, setHistoryStartDate] = useState<string>('');
+  const [historyEndDate, setHistoryEndDate] = useState<string>('');
   const [inspectModalRecord, setInspectModalRecord] = useState<ReplacementRecord | null>(null);
 
   const linesList: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5', 'E6'];
@@ -390,9 +394,10 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
         (rec.newPartLotNumber && rec.newPartLotNumber.toLowerCase().includes(historySearch.toLowerCase()));
       const matchesType = historyTypeFilter === 'ALL' || rec.replacementType === historyTypeFilter;
       const matchesLine = rec.lineId === selectedLineId;
-      return matchesSearch && matchesType && matchesLine;
+      const matchesDate = isDateInSelectedRange(rec.timestamp || rec.replacementDateTime, historyStartDate, historyEndDate);
+      return matchesSearch && matchesType && matchesLine && matchesDate;
     });
-  }, [historyRecords, historySearch, historyTypeFilter, selectedLineId]);
+  }, [historyRecords, historySearch, historyTypeFilter, selectedLineId, historyStartDate, historyEndDate]);
 
   // Export CSV
   const handleExportCSV = () => {
@@ -486,6 +491,18 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
         <div className="flex items-center justify-between pt-0.5">
           <div className="flex items-center gap-2">
             <button
+              id="tab-layout"
+              onClick={() => setActiveTab('layout')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all border ${
+                activeTab === 'layout'
+                  ? 'bg-cyan-500 text-slate-950 border-cyan-400 font-bold shadow'
+                  : 'bg-slate-950 text-slate-400 hover:text-white border-slate-800'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              2D Interactive Die Layout
+            </button>
+            <button
               id="tab-entry"
               onClick={() => setActiveTab('entry')}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all border ${
@@ -495,7 +512,7 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
               }`}
             >
               <Wrench className="w-3.5 h-3.5" />
-              New Replacement Entry
+              Form Replacement Entry
             </button>
             <button
               id="tab-drafts"
@@ -519,7 +536,7 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
               }`}
             >
               <History className="w-3.5 h-3.5" />
-              History Log ({historyRecords.length})
+              Recent Logs ({Math.min(10, historyRecords.length)})
             </button>
           </div>
 
@@ -560,6 +577,11 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
             Dismiss
           </button>
         </div>
+      )}
+
+      {/* TAB 0: 2D INTERACTIVE DIE LAYOUT */}
+      {activeTab === 'layout' && (
+        <InteractiveDieLayoutView initialLineId={selectedLineId} showLineSelector={false} />
       )}
 
       {/* TAB 1: NEW REPLACEMENT ENTRY */}
@@ -1135,16 +1157,31 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
         <div className="bg-slate-900 border border-slate-800 rounded-lg p-5 space-y-4">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
             <div>
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                <History className="w-5 h-5 text-cyan-400" />
-                Replacement Audit Trail & Life History Ledger
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <History className="w-5 h-5 text-cyan-400" />
+                  Replacement Audit Trail & Recent History
+                </h2>
+                <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-cyan-950 text-cyan-300 border border-cyan-800 font-mono">
+                  10 RECENT LOGS
+                </span>
+              </div>
               <p className="text-xs text-slate-400 mt-1 font-thai">
-                ประวัติการเปลี่ยนชิ้นส่วนแม่พิมพ์และบันทึกยอดช็อตสะสมเดิมของชิ้นส่วนที่ถูกถอดออก (Line {selectedLineId})
+                ประวัติการเปลี่ยนชิ้นส่วนแม่พิมพ์ 10 รายการล่าสุดสำหรับอ้างอิงหน้างาน (Line {selectedLineId})
               </p>
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
+              <DateRangeFilter
+                startDate={historyStartDate}
+                endDate={historyEndDate}
+                onChangeRange={(start, end) => {
+                  setHistoryStartDate(start);
+                  setHistoryEndDate(end);
+                }}
+                maxDaysAllowed={31}
+              />
+
               {/* Search */}
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
@@ -1168,15 +1205,16 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                   <option key={t} value={t}>{t}</option>
                 ))}
               </select>
+            </div>
+          </div>
 
-              {/* Export CSV */}
-              <button
-                onClick={handleExportCSV}
-                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
-              >
-                <Download className="w-3.5 h-3.5 text-cyan-400" />
-                Export CSV
-              </button>
+          {/* Single Source of Truth Notice Banner */}
+          <div className="p-3 bg-slate-950 border border-slate-800 rounded-lg flex items-center justify-between gap-3 text-xs text-slate-300 font-thai">
+            <div className="flex items-center gap-2">
+              <span className="flex h-2 w-2 rounded-full bg-cyan-400 animate-pulse"></span>
+              <span>
+                แสดงประวัติล่าสุด <strong>10 รายการ</strong> เพื่อความสะดวกรวดเร็วหน้างาน • สำหรับประวัติย้อนหลังทั้งหมดและส่งออกรายงาน Excel ให้ไปที่เมนู <strong>Reports & Analytics</strong>
+              </span>
             </div>
           </div>
 
@@ -1185,6 +1223,7 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-950 text-slate-400 font-mono border-b border-slate-800">
+                  <th className="p-3 text-center w-12">NO.</th>
                   <th className="p-3">ID / Work Order</th>
                   <th className="p-3">Component / Stage</th>
                   <th className="p-3">Type & Scope</th>
@@ -1200,13 +1239,16 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
               <tbody className="divide-y divide-slate-800">
                 {filteredHistory.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="p-8 text-center text-slate-500">
+                    <td colSpan={11} className="p-8 text-center text-slate-500">
                       No replacement history records found for Line {selectedLineId}.
                     </td>
                   </tr>
                 ) : (
-                  filteredHistory.map(rec => (
+                  filteredHistory.slice(0, 10).map((rec, idx) => (
                     <tr key={rec.id} className="hover:bg-slate-800/40 transition-colors">
+                      <td className="p-3 text-center font-mono font-bold text-cyan-400/80">
+                        {idx + 1}
+                      </td>
                       <td className="p-3 font-mono">
                         <span className="font-bold text-cyan-400 block">{rec.id}</span>
                         <span className="text-[11px] text-slate-400">{rec.workOrderNumber || 'WO-N/A'}</span>

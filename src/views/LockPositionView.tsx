@@ -607,6 +607,7 @@ export const LockPositionView: React.FC<LockPositionViewProps> = ({ initialLineI
                       className="rounded bg-slate-900 border-slate-700 text-cyan-500 cursor-pointer"
                     />
                   </th>
+                  <th className="py-2.5 px-2 text-center w-12 border-r border-slate-800/70 font-mono">NO.</th>
                   <th className="py-2.5 px-3 border-r border-slate-800/70 font-sans">STAGE / STATION</th>
                   <th className="py-2.5 px-3 border-r border-slate-800/70">PART CODE</th>
                   <th className="py-2.5 px-3 border-r border-slate-800/70">POS ID</th>
@@ -618,7 +619,7 @@ export const LockPositionView: React.FC<LockPositionViewProps> = ({ initialLineI
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 text-[11px]">
-                {filteredPositions.map(pos => {
+                {filteredPositions.map((pos, idx) => {
                   const isSelected = selectedIds.includes(pos.id);
                   const lockInfo = LOCK_TYPE_INFO[pos.lockType];
 
@@ -636,6 +637,10 @@ export const LockPositionView: React.FC<LockPositionViewProps> = ({ initialLineI
                           onChange={() => handleToggleSelectId(pos.id)}
                           className="rounded bg-slate-900 border-slate-700 text-cyan-500 cursor-pointer"
                         />
+                      </td>
+
+                      <td className="py-2 px-2 text-center font-mono font-bold text-cyan-400/80 border-r border-slate-800/70">
+                        {idx + 1}
                       </td>
 
                       <td className="py-2 px-3 font-sans font-medium text-slate-100 border-r border-slate-800/70">

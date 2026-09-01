@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { DateRangeFilter, isDateInSelectedRange } from '../components/common/DateRangeFilter';
 import { 
   PlusCircle, 
   RotateCcw, 
@@ -220,6 +221,8 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
   const [historyLineFilter, setHistoryLineFilter] = useState<string>('ALL');
   const [historyShiftFilter, setHistoryShiftFilter] = useState<string>('ALL');
   const [historySearch, setHistorySearch] = useState<string>('');
+  const [historyStartDate, setHistoryStartDate] = useState<string>('');
+  const [historyEndDate, setHistoryEndDate] = useState<string>('');
 
   const linesList: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5', 'E6'];
 
@@ -587,6 +590,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
     return shotLogs.filter(log => {
       if (historyLineFilter !== 'ALL' && log.lineId !== historyLineFilter) return false;
       if (historyShiftFilter !== 'ALL' && log.shift !== historyShiftFilter) return false;
+      if (!isDateInSelectedRange(log.productionDate || log.timestamp, historyStartDate, historyEndDate)) return false;
       if (historySearch) {
         const query = historySearch.toLowerCase();
         const matchId = log.id.toLowerCase().includes(query);
@@ -596,7 +600,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
       }
       return true;
     });
-  }, [shotLogs, historyLineFilter, historyShiftFilter, historySearch]);
+  }, [shotLogs, historyLineFilter, historyShiftFilter, historySearch, historyStartDate, historyEndDate]);
 
   const isHmi = systemSettings?.theme === 'hmi' || systemSettings?.theme === 'industrial-dark';
 
@@ -679,7 +683,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
               }`}
             >
               <History className="w-3.5 h-3.5" />
-              <span>HISTORY ({shotLogs.length})</span>
+              <span>RECENT LOGS ({Math.min(10, shotLogs.length)})</span>
             </button>
 
             <button
@@ -1561,43 +1565,37 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
             isHmi ? 'border-green-900' : 'border-slate-800'
           }`}>
             <div>
-              <h3 className={`font-bold text-base uppercase tracking-wider ${
-                isHmi ? 'text-green-400 font-extrabold font-mono' : 'text-white'
-              }`}>
-                HISTORICAL SHOT LOGS ({filteredShotLogs.length} RECORDS)
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className={`font-bold text-base uppercase tracking-wider ${
+                  isHmi ? 'text-green-400 font-extrabold font-mono' : 'text-white'
+                }`}>
+                  HISTORICAL SHOT LOGS
+                </h3>
+                <span className={`px-2 py-0.5 rounded text-[11px] font-bold font-mono ${
+                  isHmi 
+                    ? 'bg-green-950 text-green-300 border border-green-800' 
+                    : 'bg-cyan-950 text-cyan-300 border border-cyan-800'
+                }`}>
+                  10 RECENT LOGS
+                </span>
+              </div>
               <p className={`text-xs ${isHmi ? 'text-green-600' : 'text-slate-400'}`}>
-                ประวัติการบันทึกช็อตรายกะและข้อมูลซิงค์ PLC
+                ประวัติการบันทึกช็อตรายกะ 10 รายการล่าสุดสำหรับอ้างอิงหน้างาน
               </p>
             </div>
 
             {/* Filter Bar */}
             <div className="flex items-center gap-2 flex-wrap text-xs">
-              <button
-                onClick={() => {
-                  const data = filteredShotLogs;
-                  const headers = 'Log ID,Production Date,Line ID,Shift,Input Method,Previous Total,New Total,Shots Added,Operator,Reason,Notes,Timestamp\n';
-                  const rows = data.map(log => 
-                    `"${log.id}","${log.productionDate}","${log.lineId}","${log.shift}","${log.inputMethod}",${log.previousTotal},${log.newTotal},${log.shotsAdded},"${log.operatorName || ''}","${log.entryReason || ''}","${(log.notes || '').replace(/"/g, '""')}","${log.timestamp}"`
-                  ).join('\n');
-                  
-                  const blob = new Blob(['\uFEFF' + headers + rows], { type: 'text/csv;charset=utf-8;' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = `Shot_Accumulation_Logs_${new Date().toISOString().substring(0, 10)}.csv`;
-                  a.click();
-                  URL.revokeObjectURL(url);
+              <DateRangeFilter
+                startDate={historyStartDate}
+                endDate={historyEndDate}
+                onChangeRange={(start, end) => {
+                  setHistoryStartDate(start);
+                  setHistoryEndDate(end);
                 }}
-                className={`px-3 py-1 rounded font-bold font-mono transition-all flex items-center gap-1.5 border shadow ${
-                  isHmi 
-                    ? 'bg-green-500 text-black border-green-400 hover:bg-green-400 font-extrabold' 
-                    : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-400'
-                }`}
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>EXPORT CSV (ส่งออกไฟล์ CSV)</span>
-              </button>
+                maxDaysAllowed={31}
+                isHmi={isHmi}
+              />
 
               <select
                 value={historyLineFilter}
@@ -1632,6 +1630,20 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
             </div>
           </div>
 
+          {/* Single Source of Truth Notice Banner */}
+          <div className={`p-3 border rounded-lg flex items-center justify-between gap-3 text-xs font-thai ${
+            isHmi 
+              ? 'bg-zinc-950 border-green-900 text-green-300' 
+              : 'bg-slate-950 border-slate-800 text-slate-300'
+          }`}>
+            <div className="flex items-center gap-2">
+              <span className={`flex h-2 w-2 rounded-full ${isHmi ? 'bg-green-400' : 'bg-cyan-400'} animate-pulse`}></span>
+              <span>
+                แสดงประวัติล่าสุด <strong>10 รายการ</strong> เพื่อความสะดวกรวดเร็วหน้างาน • สำหรับประวัติย้อนหลังทั้งหมดและส่งออกรายงาน Excel (.xlsx) กรุณาไปที่เมนู <strong>Reports & Analytics</strong>
+              </span>
+            </div>
+          </div>
+
           <div className={`overflow-x-auto custom-scrollbar border rounded-lg ${
             isHmi ? 'border-green-900' : 'border-slate-800'
           }`}>
@@ -1640,6 +1652,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                 isHmi ? 'bg-zinc-950 text-green-400 border-green-800' : 'bg-slate-950 text-slate-300 border-slate-800'
               }`}>
                 <tr>
+                  <th className="py-3 px-2 text-center w-12 font-mono">NO.</th>
                   <th className="py-3 px-3.5">RECORD ID</th>
                   <th className="py-3 px-3.5">LINE</th>
                   <th className="py-3 px-3.5">DATE / SHIFT</th>
@@ -1653,10 +1666,11 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
               <tbody className={`divide-y text-sm font-bold ${
                 isHmi ? 'divide-green-950 text-green-300' : 'divide-slate-800/60 text-slate-200'
               }`}>
-                {filteredShotLogs.map(log => (
+                {filteredShotLogs.slice(0, 10).map((log, idx) => (
                   <tr key={log.id} className={`transition-colors ${
                     isHmi ? 'hover:bg-green-950/40' : 'hover:bg-slate-900/60'
                   }`}>
+                    <td className={`py-3 px-2 text-center font-mono font-bold ${isHmi ? 'text-green-500' : 'text-cyan-400/80'}`}>{idx + 1}</td>
                     <td className={`py-3 px-3.5 font-bold ${isHmi ? 'text-green-400' : 'text-cyan-400'}`}>{log.id}</td>
                     <td className="py-3 px-3.5">LINE {log.lineId}</td>
                     <td className="py-3 px-3.5">{log.productionDate} ({log.shift})</td>

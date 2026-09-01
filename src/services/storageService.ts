@@ -66,7 +66,7 @@ const STORAGE_KEYS = {
   AUDIT_LOGS: 'fin_press_audit_logs',
   SETTINGS: 'fin_press_settings',
   POSITION_LOCKS: 'fin_press_position_locks',
-  SEED_INITIALIZED: 'fin_press_seed_init_v5'
+  SEED_INITIALIZED: 'fin_press_seed_init_v6'
 };
 
 type Listener = () => void;
@@ -317,7 +317,20 @@ class StorageService {
   }
 
   public getLifeStandards(): PartLifeStandard[] {
-    return JSON.parse(localStorage.getItem(STORAGE_KEYS.LIFE_STANDARDS) || '[]');
+    const raw = localStorage.getItem(STORAGE_KEYS.LIFE_STANDARDS);
+    if (!raw) {
+      localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(INITIAL_PART_LIFE_STANDARDS));
+      return INITIAL_PART_LIFE_STANDARDS;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+      return INITIAL_PART_LIFE_STANDARDS;
+    } catch {
+      return INITIAL_PART_LIFE_STANDARDS;
+    }
   }
 
   public saveLifeStandards(standards: PartLifeStandard[]): void {
@@ -2629,6 +2642,15 @@ class StorageService {
 
     this.notify();
   }
+
+  public applyMigration(parts: PartMaster[], regrindMasters: RegrindMasterStandard[], configs: LineActiveConfiguration[], lifeStandards: PartLifeStandard[]) {
+    localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(parts));
+    localStorage.setItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(regrindMasters));
+    localStorage.setItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
+    localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(lifeStandards));
+    this.notify();
+  }
 }
 
 export const storageService = new StorageService();
+

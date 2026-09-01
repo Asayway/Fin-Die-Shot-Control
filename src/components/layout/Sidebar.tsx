@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   Tv,
+  Map,
   PlusCircle,
   Wrench,
   RotateCcw,
@@ -80,8 +81,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {
           id: 'replacement-entry',
           label: 'Replacement Entry',
-          labelTh: 'บันทึกเปลี่ยนอะไหล่',
-          icon: Wrench
+          labelTh: 'บันทึกเปลี่ยนอะไหล่ & ผังแม่พิมพ์ 2D',
+          icon: Wrench,
+          badge: 'Hub',
+          badgeColor: 'bg-cyan-950 text-cyan-300 border-cyan-500'
         },
         {
           id: 'regrinding-entry',
@@ -89,14 +92,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           labelTh: 'ส่งเจียระไนลับคม',
           icon: RotateCcw
         },
-        {
-          id: 'lock-position',
-          label: 'Lock Position Matrix',
-          labelTh: 'ล็อคตำแหน่งแม่พิมพ์',
-          icon: Lock,
-          badge: 'Lock',
-          badgeColor: 'bg-red-950 text-red-300 border-red-500'
-        }
       ]
     },
     {
@@ -117,12 +112,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       title: 'STOCK & SPARE PARTS',
       titleTh: 'คลังอะไหล่และรายงาน',
       items: [
-        {
-          id: 'replacement-history',
-          label: 'Replacement History',
-          labelTh: 'ประวัติการเปลี่ยนชิ้นส่วน',
-          icon: History
-        },
         {
           id: 'reports',
           label: 'Reports & Analytics',
