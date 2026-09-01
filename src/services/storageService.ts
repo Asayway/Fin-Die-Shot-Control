@@ -210,6 +210,8 @@ class StorageService {
     const idx = list.findIndex(p => p.partCode === part.partCode);
     if (idx >= 0) {
       list[idx] = part;
+      // Sync names across configuration stores
+      this.syncPartNameChanges(part.partCode, part.partName, part.stageName);
     } else {
       list.push(part);
     }
@@ -218,10 +220,96 @@ class StorageService {
     this.notify();
   }
 
+  private syncPartNameChanges(partCode: string, newName: string, newStage: string) {
+    let changed = false;
+
+    // Sync Life Standards
+    const lifeStds = this.getLifeStandards();
+    lifeStds.forEach(std => {
+      if (std.configKey.partCode === partCode) {
+        if (std.partName !== newName || std.stagePunchDie !== newStage) {
+          std.partName = newName;
+          std.stagePunchDie = newStage;
+          changed = true;
+        }
+      }
+    });
+    if (changed) localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(lifeStds));
+
+    // Sync Regrind Standards
+    changed = false;
+    const regrindStds = this.getRegrindMasterStandards();
+    regrindStds.forEach(std => {
+      if (std.partCode === partCode) {
+        if (std.partName !== newName || std.stagePunchDie !== newStage) {
+          std.partName = newName;
+          std.stagePunchDie = newStage;
+          changed = true;
+        }
+      }
+    });
+    if (changed) localStorage.setItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(regrindStds));
+
+    // Sync Spare Stocks
+    changed = false;
+    const stocks = this.getSpareStocks();
+    stocks.forEach(stk => {
+      if (stk.partCode === partCode && stk.partName !== newName) {
+        stk.partName = newName;
+        changed = true;
+      }
+    });
+    if (changed) localStorage.setItem(STORAGE_KEYS.SPARE_STOCKS, JSON.stringify(stocks));
+
+    // Sync Position Locks
+    changed = false;
+    const locks = this.getPositionLocks();
+    locks.forEach(lock => {
+      if (lock.partCode === partCode && lock.partName !== newName) {
+        lock.partName = newName;
+        changed = true;
+      }
+    });
+    if (changed) localStorage.setItem(STORAGE_KEYS.POSITION_LOCKS, JSON.stringify(locks));
+  }
+
   public savePartMasters(parts: PartMaster[]): void {
     localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(parts));
     this.addAuditLog('SYSTEM', `Bulk updated ${parts.length} Part Master catalog records`);
     this.notify();
+  }
+
+  public deletePartMaster(partCode: string): void {
+    const list = this.getPartMasters();
+    const idx = list.findIndex(p => p.partCode === partCode);
+    if (idx >= 0) {
+      const part = list[idx];
+      list.splice(idx, 1);
+      localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(list));
+      
+      // Cleanup orphaned records
+      const lifeStds = this.getLifeStandards().filter(std => std.configKey.partCode !== partCode);
+      localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(lifeStds));
+      
+      const regrindStds = this.getRegrindMasterStandards().filter(std => std.partCode !== partCode);
+      localStorage.setItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(regrindStds));
+      
+      const stocks = this.getSpareStocks().filter(stk => stk.partCode !== partCode);
+      localStorage.setItem(STORAGE_KEYS.SPARE_STOCKS, JSON.stringify(stocks));
+
+      const configs = this.getLineConfigs();
+      let configsChanged = false;
+      configs.forEach(cfg => {
+        if (cfg.installedPartQuantities && cfg.installedPartQuantities[partCode] !== undefined) {
+          delete cfg.installedPartQuantities[partCode];
+          configsChanged = true;
+        }
+      });
+      if (configsChanged) localStorage.setItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
+      
+      this.addAuditLog('SYSTEM', `Deleted Part Master: ${part.partCode} (${part.partName}) and related config records`, `ลบข้อมูลชิ้นส่วนหลัก ${part.partName}`);
+      this.notify();
+    }
   }
 
   public getLineConfigs(): LineActiveConfiguration[] {

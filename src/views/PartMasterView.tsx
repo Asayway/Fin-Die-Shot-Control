@@ -238,14 +238,30 @@ export const PartMasterView: React.FC = () => {
               width: 100,
               align: 'center',
               render: (p) => (
-                <button
-                  type="button"
-                  onClick={() => handleOpenEdit(p)}
-                  className="p-1.5 rounded bg-slate-800 hover:bg-cyan-950 text-slate-300 hover:text-cyan-300 border border-slate-700 hover:border-cyan-600 transition-colors"
-                  title="Edit Part Name and Parameters"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEdit(p)}
+                    className="p-1.5 rounded bg-slate-800 hover:bg-cyan-950 text-slate-300 hover:text-cyan-300 border border-slate-700 hover:border-cyan-600 transition-colors"
+                    title="Edit Part Name and Parameters"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm(`Are you sure you want to delete ${p.partCode}?`)) {
+                        storageService.deletePartMaster(p.partCode);
+                        setFeedback({ type: 'success', message: `Deleted ${p.partCode}` });
+                        setTimeout(() => setFeedback(null), 3000);
+                      }
+                    }}
+                    className="p-1.5 rounded bg-slate-800 hover:bg-red-950 text-slate-400 hover:text-red-400 border border-slate-700 hover:border-red-800 transition-colors"
+                    title="Delete Part"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               )
             }
           ]}

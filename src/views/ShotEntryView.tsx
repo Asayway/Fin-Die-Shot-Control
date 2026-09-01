@@ -33,8 +33,7 @@ import {
   Delete,
   Play,
   Square,
-  Flame,
-  ExternalLink
+  Flame
 } from 'lucide-react';
 import { 
   ProductionLineId, 
@@ -635,19 +634,8 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
             </div>
           </div>
 
-          {/* Line Selector Pills & Standalone HTML Launcher */}
+          {/* Line Selector Pills */}
           <div className="w-full sm:w-auto flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1.5 pt-1 custom-scrollbar flex-nowrap sm:flex-wrap">
-            <a 
-              href="/standalone_fin_die_shot_control.html" 
-              target="_blank" 
-              rel="noreferrer"
-              className="px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold bg-purple-950 hover:bg-purple-900 text-purple-200 border border-purple-500 flex items-center gap-1 shadow-sm transition-all flex-shrink-0"
-              title="เปิดระบบ Single-File Standalone HTML Cyberpunk Mode ในแท็บใหม่"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-              <span>STANDALONE HTML</span>
-            </a>
-
             <LineFilterSelector
               selectedLine={selectedLineId}
               onSelectLine={(line) => setSelectedLineId(line)}

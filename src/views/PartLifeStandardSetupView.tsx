@@ -690,35 +690,41 @@ export const PartLifeStandardSetupView: React.FC = () => {
 
 export const InstallQuantitySetupView: React.FC = () => {
   const [lines, setLines] = useState<any[]>([]);
+  const [partMasters, setPartMasters] = useState<any[]>([]);
   const [isEditing, setIsEditing] = useState(false);
   const [editValues, setEditValues] = useState<Record<string, number>>({});
   
   useEffect(() => {
-    setLines(storageService.getLineConfigs());
+    const loadAll = () => {
+      setLines(storageService.getLineConfigs());
+      setPartMasters(storageService.getPartMasters());
+    };
+    loadAll();
+    const unsub = storageService.subscribe(loadAll);
+    return () => unsub();
   }, []);
 
   const lineIds = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5', 'E6'];
 
-  // Dynamically build matrix from lines configuration
-  const matrixParts = [
-    { no: 1, part: 'Bucking Punch', code: 'PT-BP-01' },
-    { no: 2, part: 'Ironing Punch', code: 'PT-IP-02' },
-    { no: 3, part: 'Ironing Die', code: 'PT-ID-03' },
-    { no: 4, part: 'Louver Punch', code: 'PT-LP-04' },
-    { no: 5, part: 'Louver Die', code: 'PT-LD-05' },
-    { no: 6, part: 'Reflaire Punch', code: 'PT-RP-06' },
-    { no: 7, part: 'Reflaire Die', code: 'PT-RD-07' },
-    { no: 8, part: 'Row Slit Blade', code: 'PT-RS-08' },
-    { no: 9, part: 'Side Cutting Punch', code: 'PT-SCP-09' },
-    { no: 10, part: 'Side Cutting Die', code: 'PT-SCD-10' },
-    { no: 11, part: 'Cut Off Punch', code: 'PT-COP-11' },
-    { no: 12, part: 'Cut Off Die', code: 'PT-COD-12' }
-  ];
+  interface InstallMatrixRow {
+    no: number;
+    part: string;
+    code: string;
+    total: number;
+    [key: string]: string | number;
+  }
+
+  // Dynamically build matrix from part masters
+  const matrixParts = partMasters.map((pm, index) => ({
+    no: index + 1,
+    part: pm.partName,
+    code: pm.partCode
+  }));
 
   const getCellKey = (partCode: string, lineId: string) => `${partCode}_${lineId}`;
 
-  const installMatrix = matrixParts.map(mp => {
-    const row: any = { ...mp };
+  const installMatrix: InstallMatrixRow[] = matrixParts.map(mp => {
+    const row: InstallMatrixRow = { ...mp, total: 0 };
     let total = 0;
     lineIds.forEach(lId => {
       let qty = 0;
