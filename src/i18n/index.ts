@@ -45,9 +45,28 @@ export interface ControlsTranslations {
   clickStatusHint: string;
 }
 
+export interface SidebarTranslations {
+  operations: string;
+  toolingSetup: string;
+  settings: string;
+  shotEntry: string;
+  tvDashboard: string;
+  partReplacement: string;
+  dieAndPartMaster: string;
+  systemSettings: string;
+}
+
+export interface HeaderTranslations {
+  subtitle: string;
+  liveStatus: string;
+  hmiStatus: string;
+}
+
 export interface Dictionary {
   table: TableTranslations;
   controls: ControlsTranslations;
+  sidebar: SidebarTranslations;
+  header: HeaderTranslations;
 }
 
 export const TRANSLATIONS: Record<'EN' | 'TH' | 'KO', Dictionary> = {
@@ -94,6 +113,21 @@ export const TRANSLATIONS: Record<'EN' | 'TH' | 'KO', Dictionary> = {
       overLife: 'OVER LIFE',
       missing: 'MISSING',
       clickStatusHint: 'Click STATUS button for detailed part breakdown and maintenance advice'
+    },
+    sidebar: {
+      operations: 'OPERATIONS',
+      toolingSetup: 'TOOLING SETUP',
+      settings: 'SETTINGS',
+      shotEntry: 'Shot Entry',
+      tvDashboard: 'TV Dashboard',
+      partReplacement: 'Part Replacement',
+      dieAndPartMaster: 'Die & Part Master',
+      systemSettings: 'System Settings'
+    },
+    header: {
+      subtitle: 'FIN DIE SHOT & LIFETIME MONITOR',
+      liveStatus: 'LIVE ONLINE',
+      hmiStatus: 'HMI ACTIVE'
     }
   },
   TH: {
@@ -129,7 +163,7 @@ export const TRANSLATIONS: Record<'EN' | 'TH' | 'KO', Dictionary> = {
       signal: 'สัญญาณ',
       alert: 'เตือนภัย',
       running: 'กำลังทำงาน',
-      idle: 'สแตนด์บาย',
+      idle: 'พักไลน์ / ไม่มีแผน',
       maintenance: 'ซ่อมบำรุง',
       stopped: 'หยุดทำงาน',
       normal: 'ปกติ',
@@ -139,6 +173,21 @@ export const TRANSLATIONS: Record<'EN' | 'TH' | 'KO', Dictionary> = {
       overLife: 'เกินอายุ',
       missing: 'ไม่มีมาตรฐาน',
       clickStatusHint: 'กดที่ปุ่ม STATUS เพื่อดูรายละเอียดสถานะและแจ้งเตือนของแต่ละชิ้นส่วน'
+    },
+    sidebar: {
+      operations: 'การทำงาน',
+      toolingSetup: 'ตั้งค่าแม่พิมพ์',
+      settings: 'ตั้งค่าระบบ',
+      shotEntry: 'บันทึกช็อต',
+      tvDashboard: 'มอนิเตอร์ช็อต',
+      partReplacement: 'เปลี่ยนอะไหล่ & ผัง 2D',
+      dieAndPartMaster: 'จัดการแม่พิมพ์/อะไหล่',
+      systemSettings: 'ตั้งค่าระบบ'
+    },
+    header: {
+      subtitle: 'ระบบควบคุมช็อตแม่พิมพ์และอายุการใช้งาน',
+      liveStatus: 'ออนไลน์สด',
+      hmiStatus: 'HMI ทำงานอยู่'
     }
   },
   KO: {
@@ -184,6 +233,21 @@ export const TRANSLATIONS: Record<'EN' | 'TH' | 'KO', Dictionary> = {
       overLife: '수명 초과',
       missing: '기준 없음',
       clickStatusHint: '상태 버튼을 클릭하여 세부 정보 및 유지보수 권장사항을 확인하세요'
+    },
+    sidebar: {
+      operations: '운영',
+      toolingSetup: '금형 설정',
+      settings: '시스템 설정',
+      shotEntry: '타수 입력',
+      tvDashboard: 'TV 대시보드',
+      partReplacement: '부품 교체 및 2D 도면',
+      dieAndPartMaster: '금형 및 부품 마스터',
+      systemSettings: '시스템 설정'
+    },
+    header: {
+      subtitle: '핀 다이 타수 및 수명 모니터링 시스템',
+      liveStatus: '실시간 온라인',
+      hmiStatus: 'HMI 활성'
     }
   }
 };
@@ -193,3 +257,14 @@ export const getI18n = (lang: LanguageCode = 'EN'): Dictionary => {
   if (lang === 'KO') return TRANSLATIONS.KO;
   return TRANSLATIONS.EN;
 };
+
+export function formatLineName(lineId: string, lang: LanguageCode): string {
+  const lineNum = lineId.startsWith('E3') ? 'E3' : lineId;
+  if (lang === 'KO') {
+    return `라인 ${lineNum}`;
+  }
+  if (lang === 'TH') {
+    return `ไลน์ ${lineNum}`;
+  }
+  return `Line ${lineNum}`;
+}

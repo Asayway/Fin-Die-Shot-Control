@@ -42,6 +42,7 @@ import { formatShots } from '../services/calculationService';
 import { LineFilterSelector } from '../components/common/LineFilterSelector';
 import { InteractiveDieLayoutView } from './InteractiveDieLayoutView';
 import { ErrorBoundary } from '../components/common/ErrorBoundary';
+import { exportReplacementHistoryExcel } from '../utils/excelExport';
 
 interface ReplacementEntryViewProps {
   initialLineId?: ProductionLineId;
@@ -480,21 +481,21 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {/* Integrated Top Header Card & Line + Tabs Navigation (Sticky Locked at Top) */}
-      <div id="replacement-header" className="sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-xl p-3 sm:p-4 space-y-3 shadow-2xl">
+      <div id="replacement-header" className="sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-lg p-2.5 sm:p-3 space-y-2 shadow-xl">
         {/* Row 1: Title & Line Selector Pills */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-2 border-b border-slate-800/80">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 pb-1.5 border-b border-slate-800/80">
           <div>
-            <div className="flex items-center gap-2">
-              <span className="p-1.5 bg-cyan-500/10 text-cyan-400 rounded-lg border border-cyan-500/20">
-                <Wrench className="w-4 h-4" />
+            <div className="flex items-center gap-1.5">
+              <span className="p-1 bg-cyan-500/10 text-cyan-400 rounded border border-cyan-500/20">
+                <Wrench className="w-3.5 h-3.5" />
               </span>
-              <h1 className="text-base sm:text-lg font-bold text-white tracking-tight">
+              <h1 className="text-sm sm:text-base font-bold text-white tracking-tight">
                 Part Replacement & 2D Layout
               </h1>
             </div>
-            <p className="text-xs text-slate-400 mt-0.5 font-thai">
+            <p className="text-[11px] text-slate-400 font-thai">
               บันทึกเปลี่ยนอะไหล่แม่พิมพ์และดูผัง 2D
             </p>
           </div>
@@ -509,13 +510,13 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
 
         {/* Row 2: Navigation Tabs */}
         <div className="flex items-center justify-between pt-0.5">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
               id="tab-layout"
               onClick={() => setActiveTab('layout')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all border ${
+              className={`px-2.5 py-1 rounded text-xs font-bold flex items-center gap-1.5 transition-all border ${
                 activeTab === 'layout'
-                  ? 'bg-cyan-500 text-slate-950 border-cyan-400 font-bold shadow'
+                  ? 'bg-cyan-500 text-slate-950 border-cyan-400 font-bold shadow-sm'
                   : 'bg-slate-950 text-slate-400 hover:text-white border-slate-800'
               }`}
             >
@@ -525,9 +526,9 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
             <button
               id="tab-entry"
               onClick={() => setActiveTab('entry')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all border ${
+              className={`px-2.5 py-1 rounded text-xs font-bold flex items-center gap-1.5 transition-all border ${
                 activeTab === 'entry'
-                  ? 'bg-cyan-500 text-slate-950 border-cyan-400 font-bold shadow'
+                  ? 'bg-cyan-500 text-slate-950 border-cyan-400 font-bold shadow-sm'
                   : 'bg-slate-950 text-slate-400 hover:text-white border-slate-800'
               }`}
             >
@@ -537,9 +538,9 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
             <button
               id="tab-drafts"
               onClick={() => setActiveTab('drafts')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all border ${
+              className={`px-2.5 py-1 rounded text-xs font-bold flex items-center gap-1.5 transition-all border ${
                 activeTab === 'drafts'
-                  ? 'bg-cyan-500 text-slate-950 border-cyan-400 font-bold shadow'
+                  ? 'bg-cyan-500 text-slate-950 border-cyan-400 font-bold shadow-sm'
                   : 'bg-slate-950 text-slate-400 hover:text-white border-slate-800'
               }`}
             >
@@ -549,9 +550,9 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
             <button
               id="tab-history"
               onClick={() => setActiveTab('history')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all border ${
+              className={`px-2.5 py-1 rounded text-xs font-bold flex items-center gap-1.5 transition-all border ${
                 activeTab === 'history'
-                  ? 'bg-cyan-500 text-slate-950 border-cyan-400 font-bold shadow'
+                  ? 'bg-cyan-500 text-slate-950 border-cyan-400 font-bold shadow-sm'
                   : 'bg-slate-950 text-slate-400 hover:text-white border-slate-800'
               }`}
             >
@@ -561,9 +562,9 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
           </div>
 
           {activeDraftId && activeTab === 'entry' && (
-            <span className="text-[11px] px-2.5 py-1 bg-amber-500/10 text-amber-300 border border-amber-500/30 rounded-full font-mono flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-              Editing Draft: {activeDraftId}
+            <span className="text-[10px] px-2 py-0.5 bg-amber-500/10 text-amber-300 border border-amber-500/30 rounded-full font-mono flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+              Draft: {activeDraftId}
             </span>
           )}
         </div>
@@ -572,7 +573,7 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
       {/* Notification Banner */}
       {notification && (
         <div 
-          className={`p-4 rounded-lg text-sm flex items-center justify-between gap-3 animate-fadeIn ${
+          className={`p-2.5 rounded-lg text-xs flex items-center justify-between gap-2.5 animate-fadeIn ${
             notification.type === 'success'
               ? 'bg-emerald-950/80 border border-emerald-600 text-emerald-300'
               : notification.type === 'warning'
@@ -580,19 +581,19 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
               : 'bg-rose-950/80 border border-rose-600 text-rose-300'
           }`}
         >
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
             {notification.type === 'success' ? (
-              <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-emerald-400" />
+              <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-400" />
             ) : notification.type === 'warning' ? (
-              <AlertTriangle className="w-5 h-5 flex-shrink-0 text-amber-400" />
+              <AlertTriangle className="w-4 h-4 flex-shrink-0 text-amber-400" />
             ) : (
-              <AlertCircle className="w-5 h-5 flex-shrink-0 text-rose-400" />
+              <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-400" />
             )}
             <span>{notification.message}</span>
           </div>
           <button 
             onClick={() => setNotification(null)}
-            className="text-slate-400 hover:text-white text-xs px-2 py-1 rounded bg-black/20"
+            className="text-slate-400 hover:text-white text-[11px] px-1.5 py-0.5 rounded bg-black/20"
           >
             Dismiss
           </button>
@@ -608,42 +609,42 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
 
       {/* TAB 1: NEW REPLACEMENT ENTRY */}
       {activeTab === 'entry' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5">
           {/* Main Entry Form (Col 8) */}
-          <div className="lg:col-span-8 bg-slate-900 border border-slate-800 rounded-lg p-6 space-y-6">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div className="lg:col-span-8 bg-slate-900 border border-slate-800 rounded-lg p-3 sm:p-3.5 space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
               <div>
-                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <h2 className="text-sm font-bold text-white flex items-center gap-1.5">
                   <span>Replacement Transaction Form</span>
-                  <span className="text-xs px-2 py-0.5 bg-slate-800 text-cyan-400 rounded font-mono">
+                  <span className="text-[10px] px-1.5 py-0.5 bg-slate-800 text-cyan-400 rounded font-mono">
                     Line {selectedLineId}
                   </span>
                 </h2>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-[11px] text-slate-400 mt-0.5">
                   Die Code: <span className="font-mono text-slate-200">{lineData?.activeConfig?.dieCode || 'N/A'}</span> • Active Config: <span className="font-mono text-slate-200">{lineData?.activeConfig?.id || 'Slot 1'}</span>
                 </p>
               </div>
             </div>
 
-            <form onSubmit={e => { e.preventDefault(); handleOpenPreview(); }} className="space-y-6">
+            <form onSubmit={e => { e.preventDefault(); handleOpenPreview(); }} className="space-y-3">
               {/* Section 1: Tooling Identification */}
-              <div className="space-y-4">
-                <h3 className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Hash className="w-4 h-4" />
+              <div className="space-y-2">
+                <h3 className="text-[11px] font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1">
+                  <Hash className="w-3.5 h-3.5" />
                   1. Tooling Component & Stage Identification
                 </h3>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {/* Part Selection */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
                       Tooling Part Code & Name <span className="text-rose-400">*</span>
                     </label>
                     <select
                       id="select-part-code"
                       value={selectedPartCode}
                       onChange={e => handlePartChange(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 font-mono focus:border-cyan-500 focus:outline-none"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-md px-2.5 py-1.5 text-xs text-slate-100 font-mono focus:border-cyan-500 focus:outline-none"
                     >
                       {lineData?.items.map(item => (
                         <option key={item.slotId} value={item.partCode}>
@@ -655,37 +656,37 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
 
                   {/* Stage Name (Readonly) */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
                       Station / Stage Name
                     </label>
                     <input
                       type="text"
                       readOnly
                       value={selectedItem ? `${selectedItem.stagePunchDie} (Slot ${selectedItem.slotId})` : 'N/A'}
-                      className="w-full bg-slate-950/70 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-400 font-mono"
+                      className="w-full bg-slate-950/70 border border-slate-800 rounded-md px-2.5 py-1.5 text-xs text-slate-400 font-mono"
                     />
                   </div>
                 </div>
               </div>
 
               {/* Section 2: Replacement Scope & Quantities */}
-              <div className="space-y-4 pt-2 border-t border-slate-800/80">
-                <h3 className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Layers className="w-4 h-4" />
+              <div className="space-y-2 pt-2 border-t border-slate-800/80">
+                <h3 className="text-[11px] font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1">
+                  <Layers className="w-3.5 h-3.5" />
                   2. Replacement Scope & Quantities
                 </h3>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                   {/* Replacement Type */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
                       Replacement Type <span className="text-rose-400">*</span>
                     </label>
                     <select
                       id="select-replacement-type"
                       value={replacementType}
                       onChange={e => handleReplacementTypeChange(e.target.value as ReplacementType)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:border-cyan-500 focus:outline-none"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-md px-2.5 py-1.5 text-xs text-slate-100 focus:border-cyan-500 focus:outline-none"
                     >
                       {REPLACEMENT_TYPES.map(t => (
                         <option key={t} value={t}>{t}</option>
@@ -695,14 +696,14 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
 
                   {/* Full Set vs Partial */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
                       Scope (Full Set vs Partial) <span className="text-rose-400">*</span>
                     </label>
-                    <div className="grid grid-cols-2 gap-1 bg-slate-950 p-1 rounded-lg border border-slate-700">
+                    <div className="grid grid-cols-2 gap-1 bg-slate-950 p-0.5 rounded-md border border-slate-700">
                       <button
                         type="button"
                         onClick={() => setFullSetOrPartial('FULL_SET')}
-                        className={`py-1.5 text-xs font-semibold rounded text-center transition-colors ${
+                        className={`py-1 text-xs font-semibold rounded text-center transition-colors ${
                           fullSetOrPartial === 'FULL_SET'
                             ? 'bg-cyan-500 text-slate-950 font-bold'
                             : 'text-slate-400 hover:text-white'
@@ -713,7 +714,7 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                       <button
                         type="button"
                         onClick={() => setFullSetOrPartial('PARTIAL')}
-                        className={`py-1.5 text-xs font-semibold rounded text-center transition-colors ${
+                        className={`py-1 text-xs font-semibold rounded text-center transition-colors ${
                           fullSetOrPartial === 'PARTIAL'
                             ? 'bg-amber-500 text-slate-950 font-bold'
                             : 'text-slate-400 hover:text-white'
@@ -726,7 +727,7 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
 
                   {/* Position Numbers */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
                       Position Numbers {fullSetOrPartial === 'PARTIAL' && <span className="text-rose-400">*</span>}
                     </label>
                     <input
@@ -734,9 +735,9 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                       type="text"
                       value={position}
                       onChange={e => setPosition(e.target.value)}
-                      placeholder={fullSetOrPartial === 'PARTIAL' ? 'ระบุตำแหน่ง เช่น แถว 1 ช่อง 1-10' : 'ทั้งหมด (ALL)'}
+                      placeholder={fullSetOrPartial === 'PARTIAL' ? 'เช่น แถว 1 ช่อง 1-10' : 'ทั้งหมด (ALL)'}
                       disabled={fullSetOrPartial === 'FULL_SET'}
-                      className={`w-full bg-slate-950 border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none ${
+                      className={`w-full bg-slate-950 border rounded-md px-2.5 py-1.5 text-xs font-mono focus:outline-none ${
                         fullSetOrPartial === 'PARTIAL'
                           ? 'border-amber-500/60 text-amber-200 focus:border-amber-400'
                           : 'border-slate-800 text-slate-400'
@@ -744,30 +745,30 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                       required={fullSetOrPartial === 'PARTIAL'}
                     />
                     {fullSetOrPartial === 'PARTIAL' && (
-                      <p className="text-[11px] text-amber-400 mt-1 font-thai">
+                      <p className="text-[10px] text-amber-400 mt-0.5 font-thai">
                         * กฎข้อ 5: เปลี่ยนบางส่วนต้องระบุเลขตำแหน่ง / แถวที่เปลี่ยน
                       </p>
                     )}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {/* Installed Qty */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
                       Installed Quantity in Die (EA)
                     </label>
                     <input
                       type="number"
                       readOnly
                       value={installedQuantity}
-                      className="w-full bg-slate-950/70 border border-slate-800 rounded-lg px-3 py-2 text-sm font-mono text-slate-300 font-bold"
+                      className="w-full bg-slate-950/70 border border-slate-800 rounded-md px-2.5 py-1.5 text-xs font-mono text-slate-300 font-bold"
                     />
                   </div>
 
                   {/* Changed Qty */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
                       Changed / Replaced Quantity (EA) <span className="text-rose-400">*</span>
                     </label>
                     <input
@@ -777,7 +778,7 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                       max={installedQuantity}
                       value={changedQuantity}
                       onChange={e => setChangedQuantity(parseInt(e.target.value, 10) || 1)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm font-mono text-cyan-300 font-bold focus:border-cyan-500 focus:outline-none"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-md px-2.5 py-1.5 text-xs font-mono text-cyan-300 font-bold focus:border-cyan-500 focus:outline-none"
                       required
                     />
                   </div>
@@ -785,14 +786,14 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
 
                 {/* Full Set Quantity Mismatch Warning / Supervisor Override */}
                 {fullSetOrPartial === 'FULL_SET' && changedQuantity !== installedQuantity && (
-                  <div className="p-4 bg-amber-950/60 border border-amber-600/80 rounded-lg space-y-3 animate-fadeIn">
-                    <div className="flex items-center gap-2 text-amber-300 font-semibold text-xs">
-                      <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                      <span>Quantity Mismatch Rule (Rule 8 & 9): Full set replacement requested but changed qty ({changedQuantity}) ≠ installed qty ({installedQuantity})</span>
+                  <div className="p-2.5 bg-amber-950/60 border border-amber-600/80 rounded-md space-y-2 animate-fadeIn">
+                    <div className="flex items-center gap-1.5 text-amber-300 font-semibold text-xs">
+                      <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span>Quantity Mismatch: Full set requested but changed ({changedQuantity}) ≠ installed ({installedQuantity})</span>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-xs font-bold text-amber-200 mb-1">
+                        <label className="block text-[10px] font-bold text-amber-200 mb-0.5">
                           Mismatch Justification Reason <span className="text-rose-400">*</span>
                         </label>
                         <input
@@ -800,12 +801,12 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                           value={quantityMismatchReason}
                           onChange={e => setQuantityMismatchReason(e.target.value)}
                           placeholder="ระบุเหตุผลที่จำนวนไม่ตรง..."
-                          className="w-full bg-slate-950 border border-amber-500/60 rounded px-3 py-1.5 text-xs text-amber-100 focus:border-amber-400 focus:outline-none"
+                          className="w-full bg-slate-950 border border-amber-500/60 rounded px-2 py-1 text-xs text-amber-100 focus:border-amber-400 focus:outline-none"
                           required
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-bold text-amber-200 mb-1">
+                        <label className="block text-[10px] font-bold text-amber-200 mb-0.5">
                           Supervisor Approval Override <span className="text-rose-400">*</span>
                         </label>
                         <input
@@ -813,7 +814,7 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                           value={quantityMismatchApprovedBy}
                           onChange={e => setQuantityMismatchApprovedBy(e.target.value)}
                           placeholder="ชื่อผู้อนุมัติ..."
-                          className="w-full bg-slate-950 border border-amber-500/60 rounded px-3 py-1.5 text-xs text-amber-100 focus:border-amber-400 focus:outline-none"
+                          className="w-full bg-slate-950 border border-amber-500/60 rounded px-2 py-1 text-xs text-amber-100 focus:border-amber-400 focus:outline-none"
                           required
                         />
                       </div>
@@ -823,16 +824,16 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
               </div>
 
               {/* Section 3: Machine & Part Meter Tracking (Rules 1, 3, 4) */}
-              <div className="space-y-4 pt-2 border-t border-slate-800/80">
-                <h3 className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Clock className="w-4 h-4" />
+              <div className="space-y-2 pt-2 border-t border-slate-800/80">
+                <h3 className="text-[11px] font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5" />
                   3. Machine Shot Meter & Removed Part History
                 </h3>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {/* Machine Shot at Replacement */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
                       Machine Shot at Replacement <span className="text-rose-400">*</span>
                     </label>
                     <input
@@ -841,59 +842,59 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                       value={machineShotAtReplacement}
                       onChange={e => setMachineShotAtReplacement(parseInt(e.target.value, 10) || 0)}
                       onFocus={(e) => e.target.select()}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm font-mono text-cyan-300 font-bold focus:border-cyan-500 focus:outline-none"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-md px-2.5 py-1.5 text-xs font-mono text-cyan-300 font-bold focus:border-cyan-500 focus:outline-none"
                       required
                     />
-                    <p className="text-[11px] text-slate-400 mt-1">
+                    <p className="text-[10px] text-slate-400 mt-0.5">
                       Fin Press Meter: {formatShots(lineData?.machineShotTotal || 0)}
                     </p>
                   </div>
 
                   {/* Removed Part Used Shot */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
                       Removed Part Used Shot (Preserved)
                     </label>
                     <input
                       type="number"
                       readOnly
                       value={removedPartUsedShot}
-                      className="w-full bg-slate-950/70 border border-slate-800 rounded-lg px-3 py-2 text-sm font-mono text-amber-300 font-bold"
+                      className="w-full bg-slate-950/70 border border-slate-800 rounded-md px-2.5 py-1.5 text-xs font-mono text-amber-300 font-bold"
                     />
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      * กฎข้อ 3: เก็บบันทึกประวัติช็อตสะสมเดิมไว้ถาวร
+                    <p className="text-[10px] text-slate-400 mt-0.5">
+                      * บันทึกประวัติช็อตสะสมเดิมไว้ถาวร
                     </p>
                   </div>
 
                   {/* Removed Part Regrind Count */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
                       Removed Part Regrind Count
                     </label>
                     <input
                       type="number"
                       readOnly
                       value={removedPartRegrindCount}
-                      className="w-full bg-slate-950/70 border border-slate-800 rounded-lg px-3 py-2 text-sm font-mono text-slate-300"
+                      className="w-full bg-slate-950/70 border border-slate-800 rounded-md px-2.5 py-1.5 text-xs font-mono text-slate-300"
                     />
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      Max Allowed: {matchedRegrindStd?.maxRegrindCount || 4} cycles
+                    <p className="text-[10px] text-slate-400 mt-0.5">
+                      Max: {matchedRegrindStd?.maxRegrindCount || 4} cycles
                     </p>
                   </div>
                 </div>
               </div>
 
               {/* Section 4: Traceability, Lots, Work Order & Personnel */}
-              <div className="space-y-4 pt-2 border-t border-slate-800/80">
-                <h3 className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <UserCheck className="w-4 h-4" />
+              <div className="space-y-2 pt-2 border-t border-slate-800/80">
+                <h3 className="text-[11px] font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1">
+                  <UserCheck className="w-3.5 h-3.5" />
                   4. Traceability, Work Order & Personnel
                 </h3>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                   {/* New Part Lot Number */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
                       New Part Lot Number <span className="text-rose-400">*</span>
                     </label>
                     <input
@@ -902,44 +903,44 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                       value={newPartLotNumber}
                       onChange={e => setNewPartLotNumber(e.target.value)}
                       placeholder="ระบุเลขล็อตอะไหล่..."
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm font-mono text-slate-100 focus:border-cyan-500 focus:outline-none"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-md px-2.5 py-1.5 text-xs font-mono text-slate-100 focus:border-cyan-500 focus:outline-none"
                       required
                     />
                   </div>
 
                   {/* New Part Serial Number */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">
-                      New Part Serial No. (If applicable)
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      New Part Serial No.
                     </label>
                     <input
                       type="text"
                       value={newPartSerialNumber}
                       onChange={e => setNewPartSerialNumber(e.target.value)}
                       placeholder="ระบุ Serial No..."
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm font-mono text-slate-100 focus:border-cyan-500 focus:outline-none"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-md px-2.5 py-1.5 text-xs font-mono text-slate-100 focus:border-cyan-500 focus:outline-none"
                     />
                   </div>
 
                   {/* Replacement Date & Time */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
                       Replacement Date & Time <span className="text-rose-400">*</span>
                     </label>
                     <input
                       type="datetime-local"
                       value={replacementDateTime}
                       onChange={e => setReplacementDateTime(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:border-cyan-500 focus:outline-none"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-md px-2.5 py-1.5 text-xs text-slate-100 focus:border-cyan-500 focus:outline-none"
                       required
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {/* Work Order Number */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
                       Work Order Number <span className="text-rose-400">*</span>
                     </label>
                     <input
@@ -948,35 +949,37 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                       value={workOrderNumber}
                       onChange={e => setWorkOrderNumber(e.target.value)}
                       placeholder="ระบุเลข WO..."
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm font-mono text-slate-100 focus:border-cyan-500 focus:outline-none"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-md px-2.5 py-1.5 text-xs font-mono text-slate-100 focus:border-cyan-500 focus:outline-none"
                       required
                     />
                   </div>
 
                   {/* Changed By */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
                       Changed By (Technician) <span className="text-rose-400">*</span>
                     </label>
                     <input
                       type="text"
                       value={changedBy}
                       onChange={e => setChangedBy(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:border-cyan-500 focus:outline-none"
+                      placeholder="ชื่อช่างเทคนิค..."
+                      className="w-full bg-slate-950 border border-slate-700 rounded-md px-2.5 py-1.5 text-xs text-slate-100 focus:border-cyan-500 focus:outline-none"
                       required
                     />
                   </div>
 
                   {/* Verified By */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
                       Verified By (Lead / Supervisor) <span className="text-rose-400">*</span>
                     </label>
                     <input
                       type="text"
                       value={verifiedBy}
                       onChange={e => setVerifiedBy(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:border-cyan-500 focus:outline-none"
+                      placeholder="ชื่อหัวหน้างาน..."
+                      className="w-full bg-slate-950 border border-slate-700 rounded-md px-2.5 py-1.5 text-xs text-slate-100 focus:border-cyan-500 focus:outline-none"
                       required
                     />
                   </div>
@@ -984,13 +987,13 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
 
                 {/* Replacement Reason */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">
                     Replacement Reason <span className="text-rose-400">*</span>
                   </label>
                   <select
                     value={replacementReason}
                     onChange={e => setReplacementReason(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:border-cyan-500 focus:outline-none"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-md px-2.5 py-1.5 text-xs text-slate-100 focus:border-cyan-500 focus:outline-none"
                   >
                     <option value="Normal Preventive Life Limit Reached">Normal Preventive Life Limit Reached (ถึงเกณฑ์อายุการใช้งานตามแผน)</option>
                     <option value="Burr Height Exceeded Limit (>0.035mm)">Burr Height Exceeded Limit (ครีบเสี้ยนสูงเกินมาตรฐาน &gt;0.035mm)</option>
@@ -1003,17 +1006,17 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                 </div>
 
                 {/* Evidence Attachment & Note */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {/* File Upload / Attachment */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">
-                      Evidence Attachment (Inspection Sheet / Photo / WO)
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      Evidence Attachment (Photo / WO)
                     </label>
-                    <div className="border-2 border-dashed border-slate-700 hover:border-cyan-500/80 rounded-lg p-3 text-center bg-slate-950/50 transition-colors">
-                      <UploadCloud className="w-6 h-6 mx-auto text-slate-400 mb-1" />
+                    <div className="border border-dashed border-slate-700 hover:border-cyan-500/80 rounded-md p-2 text-center bg-slate-950/50 transition-colors">
+                      <UploadCloud className="w-5 h-5 mx-auto text-slate-400 mb-0.5" />
                       {evidenceFileName ? (
-                        <div className="flex items-center justify-center gap-2 text-xs text-cyan-300 font-mono">
-                          <span>{evidenceFileName}</span>
+                        <div className="flex items-center justify-center gap-1.5 text-xs text-cyan-300 font-mono">
+                          <span className="truncate max-w-[150px]">{evidenceFileName}</span>
                           <button
                             type="button"
                             onClick={() => setEvidenceFileName(null)}
@@ -1024,10 +1027,10 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                         </div>
                       ) : (
                         <label className="cursor-pointer">
-                          <span className="text-xs text-cyan-400 font-semibold hover:underline">
-                            Click to upload photo/sheet
+                          <span className="text-[11px] text-cyan-400 font-semibold hover:underline">
+                            Upload sheet/photo
                           </span>
-                          <span className="text-xs text-slate-400 block mt-0.5">
+                          <span className="text-[10px] text-slate-400 block">
                             PNG, JPG, PDF up to 10MB
                           </span>
                           <input
@@ -1046,29 +1049,29 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
 
                   {/* Note */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
                       Technician Remarks / Maintenance Note
                     </label>
                     <textarea
-                      rows={3}
+                      rows={2}
                       value={note}
                       onChange={e => setNote(e.target.value)}
                       placeholder="ระบุบันทึกซ่อมบำรุงเพิ่มเติม..."
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:border-cyan-500 focus:outline-none"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-md px-2.5 py-1.5 text-xs text-slate-100 focus:border-cyan-500 focus:outline-none"
                     />
                   </div>
                 </div>
               </div>
 
               {/* Submit Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
                 <button
                   type="button"
                   onClick={() => {
                     handlePartChange(selectedPartCode);
                     setNotification({ type: 'warning', message: 'Form reset to current line values.' });
                   }}
-                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-semibold transition-colors"
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-semibold transition-colors"
                 >
                   ล้างข้อมูล
                 </button>
@@ -1076,26 +1079,26 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                 <button
                   id="btn-open-preview"
                   type="submit"
-                  className="px-6 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-cyan-500/20 transition-all hover:scale-[1.01]"
+                  className="px-4 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded text-xs font-bold flex items-center gap-1.5 shadow-md shadow-cyan-500/20 transition-all active:scale-95"
                 >
-                  <Eye className="w-4 h-4" />
+                  <Eye className="w-3.5 h-3.5" />
                   ตรวจสอบก่อนบันทึก
-                  <ArrowRight className="w-4 h-4" />
+                  <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
             </form>
           </div>
 
           {/* Right Summary & Live Tooling Info Card (Col 4) */}
-          <div className="lg:col-span-4 space-y-5">
+          <div className="lg:col-span-4 space-y-2.5">
             {/* Live Part Status Card */}
-            <div className="bg-slate-900 border border-slate-800 rounded-lg p-5 space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <h3 className="font-bold text-white text-sm flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-cyan-400" />
+            <div className="bg-slate-900 border border-slate-800 rounded-lg p-3 space-y-2">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <h3 className="font-bold text-white text-xs flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
                   Current Active Tool State
                 </h3>
-                <span className={`text-[11px] px-2 py-0.5 rounded font-mono font-bold ${
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${
                   selectedItem?.alertStatus === 'CRITICAL' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40' :
                   selectedItem?.alertStatus === 'WARNING' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' :
                   'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
@@ -1104,69 +1107,69 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                 </span>
               </div>
 
-              <div className="space-y-3 text-xs">
-                <div className="flex justify-between items-center py-1 border-b border-slate-800/60">
-                  <span className="text-slate-400">Selected Component:</span>
-                  <span className="font-mono font-bold text-slate-200 text-right">{selectedItem?.partName}</span>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex justify-between items-center py-0.5 border-b border-slate-800/60">
+                  <span className="text-slate-400 text-[11px]">Selected Component:</span>
+                  <span className="font-mono font-bold text-slate-200 text-right text-[11px]">{selectedItem?.partName}</span>
                 </div>
-                <div className="flex justify-between items-center py-1 border-b border-slate-800/60">
-                  <span className="text-slate-400">Current Accumulated Shot:</span>
-                  <span className="font-mono font-bold text-amber-300">
+                <div className="flex justify-between items-center py-0.5 border-b border-slate-800/60">
+                  <span className="text-slate-400 text-[11px]">Accumulated Shot:</span>
+                  <span className="font-mono font-bold text-amber-300 text-[11px]">
                     {formatShots(selectedItem?.usedShot !== undefined ? selectedItem.usedShot : (selectedItem?.currentShot || 0))}
                   </span>
                 </div>
-                <div className="flex justify-between items-center py-1 border-b border-slate-800/60">
-                  <span className="text-slate-400">Life Limit:</span>
-                  <span className="font-mono text-slate-300">{formatShots(selectedItem?.lifeLimit || 0)} shots</span>
+                <div className="flex justify-between items-center py-0.5 border-b border-slate-800/60">
+                  <span className="text-slate-400 text-[11px]">Life Limit:</span>
+                  <span className="font-mono text-slate-300 text-[11px]">{formatShots(selectedItem?.lifeLimit || 0)}</span>
                 </div>
-                <div className="flex justify-between items-center py-1 border-b border-slate-800/60">
-                  <span className="text-slate-400">Life Consumed:</span>
-                  <span className="font-mono font-bold text-cyan-400">{selectedItem?.usagePercent || 0}%</span>
+                <div className="flex justify-between items-center py-0.5 border-b border-slate-800/60">
+                  <span className="text-slate-400 text-[11px]">Life Consumed:</span>
+                  <span className="font-mono font-bold text-cyan-400 text-[11px]">{selectedItem?.usagePercent || 0}%</span>
                 </div>
-                <div className="flex justify-between items-center py-1 border-b border-slate-800/60">
-                  <span className="text-slate-400">Remaining Life:</span>
-                  <span className="font-mono text-slate-300">{formatShots(selectedItem?.remainingShot || 0)} shots</span>
+                <div className="flex justify-between items-center py-0.5 border-b border-slate-800/60">
+                  <span className="text-slate-400 text-[11px]">Remaining:</span>
+                  <span className="font-mono text-slate-300 text-[11px]">{formatShots(selectedItem?.remainingShot || 0)}</span>
                 </div>
-                <div className="flex justify-between items-center py-1 border-b border-slate-800/60">
-                  <span className="text-slate-400">Current Regrind Cycle:</span>
-                  <span className="font-mono text-slate-200">{selectedItem?.regrindCount || 0} / {matchedRegrindStd?.maxRegrindCount || 4} cycles</span>
+                <div className="flex justify-between items-center py-0.5 border-b border-slate-800/60">
+                  <span className="text-slate-400 text-[11px]">Regrind Cycle:</span>
+                  <span className="font-mono text-slate-200 text-[11px]">{selectedItem?.regrindCount || 0} / {matchedRegrindStd?.maxRegrindCount || 4}</span>
                 </div>
-                <div className="flex justify-between items-center py-1">
-                  <span className="text-slate-400">Warehouse Backup Stock:</span>
-                  <span className={`font-mono font-bold ${
+                <div className="flex justify-between items-center py-0.5">
+                  <span className="text-slate-400 text-[11px]">Stock Available:</span>
+                  <span className={`font-mono font-bold text-[11px] ${
                     (matchedStock?.currentStockQty || 0) < 10 ? 'text-rose-400' : 'text-emerald-400'
                   }`}>
-                    {matchedStock?.currentStockQty || 0} EA available
+                    {matchedStock?.currentStockQty || 0} EA
                   </span>
                 </div>
               </div>
             </div>
 
             {/* Standard Replacement Rules Checklist */}
-            <div className="bg-slate-900 border border-slate-800 rounded-lg p-5 space-y-3">
-              <h3 className="font-bold text-white text-sm flex items-center gap-2">
-                <ShieldAlert className="w-4 h-4 text-amber-400" />
-                Compliance & Quality Safeguards
+            <div className="bg-slate-900 border border-slate-800 rounded-lg p-3 space-y-2">
+              <h3 className="font-bold text-white text-xs flex items-center gap-1.5">
+                <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+                Safeguards & Compliance
               </h3>
-              <ul className="space-y-2 text-xs text-slate-300">
-                <li className="flex items-start gap-2">
-                  <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                  <span><strong>Rule 1 & 2:</strong> Used shots reset strictly upon approved replacement transaction.</span>
+              <ul className="space-y-1.5 text-[11px] text-slate-300">
+                <li className="flex items-start gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+                  <span><strong>Rule 1 & 2:</strong> Used shots reset strictly upon approved transaction.</span>
                 </li>
-                <li className="flex items-start gap-2">
-                  <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                  <span><strong>Rule 3 & 4:</strong> Removed part final shots and machine meter recorded permanently.</span>
+                <li className="flex items-start gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+                  <span><strong>Rule 3 & 4:</strong> Preserves removed part shots and machine meter permanently.</span>
                 </li>
-                <li className="flex items-start gap-2">
-                  <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                <li className="flex items-start gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
                   <span><strong>Rule 5 & 6:</strong> Partial replacements require station position tracking.</span>
                 </li>
-                <li className="flex items-start gap-2">
-                  <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                <li className="flex items-start gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
                   <span><strong>Rule 8 & 9:</strong> Full set replacement verifies changed qty vs die install qty.</span>
                 </li>
-                <li className="flex items-start gap-2">
-                  <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                <li className="flex items-start gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
                   <span><strong>Rule 10 & 11:</strong> Blocks scrapped lots or tools exceeding max regrind cycles.</span>
                 </li>
               </ul>
@@ -1177,24 +1180,24 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
 
       {/* TAB 2: AUDIT HISTORY */}
       {activeTab === 'history' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-lg p-5 space-y-4">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+        <div className="bg-slate-900 border border-slate-800 rounded-lg p-3 space-y-2.5">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 border-b border-slate-800 pb-2">
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                  <History className="w-5 h-5 text-cyan-400" />
+                <h2 className="text-sm font-bold text-white flex items-center gap-1.5">
+                  <History className="w-4 h-4 text-cyan-400" />
                   Replacement Audit Trail & Recent History
                 </h2>
-                <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-cyan-950 text-cyan-300 border border-cyan-800 font-mono">
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-cyan-950 text-cyan-300 border border-cyan-800 font-mono">
                   10 RECENT LOGS
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-1 font-thai">
+              <p className="text-[11px] text-slate-400 mt-0.5 font-thai">
                 ประวัติการเปลี่ยนชิ้นส่วนแม่พิมพ์ 10 รายการล่าสุดสำหรับอ้างอิงหน้างาน (Line {selectedLineId})
               </p>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <DateRangeFilter
                 startDate={historyStartDate}
                 endDate={historyEndDate}
@@ -1207,13 +1210,13 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
 
               {/* Search */}
               <div className="relative">
-                <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-slate-400" />
                 <input
                   type="text"
                   placeholder="ค้นหาอะไหล่/WO/ล็อต..."
                   value={historySearch}
                   onChange={e => setHistorySearch(e.target.value)}
-                  className="bg-slate-950 border border-slate-700 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-100 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
+                  className="bg-slate-950 border border-slate-700 rounded-md pl-8 pr-2.5 py-1 text-xs text-slate-100 placeholder-slate-500 focus:border-cyan-500 focus:outline-none w-36 sm:w-44"
                 />
               </div>
 
@@ -1221,20 +1224,28 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
               <select
                 value={historyTypeFilter}
                 onChange={e => setHistoryTypeFilter(e.target.value)}
-                className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-100 focus:border-cyan-500 focus:outline-none"
+                className="bg-slate-950 border border-slate-700 rounded-md px-2 py-1 text-xs text-slate-100 focus:border-cyan-500 focus:outline-none"
               >
                 <option value="ALL">All Types</option>
                 {REPLACEMENT_TYPES.map(t => (
                   <option key={t} value={t}>{t}</option>
                 ))}
               </select>
+
+              <button
+                onClick={() => exportReplacementHistoryExcel(filteredHistory, selectedLineId)}
+                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold flex items-center gap-1.5 transition-colors shadow-md"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Export Excel</span>
+              </button>
             </div>
           </div>
 
           {/* Single Source of Truth Notice Banner */}
-          <div className="p-3 bg-slate-950 border border-slate-800 rounded-lg flex items-center justify-between gap-3 text-xs text-slate-300 font-thai">
-            <div className="flex items-center gap-2">
-              <span className="flex h-2 w-2 rounded-full bg-cyan-400 animate-pulse"></span>
+          <div className="p-2 bg-slate-950 border border-slate-800 rounded-md flex items-center justify-between gap-2 text-[11px] text-slate-300 font-thai">
+            <div className="flex items-center gap-1.5">
+              <span className="flex h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
               <span>
                 แสดงประวัติล่าสุด <strong>10 รายการ</strong> เพื่อความสะดวกรวดเร็วหน้างาน • สำหรับประวัติย้อนหลังทั้งหมดและส่งออกรายงาน Excel ให้ไปที่เมนู <strong>Reports & Analytics</strong>
               </span>
@@ -1242,46 +1253,46 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
           </div>
 
           {/* Table */}
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto custom-scrollbar border border-slate-800 rounded-md">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="bg-slate-950 text-slate-400 font-mono border-b border-slate-800">
-                  <th className="p-3 text-center w-12">NO.</th>
-                  <th className="p-3">ID / Work Order</th>
-                  <th className="p-3">Component / Stage</th>
-                  <th className="p-3">Type & Scope</th>
-                  <th className="p-3 text-center">Changed Qty</th>
-                  <th className="p-3 text-right">Machine Shot</th>
-                  <th className="p-3 text-right">Removed Part Shot</th>
-                  <th className="p-3">New Lot / Serial</th>
-                  <th className="p-3">Date & Time</th>
-                  <th className="p-3 text-center">Status</th>
-                  <th className="p-3 text-center">Actions</th>
+                <tr className="bg-slate-950 text-slate-400 font-mono border-b border-slate-800 text-[11px]">
+                  <th className="py-2 px-2 text-center w-10">NO.</th>
+                  <th className="py-2 px-2.5">ID / Work Order</th>
+                  <th className="py-2 px-2.5">Component / Stage</th>
+                  <th className="py-2 px-2.5">Type & Scope</th>
+                  <th className="py-2 px-2 text-center">Changed Qty</th>
+                  <th className="py-2 px-2.5 text-right">Machine Shot</th>
+                  <th className="py-2 px-2.5 text-right">Removed Part Shot</th>
+                  <th className="py-2 px-2.5">New Lot / Serial</th>
+                  <th className="py-2 px-2.5">Date & Time</th>
+                  <th className="py-2 px-2 text-center">Status</th>
+                  <th className="py-2 px-2 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {filteredHistory.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="p-8 text-center text-slate-500">
+                    <td colSpan={11} className="p-6 text-center text-slate-500">
                       No replacement history records found for Line {selectedLineId}.
                     </td>
                   </tr>
                 ) : (
                   filteredHistory.slice(0, 10).map((rec, idx) => (
                     <tr key={rec.id} className="hover:bg-slate-800/40 transition-colors">
-                      <td className="p-3 text-center font-mono font-bold text-cyan-400/80">
+                      <td className="py-1.5 px-2 text-center font-mono font-bold text-cyan-400/80">
                         {idx + 1}
                       </td>
-                      <td className="p-3 font-mono">
+                      <td className="py-1.5 px-2.5 font-mono">
                         <span className="font-bold text-cyan-400 block">{rec.id}</span>
-                        <span className="text-[11px] text-slate-400">{rec.workOrderNumber || 'WO-N/A'}</span>
+                        <span className="text-[10px] text-slate-400">{rec.workOrderNumber || 'WO-N/A'}</span>
                       </td>
-                      <td className="p-3">
+                      <td className="py-1.5 px-2.5">
                         <span className="font-bold text-slate-200 block">{rec.partName}</span>
-                        <span className="text-[11px] text-slate-400 font-mono">{rec.partCode} ({rec.stageName})</span>
+                        <span className="text-[10px] text-slate-400 font-mono">{rec.partCode} ({rec.stageName})</span>
                       </td>
-                      <td className="p-3">
-                        <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-bold ${
+                      <td className="py-1.5 px-2.5">
+                        <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${
                           rec.replacementType === 'NEW PART' ? 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/20' :
                           rec.replacementType === 'RE-GROUND PART' ? 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/20' :
                           rec.replacementType === 'PARTIAL REPLACEMENT' ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20' :
@@ -1290,16 +1301,16 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                         }`}>
                           {rec.replacementType}
                         </span>
-                        <span className="text-[10px] text-slate-400 block mt-0.5 font-mono">Pos: {rec.position || 'ALL'}</span>
+                        <span className="text-[10px] text-slate-400 block font-mono">Pos: {rec.position || 'ALL'}</span>
                       </td>
-                      <td className="p-3 text-center font-mono">
+                      <td className="py-1.5 px-2 text-center font-mono">
                         <span className="font-bold text-slate-100">{rec.changedQuantity || rec.replacedQty}</span>
                         <span className="text-slate-500 text-[10px] block">/ {rec.installedQuantity || rec.installQtyTotal || rec.changedQuantity} EA</span>
                       </td>
-                      <td className="p-3 text-right font-mono font-bold text-cyan-300">
+                      <td className="py-1.5 px-2.5 text-right font-mono font-bold text-cyan-300">
                         {formatShots(rec.machineShotAtReplacement || rec.shotAtReplacement || 0)}
                       </td>
-                      <td className="p-3 text-right font-mono">
+                      <td className="py-1.5 px-2.5 text-right font-mono">
                         <span className="font-bold text-amber-300 block">
                           {formatShots(rec.removedPartUsedShot !== undefined ? rec.removedPartUsedShot : (rec.partAccumulatedShots || 0))}
                         </span>
@@ -1307,17 +1318,17 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                           Cycle: {rec.removedPartRegrindCount || rec.regrindCycleCount || 0}
                         </span>
                       </td>
-                      <td className="p-3 font-mono text-xs">
+                      <td className="py-1.5 px-2.5 font-mono text-xs">
                         <span className="text-slate-300 block">{rec.newPartLotNumber || '-'}</span>
                         {rec.newPartSerialNumber && (
-                          <span className="text-[11px] text-slate-400">SN: {rec.newPartSerialNumber}</span>
+                          <span className="text-[10px] text-slate-400">SN: {rec.newPartSerialNumber}</span>
                         )}
                       </td>
-                      <td className="p-3 text-slate-300 text-xs">
+                      <td className="py-1.5 px-2.5 text-slate-300 text-xs">
                         {rec.replacementDateTime || rec.replacementDate || rec.timestamp}
                       </td>
-                      <td className="p-3 text-center">
-                        <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-bold ${
+                      <td className="py-1.5 px-2 text-center">
+                        <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${
                           rec.approvalStatus === 'APPROVED' || rec.approvalStatus === 'COMPLETED'
                             ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                             : rec.approvalStatus === 'SUBMITTED' || rec.approvalStatus === 'PENDING'
@@ -1327,11 +1338,11 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                           {rec.approvalStatus}
                         </span>
                       </td>
-                      <td className="p-3 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
+                      <td className="py-1.5 px-2 text-center">
+                        <div className="flex items-center justify-center gap-1">
                           <button
                             onClick={() => setInspectModalRecord(rec)}
-                            className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors"
+                            className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors"
                             title="View Full Details"
                           >
                             <Eye className="w-3.5 h-3.5" />
@@ -1339,7 +1350,7 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                           {(rec.approvalStatus === 'SUBMITTED' || rec.approvalStatus === 'PENDING') && currentUser.role !== 'OPERATOR' && (
                             <button
                               onClick={() => handleApproveRecord(rec.id)}
-                              className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[11px] font-bold transition-colors"
+                              className="px-1.5 py-0.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-bold transition-colors"
                               title="Approve & Apply"
                             >
                               Approve
@@ -1358,51 +1369,51 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
 
       {/* TAB 3: DRAFTS */}
       {activeTab === 'drafts' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-lg p-5 space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <Save className="w-5 h-5 text-amber-400" />
+        <div className="bg-slate-900 border border-slate-800 rounded-lg p-3 space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+            <h2 className="text-sm font-bold text-white flex items-center gap-1.5">
+              <Save className="w-4 h-4 text-amber-400" />
               Saved Replacement Drafts
             </h2>
-            <span className="text-xs text-slate-400">{drafts.length} drafts stored in local cache</span>
+            <span className="text-xs text-slate-400">{drafts.length} drafts stored</span>
           </div>
 
           {drafts.length === 0 ? (
-            <div className="p-12 text-center text-slate-500 space-y-2">
-              <FileText className="w-10 h-10 mx-auto text-slate-600 mb-2" />
-              <p>No replacement drafts currently saved.</p>
+            <div className="p-8 text-center text-slate-500 space-y-2">
+              <FileText className="w-8 h-8 mx-auto text-slate-600 mb-1" />
+              <p className="text-xs">No replacement drafts currently saved.</p>
               <button
                 onClick={() => setActiveTab('entry')}
-                className="px-4 py-2 bg-cyan-500 text-slate-950 rounded-lg text-xs font-bold"
+                className="px-3 py-1.5 bg-cyan-500 text-slate-950 rounded text-xs font-bold"
               >
                 Create New Replacement
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
               {drafts.map(d => (
-                <div key={d.id} className="bg-slate-950 border border-slate-800 rounded-lg p-4 space-y-3 hover:border-slate-700 transition-all">
+                <div key={d.id} className="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-2 hover:border-slate-700 transition-all">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-mono font-bold text-cyan-400">{d.id}</span>
                     <span className="text-[10px] text-slate-500">{d.updatedAt?.substring(0, 16)}</span>
                   </div>
-                  <div className="text-xs space-y-1">
+                  <div className="text-xs space-y-0.5">
                     <p className="text-slate-200 font-semibold">{d.partCode} ({d.lineId})</p>
-                    <p className="text-slate-400">Type: <span className="text-slate-300">{d.replacementType}</span></p>
-                    <p className="text-slate-400">Scope: <span className="text-slate-300">{d.fullSetOrPartial} (Qty: {d.changedQuantity})</span></p>
-                    <p className="text-slate-400">WO: <span className="font-mono text-slate-300">{d.workOrderNumber || 'N/A'}</span></p>
+                    <p className="text-slate-400 text-[11px]">Type: <span className="text-slate-300">{d.replacementType}</span></p>
+                    <p className="text-slate-400 text-[11px]">Scope: <span className="text-slate-300">{d.fullSetOrPartial} (Qty: {d.changedQuantity})</span></p>
+                    <p className="text-slate-400 text-[11px]">WO: <span className="font-mono text-slate-300">{d.workOrderNumber || 'N/A'}</span></p>
                   </div>
-                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                  <div className="flex items-center justify-end gap-1.5 pt-1.5 border-t border-slate-800">
                     <button
                       onClick={() => handleDeleteDraft(d.id)}
-                      className="p-1.5 text-rose-400 hover:bg-rose-950/40 rounded transition-colors"
+                      className="p-1 text-rose-400 hover:bg-rose-950/40 rounded transition-colors"
                       title="Delete Draft"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={() => handleLoadDraft(d)}
-                      className="px-3 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded text-xs font-bold transition-colors"
+                      className="px-2.5 py-1 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded text-xs font-bold transition-colors"
                     >
                       Load into Form
                     </button>
@@ -1416,31 +1427,31 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
 
       {/* MODAL 1: BEFORE AND AFTER PREVIEW MODAL */}
       {showPreviewModal && previewData && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-2xl w-full p-6 space-y-6 shadow-2xl animate-scaleIn">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3">
+          <div className="bg-slate-900 border border-slate-700 rounded-lg max-w-xl w-full p-4 space-y-3 shadow-2xl animate-scaleIn">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
               <div>
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                  <Eye className="w-5 h-5 text-cyan-400" />
+                <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                  <Eye className="w-4 h-4 text-cyan-400" />
                   Tooling Replacement Verification & Preview
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-[11px] text-slate-400 mt-0.5">
                   Confirm the changes before executing the replacement transaction.
                 </p>
               </div>
               <button
                 onClick={() => setShowPreviewModal(false)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800"
+                className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Warnings / Error notice */}
             {previewData.warnings && previewData.warnings.length > 0 && (
-              <div className="p-3 bg-amber-950/70 border border-amber-600/80 rounded-lg space-y-1">
+              <div className="p-2 bg-amber-950/70 border border-amber-600/80 rounded space-y-0.5">
                 {previewData.warnings.map((w: string, idx: number) => (
-                  <p key={idx} className="text-xs text-amber-200 flex items-center gap-1.5">
+                  <p key={idx} className="text-[11px] text-amber-200 flex items-center gap-1.5">
                     <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 text-amber-400" />
                     <span>{w}</span>
                   </p>
@@ -1449,29 +1460,29 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
             )}
 
             {/* Before vs After Comparison Card */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-2">
               {/* Before State */}
-              <div className="bg-slate-950 border border-slate-800 rounded-lg p-4 space-y-3">
-                <div className="text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-800 pb-2 flex items-center justify-between">
+              <div className="bg-slate-950 border border-slate-800 rounded p-2.5 space-y-2">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-800 pb-1 flex items-center justify-between">
                   <span>BEFORE REPLACEMENT</span>
                   <span className="text-rose-400">Current</span>
                 </div>
-                <div className="space-y-2 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Tool Accumulated Shot:</span>
+                <div className="space-y-1 text-xs">
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-slate-400">Accumulated Shot:</span>
                     <span className="font-mono font-bold text-amber-300">
                       {formatShots(previewData.before?.partUsedShot || 0)}
                     </span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between text-[11px]">
                     <span className="text-slate-400">Regrind Cycle:</span>
                     <span className="font-mono text-slate-200">{previewData.before?.partRegrindCount || 0}</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between text-[11px]">
                     <span className="text-slate-400">Warehouse Stock:</span>
                     <span className="font-mono text-slate-300">{previewData.before?.warehouseStockQty || 0} EA</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between text-[11px]">
                     <span className="text-slate-400">Alert Status:</span>
                     <span className="font-mono text-amber-400">{previewData.before?.partAlertStatus || 'NORMAL'}</span>
                   </div>
@@ -1479,26 +1490,26 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
               </div>
 
               {/* After State */}
-              <div className="bg-slate-950 border border-cyan-500/40 rounded-lg p-4 space-y-3 shadow-lg shadow-cyan-500/5">
-                <div className="text-xs font-bold text-cyan-400 uppercase tracking-wider border-b border-slate-800 pb-2 flex items-center justify-between">
+              <div className="bg-slate-950 border border-cyan-500/40 rounded p-2.5 space-y-2 shadow-sm">
+                <div className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider border-b border-slate-800 pb-1 flex items-center justify-between">
                   <span>AFTER REPLACEMENT</span>
-                  <span className="text-emerald-400 font-bold">New Life Cycle</span>
+                  <span className="text-emerald-400 font-bold">New Cycle</span>
                 </div>
-                <div className="space-y-2 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Tool Accumulated Shot:</span>
+                <div className="space-y-1 text-xs">
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-slate-400">Accumulated Shot:</span>
                     <span className="font-mono font-bold text-emerald-400">0 shots (Reset)</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Next Regrind Cycle:</span>
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-slate-400">Next Regrind:</span>
                     <span className="font-mono text-cyan-300 font-bold">{previewData.after?.partRegrindCount || 0}</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between text-[11px]">
                     <span className="text-slate-400">Warehouse Stock:</span>
                     <span className="font-mono text-cyan-300 font-bold">{previewData.after?.warehouseStockQty || 0} EA</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Preserved Old Shot:</span>
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-slate-400">Preserved Old:</span>
                     <span className="font-mono text-amber-300 font-bold">{formatShots(previewData.after?.preservedRemovedShot || 0)}</span>
                   </div>
                 </div>
@@ -1506,24 +1517,24 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
             </div>
 
             {/* Details Summary */}
-            <div className="bg-slate-950/80 border border-slate-800 rounded-lg p-3 text-xs space-y-1.5 font-mono">
-              <p className="text-slate-300">
+            <div className="bg-slate-950/80 border border-slate-800 rounded p-2 text-xs space-y-1 font-mono">
+              <p className="text-slate-300 text-[11px]">
                 <span className="text-slate-500">Transaction:</span> {replacementType} ({fullSetOrPartial}) • {changedQuantity} EA
               </p>
-              <p className="text-slate-300">
+              <p className="text-slate-300 text-[11px]">
                 <span className="text-slate-500">Work Order / Lot:</span> {workOrderNumber} • {newPartLotNumber}
               </p>
-              <p className="text-slate-300">
+              <p className="text-slate-300 text-[11px]">
                 <span className="text-slate-500">Machine Meter:</span> {machineShotAtReplacement.toLocaleString()} shots on Line {selectedLineId}
               </p>
             </div>
 
             {/* Action Buttons */}
-            <div className="flex items-center justify-end gap-3 pt-2">
+            <div className="flex items-center justify-end gap-2 pt-1.5">
               <button
                 type="button"
                 onClick={() => setShowPreviewModal(false)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold"
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-semibold"
               >
                 Back to Edit
               </button>
@@ -1531,9 +1542,9 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                 id="btn-confirm-submit"
                 type="button"
                 onClick={handleConfirmSubmit}
-                className="px-6 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-lg text-xs font-bold flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+                className="px-4 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded text-xs font-bold flex items-center gap-1.5 shadow-md"
               >
-                <Check className="w-4 h-4" />
+                <Check className="w-3.5 h-3.5" />
                 Confirm & Execute Replacement
               </button>
             </div>
@@ -1543,82 +1554,82 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
 
       {/* MODAL 2: INSPECT RECORD MODAL */}
       {inspectModalRecord && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-xl w-full p-6 space-y-4 shadow-2xl animate-scaleIn">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3">
+          <div className="bg-slate-900 border border-slate-700 rounded-lg max-w-lg w-full p-4 space-y-3 shadow-2xl animate-scaleIn">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
               <div>
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-cyan-400" />
+                <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                  <FileText className="w-4 h-4 text-cyan-400" />
                   Replacement Details: {inspectModalRecord.id}
                 </h3>
-                <span className="text-xs text-slate-400">Line {inspectModalRecord.lineId} • Die {inspectModalRecord.dieCode}</span>
+                <span className="text-[11px] text-slate-400">Line {inspectModalRecord.lineId} • Die {inspectModalRecord.dieCode}</span>
               </div>
               <button
                 onClick={() => setInspectModalRecord(null)}
                 className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="bg-slate-950 p-3 rounded border border-slate-800">
-                <span className="text-slate-400 block">Part Name:</span>
-                <span className="font-bold text-slate-200">{inspectModalRecord.partName}</span>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="bg-slate-950 p-2 rounded border border-slate-800">
+                <span className="text-slate-400 block text-[10px]">Part Name:</span>
+                <span className="font-bold text-slate-200 text-[11px]">{inspectModalRecord.partName}</span>
               </div>
-              <div className="bg-slate-950 p-3 rounded border border-slate-800">
-                <span className="text-slate-400 block">Part Code:</span>
-                <span className="font-mono text-cyan-300">{inspectModalRecord.partCode}</span>
+              <div className="bg-slate-950 p-2 rounded border border-slate-800">
+                <span className="text-slate-400 block text-[10px]">Part Code:</span>
+                <span className="font-mono text-cyan-300 text-[11px]">{inspectModalRecord.partCode}</span>
               </div>
-              <div className="bg-slate-950 p-3 rounded border border-slate-800">
-                <span className="text-slate-400 block">Replacement Type:</span>
-                <span className="font-bold text-amber-300">{inspectModalRecord.replacementType}</span>
+              <div className="bg-slate-950 p-2 rounded border border-slate-800">
+                <span className="text-slate-400 block text-[10px]">Replacement Type:</span>
+                <span className="font-bold text-amber-300 text-[11px]">{inspectModalRecord.replacementType}</span>
               </div>
-              <div className="bg-slate-950 p-3 rounded border border-slate-800">
-                <span className="text-slate-400 block">Position:</span>
-                <span className="font-mono text-slate-200">{inspectModalRecord.position || 'ALL'}</span>
+              <div className="bg-slate-950 p-2 rounded border border-slate-800">
+                <span className="text-slate-400 block text-[10px]">Position:</span>
+                <span className="font-mono text-slate-200 text-[11px]">{inspectModalRecord.position || 'ALL'}</span>
               </div>
-              <div className="bg-slate-950 p-3 rounded border border-slate-800">
-                <span className="text-slate-400 block">Machine Meter at Change:</span>
-                <span className="font-mono text-cyan-300 font-bold">
+              <div className="bg-slate-950 p-2 rounded border border-slate-800">
+                <span className="text-slate-400 block text-[10px]">Machine Meter at Change:</span>
+                <span className="font-mono text-cyan-300 font-bold text-[11px]">
                   {formatShots(inspectModalRecord.machineShotAtReplacement || inspectModalRecord.shotAtReplacement || 0)}
                 </span>
               </div>
-              <div className="bg-slate-950 p-3 rounded border border-slate-800">
-                <span className="text-slate-400 block">Removed Part Final Shot:</span>
-                <span className="font-mono text-amber-300 font-bold">
+              <div className="bg-slate-950 p-2 rounded border border-slate-800">
+                <span className="text-slate-400 block text-[10px]">Removed Part Final Shot:</span>
+                <span className="font-mono text-amber-300 font-bold text-[11px]">
                   {formatShots(inspectModalRecord.removedPartUsedShot !== undefined ? inspectModalRecord.removedPartUsedShot : (inspectModalRecord.partAccumulatedShots || 0))}
                 </span>
               </div>
-              <div className="bg-slate-950 p-3 rounded border border-slate-800">
-                <span className="text-slate-400 block">New Lot / Serial:</span>
-                <span className="font-mono text-slate-200">{inspectModalRecord.newPartLotNumber || '-'}</span>
+              <div className="bg-slate-950 p-2 rounded border border-slate-800">
+                <span className="text-slate-400 block text-[10px]">New Lot / Serial:</span>
+                <span className="font-mono text-slate-200 text-[11px]">{inspectModalRecord.newPartLotNumber || '-'}</span>
               </div>
-              <div className="bg-slate-950 p-3 rounded border border-slate-800">
-                <span className="text-slate-400 block">Work Order:</span>
-                <span className="font-mono text-slate-200">{inspectModalRecord.workOrderNumber || '-'}</span>
+              <div className="bg-slate-950 p-2 rounded border border-slate-800">
+                <span className="text-slate-400 block text-[10px]">Work Order:</span>
+                <span className="font-mono text-slate-200 text-[11px]">{inspectModalRecord.workOrderNumber || '-'}</span>
               </div>
-              <div className="bg-slate-950 p-3 rounded border border-slate-800">
-                <span className="text-slate-400 block">Changed By:</span>
-                <span className="text-slate-200">{inspectModalRecord.changedBy || inspectModalRecord.technicianName}</span>
+              <div className="bg-slate-950 p-2 rounded border border-slate-800">
+                <span className="text-slate-400 block text-[10px]">Changed By:</span>
+                <span className="text-slate-200 text-[11px]">{inspectModalRecord.changedBy || inspectModalRecord.technicianName}</span>
               </div>
-              <div className="bg-slate-950 p-3 rounded border border-slate-800">
-                <span className="text-slate-400 block">Verified By:</span>
-                <span className="text-slate-200">{inspectModalRecord.verifiedBy || inspectModalRecord.approverName || 'Pending'}</span>
+              <div className="bg-slate-950 p-2 rounded border border-slate-800">
+                <span className="text-slate-400 block text-[10px]">Verified By:</span>
+                <span className="text-slate-200 text-[11px]">{inspectModalRecord.verifiedBy || inspectModalRecord.approverName || 'Pending'}</span>
               </div>
             </div>
 
             {inspectModalRecord.note && (
-              <div className="bg-slate-950 p-3 rounded border border-slate-800 text-xs">
-                <span className="text-slate-400 block font-semibold mb-1">Maintenance Notes:</span>
-                <p className="text-slate-300">{inspectModalRecord.note}</p>
+              <div className="bg-slate-950 p-2 rounded border border-slate-800 text-xs">
+                <span className="text-slate-400 block font-semibold mb-0.5 text-[10px]">Maintenance Notes:</span>
+                <p className="text-slate-300 text-[11px]">{inspectModalRecord.note}</p>
               </div>
             )}
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+            <div className="flex justify-end gap-2 pt-1.5 border-t border-slate-800">
               <button
                 onClick={() => setInspectModalRecord(null)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold"
+                className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-semibold"
               >
                 Close
               </button>

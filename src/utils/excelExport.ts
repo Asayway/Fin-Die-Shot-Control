@@ -342,3 +342,32 @@ export function exportResetLogsExcel(
   saveWorkbookAsExcel(workbook, `FinDie_Shot_Reset_History_${lineFilter}_${dateStr}.xlsx`);
 }
 
+/**
+ * Export Condition Inspection Logs to Excel (.xlsx)
+ */
+export function exportInspectionLogsExcel(
+  records: any[],
+  lineFilter: string = 'ALL'
+) {
+  const data = records.map((rec, idx) => ({
+    'NO.': idx + 1,
+    'TIMESTAMP': rec.timestamp || 'N/A',
+    'LINE': `LINE ${rec.lineId}`,
+    'STAGE': rec.stageName,
+    'BURR HEIGHT (mm)': rec.burrHeightMm ?? 0,
+    'WEAR RATING': rec.visualWearRating || 1,
+    'LUBRICATION': rec.lubricationStatus || 'GOOD',
+    'VERDICT': rec.inspectionVerdict || 'PASS',
+    'INSPECTOR': rec.inspectorName || 'N/A'
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(data);
+  worksheet['!cols'] = [
+    { wch: 6 }, { wch: 20 }, { wch: 12 }, { wch: 22 }, { wch: 16 }, { wch: 14 }, { wch: 16 }, { wch: 18 }, { wch: 20 }
+  ];
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Inspection Logs');
+  const dateStr = new Date().toISOString().slice(0, 10);
+  saveWorkbookAsExcel(workbook, `FinDie_Condition_Inspection_Logs_${lineFilter}_${dateStr}.xlsx`);
+}
+

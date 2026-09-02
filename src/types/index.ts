@@ -826,3 +826,49 @@ export interface PositionLockRecord {
   notes?: string;
 }
 
+export type DowntimeCategory = 
+  | 'UNPLANNED_DOWN' 
+  | 'SCHEDULED_MAINTENANCE' 
+  | 'DIE_CHANGEOVER' 
+  | 'TOOLING_REPAIR' 
+  | 'QUALITY_HOLD' 
+  | 'OTHER';
+
+export interface DowntimeLogEntry {
+  id: string;
+  lineId: ProductionLineId;
+  startTime: string; // ISO string
+  endTime?: string; // ISO string or undefined if ongoing
+  durationMinutes: number; // calculated duration in minutes
+  category: DowntimeCategory;
+  reason: string;
+  reasonTh?: string;
+  operatorOrTech?: string;
+  isResolved: boolean;
+  notes?: string;
+}
+
+export interface DowntimeSummaryByLine {
+  lineId: ProductionLineId;
+  lineName: string;
+  totalDowntimeMinutes: number;
+  totalDowntimeHours: number;
+  eventCount: number;
+  uptimePercent: number;
+  unplannedHours: number;
+  maintenanceHours: number;
+  changeoverHours: number;
+  lastIncident?: DowntimeLogEntry;
+}
+
+export interface Downtime30DayReport {
+  startDate: string;
+  endDate: string;
+  totalFactoryDowntimeHours: number;
+  averageLineDowntimeHours: number;
+  factoryUptimePercent: number;
+  bottleneckLineId: ProductionLineId;
+  lineSummaries: Record<ProductionLineId, DowntimeSummaryByLine>;
+}
+
+

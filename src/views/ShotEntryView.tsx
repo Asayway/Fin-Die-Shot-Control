@@ -445,6 +445,15 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
       showNotification('error', 'กรุณาระบุชื่อพนักงานผู้บันทึก (Operator Name is required) - บังคับลงชื่อพนักงานทุกครั้งก่อนทำรายการ');
       return;
     }
+    if (!shift) {
+      showNotification('error', 'กรุณาเลือกกะการผลิต (Shift is strictly required) - บังคับเลือกกะ');
+      return;
+    }
+    const newReadingVal = parseInt(newReadingInput.replace(/,/g, ''), 10);
+    if (isNaN(newReadingVal) || newReadingInput.trim() === '') {
+      showNotification('error', 'กรุณาระบุเลขมิเตอร์ใหม่ (New Reading is strictly mandatory) - บังคับกรอกเลขมิเตอร์');
+      return;
+    }
     if (entryMode === 'MODE_1' && isLowerReadingDetected) {
       showNotification('error', 'New Machine Reading is lower than Previous Reading. If a counter reset occurred, please use Counter Reset.');
       return;
@@ -1672,420 +1681,234 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
 
       {/* COUNTER & SHOT RESET MODAL */}
       {counterResetModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className={`border rounded-xl max-w-2xl w-full p-4 sm:p-6 space-y-4 shadow-2xl ${
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-2 sm:p-3 overflow-y-auto">
+          <div className={`border rounded-lg max-w-xl w-full p-3 sm:p-4 space-y-2.5 shadow-2xl ${
             isHmi 
               ? 'bg-black border-amber-500 text-amber-300 font-mono' 
               : 'bg-[#0E172A] border-amber-500/80 text-amber-100 font-sans'
           }`}>
             {/* Modal Header */}
-            <div className="flex flex-wrap items-center justify-between border-b border-amber-900/60 pb-3 gap-2">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-amber-500/10 rounded-lg border border-amber-500/30">
-                  <RotateCcw className="w-5 h-5 text-amber-400" />
+            <div className="flex flex-wrap items-center justify-between border-b border-amber-900/60 pb-2 gap-1.5">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-amber-500/10 rounded-md border border-amber-500/30">
+                  <RotateCcw className="w-4 h-4 text-amber-400" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-amber-400 text-base flex items-center gap-2">
+                  <h3 className="font-bold text-amber-400 text-xs sm:text-sm flex items-center gap-1.5">
                     <span>SHOT & METER RESET (ระบบรีเซ็ตช็อตและมิเตอร์)</span>
                   </h3>
-                  <p className="text-[11px] text-slate-400">
+                  <p className="text-[10px] text-slate-400">
                     รีเซ็ตยอดช็อตรายสายการผลิต (จำกัดทำทีละ 1 สายการผลิตเพื่อความถูกต้อง)
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                {/* Navigation Tabs */}
-                <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setResetModalTab('FORM')}
-                    className={`px-3 py-1 rounded-md font-bold transition-all flex items-center gap-1.5 ${
-                      resetModalTab === 'FORM'
-                        ? 'bg-amber-500 text-slate-950 shadow-sm'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span>แบบฟอร์มรีเซ็ต</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setResetModalTab('LOGS')}
-                    className={`px-3 py-1 rounded-md font-bold transition-all flex items-center gap-1.5 ${
-                      resetModalTab === 'LOGS'
-                        ? 'bg-amber-500 text-slate-950 shadow-sm'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <History className="w-3.5 h-3.5" />
-                    <span>ประวัติ ({resetLogs.length})</span>
-                  </button>
-                </div>
-
+              <div className="flex items-center gap-1.5">
                 <button 
                   onClick={() => setCounterResetModalOpen(false)} 
-                  className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800/60"
+                  className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800/60"
+                  title="Close"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
-            {/* TAB 1: RESET FORM */}
-            {resetModalTab === 'FORM' && (
-              <form onSubmit={handleExecuteCounterReset} className="space-y-4 text-xs">
-                {/* 1. Single Line Selector */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-amber-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
-                      <Layers className="w-4 h-4 text-amber-400" />
-                      <span>1. เลือกสายการผลิต (TARGET PRODUCTION LINE - ทีละไลน์เท่านั้น) *</span>
-                    </label>
-                    <span className="text-[10px] text-amber-300/80 bg-amber-950/60 border border-amber-800/80 px-2 py-0.5 rounded-full font-bold">
-                      เลือกรีเซ็ต: สาย {resetTargetScope}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5">
-                    {linesList.map(lId => {
-                      const isSelected = resetTargetScope === lId;
-                      const lineData = storageService.getLineMonitoring(lId);
-                      const currentShots = lineData?.machineShotTotal || 0;
-                      return (
-                        <button
-                          key={lId}
-                          type="button"
-                          onClick={() => {
-                            setResetTargetScope(lId);
-                            setResetterNameInput(''); // Force operator signature on target line switch
-                          }}
-                          className={`p-2 rounded-lg border text-center transition-all flex flex-col items-center justify-center ${
-                            isSelected
-                              ? 'bg-amber-500 text-slate-950 font-black border-amber-300 shadow-md ring-2 ring-amber-400/80 scale-[1.02]'
-                              : 'bg-slate-950/90 text-slate-300 border-slate-800 hover:border-slate-700 hover:bg-slate-900'
-                          }`}
-                        >
-                          <span className="text-xs font-bold">{lId}</span>
-                          <span className={`text-[9px] mt-0.5 font-mono ${isSelected ? 'text-slate-950 font-bold' : 'text-slate-500'}`}>
-                            {currentShots > 1000000 ? `${(currentShots/1000000).toFixed(1)}M` : `${(currentShots/1000).toFixed(0)}k`}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+            {/* RESET FORM */}
+            <form onSubmit={handleExecuteCounterReset} className="space-y-2.5 text-xs">
+              {/* 1. Single Line Selector */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-amber-400 font-bold uppercase tracking-wider flex items-center gap-1 text-[11px]">
+                    <Layers className="w-3.5 h-3.5 text-amber-400" />
+                    <span>1. เลือกสายการผลิต (TARGET PRODUCTION LINE) *</span>
+                  </label>
+                  <span className="text-[9px] text-amber-300/80 bg-amber-950/60 border border-amber-800/80 px-1.5 py-0.5 rounded font-bold">
+                    เลือกรีเซ็ต: สาย {resetTargetScope}
+                  </span>
                 </div>
 
-                {/* 2. New Meter Input & Current Meter Display */}
-                <div className="p-3.5 bg-slate-950/80 border border-amber-500/40 rounded-xl space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-amber-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
-                      <Hash className="w-4 h-4 text-amber-400" />
-                      <span>2. เลขมิเตอร์ตั้งต้นใหม่ (NEW BASE METER READING) *</span>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setResetNewMeterInput('0')}
-                      className="text-[11px] px-2.5 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 font-bold flex items-center gap-1 transition-all"
-                    >
-                      <RotateCcw className="w-3 h-3 text-amber-400" />
-                      <span>ตั้งค่าเป็น 0 ช็อต (SET TO 0)</span>
-                    </button>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1">
-                      <input
-                        type="number"
-                        min="0"
-                        value={resetNewMeterInput}
-                        onChange={e => setResetNewMeterInput(e.target.value)}
-                        onFocus={(e) => e.target.select()}
-                        placeholder="0"
-                        className="w-full bg-black border-2 border-amber-500/80 rounded-lg p-2.5 text-amber-300 font-mono text-2xl font-bold tracking-wider focus:outline-none focus:ring-2 focus:ring-amber-400 shadow-inner"
-                        required
-                      />
-                    </div>
-                    <div className="p-2.5 bg-slate-900/90 border border-slate-800 rounded-lg text-right min-w-[140px]">
-                      <div className="text-[10px] text-slate-400">ยอดสะสมปัจจุบัน (สาย {resetTargetScope})</div>
-                      <div className="text-sm font-mono font-bold text-slate-200">
-                        {(storageService.getLineMonitoring(resetTargetScope)?.machineShotTotal || 0).toLocaleString()} <span className="text-[10px] font-normal text-slate-400">ช็อต</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3. Resetter Name & Reason */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-amber-400 font-bold mb-1 flex items-center gap-1.5">
-                      <UserCheck className="w-3.5 h-3.5 text-amber-400" />
-                      <span>ลงชื่อผู้รีเซ็ต (RESETTED BY / OPERATOR) * [บังคับลงชื่อ]</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={resetterNameInput}
-                      onChange={e => setResetterNameInput(e.target.value)}
-                      placeholder="กรุณากรอกชื่อ-นามสกุล ผู้ทำรายการ..."
-                      className="w-full bg-slate-950 border-2 border-amber-500/60 rounded-lg p-2.5 text-slate-100 font-medium focus:border-amber-400 focus:ring-1 focus:ring-amber-400 focus:outline-none placeholder-slate-500"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-300 font-bold mb-1 flex items-center gap-1.5">
-                      <FileText className="w-3.5 h-3.5 text-amber-400" />
-                      <span>เหตุผลการรีเซ็ต (RESET REASON) *</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={resetReasonInput}
-                      onChange={e => setResetReasonInput(e.target.value)}
-                      placeholder="ระบุเหตุผลการรีเซ็ต..."
-                      className="w-full bg-slate-950 border border-slate-700/80 rounded-lg p-2.5 text-slate-100 font-medium focus:border-amber-500 focus:outline-none"
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Quick Reason Chips */}
-                <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
-                  <span className="text-slate-500 font-bold">เหตุผลด่วน:</span>
-                  {[
-                    'เปลี่ยนมิเตอร์ใหม่ (New Counter Installed)',
-                    'ปรับเซ็ตแม่พิมพ์ประจำกะ (Shift Set Adjustment)',
-                    'สอบเทียบมิเตอร์ประจำปี (Annual Meter Calibration)',
-                    'ซ่อมบำรุงเปลี่ยนชิ้นส่วน (Maintenance Reset)'
-                  ].map(preset => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => setResetReasonInput(preset)}
-                      className="px-2 py-0.5 bg-slate-900 border border-slate-800 hover:border-amber-500/50 hover:text-amber-300 rounded text-[10px] transition-all"
-                    >
-                      + {preset.split(' ')[0]}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex gap-2 pt-2 border-t border-slate-800">
-                  <button
-                    type="button"
-                    onClick={() => setCounterResetModalOpen(false)}
-                    className="flex-1 py-2.5 bg-slate-900 text-slate-400 rounded-lg text-xs font-bold border border-slate-700 hover:text-white hover:bg-slate-800 transition-all"
-                  >
-                    ยกเลิก (CANCEL)
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-xs font-extrabold uppercase shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 active:scale-95 transition-all"
-                  >
-                    <RotateCcw className="w-4 h-4 text-slate-950" />
-                    <span>ยืนยันการรีเซ็ต (CONFIRM RESET)</span>
-                  </button>
-                </div>
-
-                {/* Recent Reset Log Preview directly under the form */}
-                {resetLogs.length > 0 && (
-                  <div className="pt-3 border-t border-slate-800/80 space-y-2">
-                    <div className="flex items-center justify-between text-slate-400">
-                      <span className="font-bold text-[11px] flex items-center gap-1.5 text-amber-400">
-                        <History className="w-3.5 h-3.5" />
-                        <span>ประวัติการรีเซ็ตล่าสุด (RECENT RESETS FOR LINE {resetTargetScope}):</span>
-                      </span>
+                <div className="grid grid-cols-4 sm:grid-cols-8 gap-1">
+                  {linesList.map(lId => {
+                    const isSelected = resetTargetScope === lId;
+                    const lineData = storageService.getLineMonitoring(lId);
+                    const currentShots = lineData?.machineShotTotal || 0;
+                    return (
                       <button
+                        key={lId}
                         type="button"
-                        onClick={() => setResetModalTab('LOGS')}
-                        className="text-[10px] text-amber-400 hover:underline flex items-center gap-0.5"
+                        onClick={() => {
+                          setResetTargetScope(lId);
+                          setResetterNameInput(''); // Force operator signature on target line switch
+                        }}
+                        className={`p-1 sm:p-1.5 rounded-md border text-center transition-all flex flex-col items-center justify-center ${
+                          isSelected
+                            ? 'bg-amber-500 text-slate-950 font-black border-amber-300 shadow-sm ring-1 ring-amber-400/80 scale-[1.02]'
+                            : 'bg-slate-950/90 text-slate-300 border-slate-800 hover:border-slate-700 hover:bg-slate-900'
+                        }`}
                       >
-                        ดูทั้งหมด ({resetLogs.length}) <ChevronRight className="w-3 h-3" />
+                        <span className="text-xs font-bold">{lId}</span>
+                        <span className={`text-[9px] mt-0.2 font-mono ${isSelected ? 'text-slate-950 font-bold' : 'text-slate-500'}`}>
+                          {currentShots > 1000000 ? `${(currentShots/1000000).toFixed(1)}M` : `${(currentShots/1000).toFixed(0)}k`}
+                        </span>
                       </button>
-                    </div>
-
-                    <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                      {resetLogs.slice(0, 3).map(log => (
-                        <div key={log.id} className="p-2 bg-slate-950 rounded-lg border border-slate-800/80 text-[11px] flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-300 font-bold rounded text-[10px]">
-                              {log.lineId}
-                            </span>
-                            <div>
-                              <div className="text-slate-200 font-medium">
-                                {log.resetReason || log.entryReason || 'Reset Counter'}
-                              </div>
-                              <div className="text-[10px] text-slate-500 flex items-center gap-2">
-                                <span>ผู้ทำรายการ: <strong className="text-slate-400">{log.operatorName}</strong></span>
-                                <span>•</span>
-                                <span>{new Date(log.timestamp).toLocaleString('th-TH')}</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="text-right font-mono shrink-0">
-                            <div className="text-amber-300 font-bold">
-                              {log.previousTotal.toLocaleString()} ➔ {log.newTotal.toLocaleString()}
-                            </div>
-                            <div className="text-[9px] text-slate-500">Ref: {log.resetApprovalId || log.id.slice(-6)}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </form>
-            )}
-
-            {/* TAB 2: RESET HISTORY LOG TABLE */}
-            {resetModalTab === 'LOGS' && (
-              <div className="space-y-3">
-                {/* Search & Filter Bar */}
-                <div className="flex flex-wrap items-center gap-2 justify-between">
-                  <div className="flex items-center gap-2 flex-1 min-w-[200px]">
-                    <div className="relative flex-1">
-                      <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-500" />
-                      <input
-                        type="text"
-                        value={resetLogSearch}
-                        onChange={e => setResetLogSearch(e.target.value)}
-                        placeholder="ค้นหาตามผู้ทำรายการ, เหตุผล, รหัส..."
-                        className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
-                      />
-                    </div>
-
-                    <select
-                      value={resetLogLineFilter}
-                      onChange={e => setResetLogLineFilter(e.target.value)}
-                      className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
-                    >
-                      <option value="ALL">ทุกสาย (All Lines)</option>
-                      {linesList.map(l => (
-                        <option key={l} value={l}>สาย {l}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <span className="text-[11px] text-slate-400 font-mono">
-                      พบทั้งหมด <strong className="text-amber-400">{resetLogs.length}</strong> รายการ
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => exportResetLogsExcel(resetLogs, resetLogLineFilter)}
-                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer"
-                      title="ดาวน์โหลดประวัติการรีเซ็ตเป็นไฟล์ Excel"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>Export Excel</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Log History Table */}
-                <div className="border border-slate-800 rounded-xl overflow-hidden max-h-[380px] overflow-y-auto bg-slate-950">
-                  {resetLogs.length === 0 ? (
-                    <div className="p-8 text-center text-slate-500 text-xs">
-                      <History className="w-8 h-8 mx-auto mb-2 text-slate-600 opacity-50" />
-                      <div>ไม่พบประวัติการรีเซ็ตช็อตในระบบ</div>
-                    </div>
-                  ) : (
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead className="sticky top-0 bg-slate-900 border-b border-slate-800 text-[10.5px] uppercase tracking-wider text-slate-400 font-bold">
-                        <tr>
-                          <th className="py-2.5 px-3">วัน-เวลา (Auto Time)</th>
-                          <th className="py-2.5 px-3">สายการผลิต</th>
-                          <th className="py-2.5 px-3">ผู้ทำรายการ</th>
-                          <th className="py-2.5 px-3">เลขเดิม ➔ ใหม่</th>
-                          <th className="py-2.5 px-3">เหตุผลการรีเซ็ต</th>
-                          <th className="py-2.5 px-3 text-right">รหัสอนุมัติ</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
-                        {resetLogs.map(log => (
-                          <tr key={log.id} className="hover:bg-slate-900/60 transition-colors">
-                            <td className="py-2 px-3 text-slate-300 whitespace-nowrap">
-                              <div className="flex items-center gap-1.5">
-                                <Clock className="w-3 h-3 text-cyan-400" />
-                                <span>{new Date(log.timestamp).toLocaleString('th-TH')}</span>
-                              </div>
-                            </td>
-                            <td className="py-2 px-3">
-                              <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 font-bold rounded text-[10px]">
-                                {log.lineId}
-                              </span>
-                            </td>
-                            <td className="py-2 px-3 font-sans font-medium text-slate-200">
-                              {log.operatorName || 'System'}
-                            </td>
-                            <td className="py-2 px-3 font-bold text-amber-300 whitespace-nowrap">
-                              {log.previousTotal.toLocaleString()} <span className="text-slate-500">➔</span> {log.newTotal.toLocaleString()}
-                            </td>
-                            <td className="py-2 px-3 font-sans text-slate-300 max-w-[180px] truncate" title={log.resetReason || log.entryReason}>
-                              {log.resetReason || log.entryReason || '-'}
-                            </td>
-                            <td className="py-2 px-3 text-right text-slate-400 text-[10px]">
-                              {log.resetApprovalId || log.id.slice(-8)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-
-                <div className="flex justify-end pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setCounterResetModalOpen(false)}
-                    className="px-4 py-2 bg-slate-900 text-slate-300 hover:text-white rounded-lg text-xs font-bold border border-slate-700"
-                  >
-                    ปิดหน้าต่าง (CLOSE)
-                  </button>
+                    );
+                  })}
                 </div>
               </div>
-            )}
+
+              {/* 2. New Meter Input & Current Meter Display */}
+              <div className="p-2.5 bg-slate-950/80 border border-amber-500/40 rounded-lg space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-amber-400 font-bold uppercase tracking-wider flex items-center gap-1 text-[11px]">
+                    <Hash className="w-3.5 h-3.5 text-amber-400" />
+                    <span>2. เลขมิเตอร์ตั้งต้นใหม่ (NEW BASE METER READING) *</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setResetNewMeterInput('0')}
+                    className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 font-bold flex items-center gap-1 transition-all"
+                  >
+                    <RotateCcw className="w-2.5 h-2.5 text-amber-400" />
+                    <span>ตั้งค่าเป็น 0 ช็อต</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <input
+                      type="number"
+                      min="0"
+                      value={resetNewMeterInput}
+                      onChange={e => setResetNewMeterInput(e.target.value)}
+                      onFocus={(e) => e.target.select()}
+                      placeholder="0"
+                      className="w-full bg-black border border-amber-500/80 rounded-md py-1.5 px-2.5 text-amber-300 font-mono text-lg font-bold tracking-wider focus:outline-none focus:ring-1 focus:ring-amber-400 shadow-inner"
+                      required
+                    />
+                  </div>
+                  <div className="p-1.5 px-2.5 bg-slate-900/90 border border-slate-800 rounded-md text-right min-w-[130px]">
+                    <div className="text-[9px] text-slate-400">ยอดสะสมเดิม (สาย {resetTargetScope})</div>
+                    <div className="text-xs font-mono font-bold text-slate-200">
+                      {(storageService.getLineMonitoring(resetTargetScope)?.machineShotTotal || 0).toLocaleString()} <span className="text-[9px] font-normal text-slate-400">ช็อต</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. Resetter Name & Reason */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-amber-400 font-bold mb-0.5 flex items-center gap-1 text-[11px]">
+                    <UserCheck className="w-3 h-3 text-amber-400" />
+                    <span>ผู้รีเซ็ต (OPERATOR) *</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={resetterNameInput}
+                    onChange={e => setResetterNameInput(e.target.value)}
+                    placeholder="กรุณากรอกชื่อผู้ทำรายการ..."
+                    className="w-full bg-slate-950 border border-amber-500/60 rounded-md py-1.5 px-2 text-xs text-slate-100 font-medium focus:border-amber-400 focus:outline-none placeholder-slate-500"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-bold mb-0.5 flex items-center gap-1 text-[11px]">
+                    <FileText className="w-3 h-3 text-amber-400" />
+                    <span>เหตุผล (REASON) *</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={resetReasonInput}
+                    onChange={e => setResetReasonInput(e.target.value)}
+                    placeholder="ระบุเหตุผลการรีเซ็ต..."
+                    className="w-full bg-slate-950 border border-slate-700/80 rounded-md py-1.5 px-2 text-xs text-slate-100 font-medium focus:border-amber-500 focus:outline-none"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Quick Reason Chips */}
+              <div className="flex flex-wrap items-center gap-1 text-[10px] text-slate-400">
+                <span className="text-slate-500 font-bold">ด่วน:</span>
+                {[
+                  'เปลี่ยนมิเตอร์ใหม่ (New Counter)',
+                  'ปรับเซ็ตประจำกะ (Shift Adjustment)',
+                  'สอบเทียบประจำปี (Calibration)',
+                  'ซ่อมบำรุงเปลี่ยนชิ้นส่วน (Maintenance)'
+                ].map(preset => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setResetReasonInput(preset)}
+                    className="px-1.5 py-0.5 bg-slate-900 border border-slate-800 hover:border-amber-500/50 hover:text-amber-300 rounded text-[9px] transition-all"
+                  >
+                    + {preset.split(' ')[0]}
+                  </button>
+                ))}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-2 pt-1.5 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setCounterResetModalOpen(false)}
+                  className="flex-1 py-1.5 bg-slate-900 text-slate-400 rounded-md text-xs font-bold border border-slate-700 hover:text-white hover:bg-slate-800 transition-all"
+                >
+                  ยกเลิก (CANCEL)
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-md text-xs font-extrabold uppercase shadow-md shadow-amber-500/20 flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-slate-950" />
+                  <span>ยืนยันการรีเซ็ต (CONFIRM)</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
 
-      {/* OEE LOSS TIME CATCHER MODAL (Triggered when Actual Shots < Expected Shots in Mode 2) */}
+      {/* OEE LOSS TIME CATCHER MODAL */}
       {lossModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0E172A] border-2 border-rose-500 rounded-xl max-w-md w-full p-5 space-y-4 shadow-2xl font-mono text-slate-200">
-            <div className="flex items-center justify-between border-b border-rose-900/60 pb-3">
-              <h3 className="font-bold text-rose-400 text-base flex items-center gap-2">
-                <AlertOctagon className="w-5 h-5 text-rose-400 animate-pulse" />
-                OEE LOSS TIME DETECTED (บันทึก Loss Time)
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3">
+          <div className="bg-[#0E172A] border-2 border-rose-500 rounded-lg max-w-md w-full p-4 space-y-3 shadow-2xl font-mono text-slate-200">
+            <div className="flex items-center justify-between border-b border-rose-900/60 pb-2">
+              <h3 className="font-bold text-rose-400 text-sm flex items-center gap-1.5">
+                <AlertOctagon className="w-4 h-4 text-rose-400 animate-pulse" />
+                <span>OEE LOSS TIME DETECTED</span>
               </h3>
               <button onClick={() => setLossModalOpen(false)} className="text-slate-400 hover:text-white">
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="p-3 bg-rose-950/40 border border-rose-800/80 rounded-lg text-xs space-y-1">
-              <div className="flex justify-between">
-                <span className="text-slate-400">EXPECTED SHOTS:</span>
+            <div className="p-2.5 bg-rose-950/40 border border-rose-800/80 rounded-md text-xs space-y-1">
+              <div className="flex justify-between text-[11px]">
+                <span className="text-slate-400">EXPECTED:</span>
                 <strong className="text-slate-200">{mode2ExpectedShots.toLocaleString()} shots</strong>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">ACTUAL PRODUCED:</span>
+              <div className="flex justify-between text-[11px]">
+                <span className="text-slate-400">PRODUCED:</span>
                 <strong className="text-cyan-300">{incrementVal.toLocaleString()} shots</strong>
               </div>
-              <div className="flex justify-between text-rose-400 font-bold border-t border-rose-900/60 pt-1">
+              <div className="flex justify-between text-rose-400 font-bold border-t border-rose-900/60 pt-1 text-[11px]">
                 <span>SHORTFALL LOSS:</span>
                 <span>-{Math.max(0, mode2ExpectedShots - incrementVal).toLocaleString()} shots (~{((Math.max(0, mode2ExpectedShots - incrementVal)) / (spmInput || 100)).toFixed(1)} mins)</span>
               </div>
             </div>
 
-            <div className="space-y-3 text-xs">
+            <div className="space-y-2 text-xs">
               <div>
-                <label className="block text-slate-300 font-bold mb-1">
-                  1. PRIMARY LOSS CATEGORY (สาเหตุหลักที่ยอดขาด) *
+                <label className="block text-slate-300 font-bold mb-1 text-[11px]">
+                  1. PRIMARY LOSS CATEGORY *
                 </label>
                 <select
                   value={lossTypeInput}
                   onChange={e => setLossTypeInput(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white font-bold"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-md py-1.5 px-2 text-xs text-white font-bold"
                 >
                   <option value="COIL_CHANGE">Coil / Material Change (เปลี่ยนคอยล์/รอวัตถุดิบ)</option>
                   <option value="DIE_JAM">Die Jam / Breakdown (แม่พิมพ์ติดขัด/พัง)</option>
@@ -2097,23 +1920,23 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
               </div>
 
               <div>
-                <label className="block text-slate-300 font-bold mb-1">
-                  2. LOSS REMARKS & ACTION TAKEN (หมายเหตุการแก้ไข)
+                <label className="block text-slate-300 font-bold mb-1 text-[11px]">
+                  2. LOSS REMARKS & ACTION TAKEN
                 </label>
                 <textarea
                   rows={2}
                   value={lossReasonInput}
                   onChange={e => setLossReasonInput(e.target.value)}
                   placeholder="ระบุสาเหตุเพิ่มเติมและการแก้ไข..."
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-200"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-md p-1.5 text-xs text-slate-200"
                 />
               </div>
 
-              <div className="flex gap-2 pt-2">
+              <div className="flex gap-2 pt-1">
                 <button
                   type="button"
                   onClick={() => setLossModalOpen(false)}
-                  className="flex-1 py-2.5 bg-slate-900 text-slate-400 rounded-lg text-xs font-bold border border-slate-700"
+                  className="flex-1 py-1.5 bg-slate-900 text-slate-400 rounded-md text-xs font-bold border border-slate-700"
                 >
                   CANCEL
                 </button>
@@ -2126,7 +1949,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                     showNotification('warning', `Loss time noted: ${calcMins} mins (${lossTypeInput}). Proceeding with preview.`);
                     handleOpenSubmissionPreview();
                   }}
-                  className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold uppercase shadow-lg shadow-rose-600/30"
+                  className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-md text-xs font-bold uppercase shadow-md shadow-rose-600/30"
                 >
                   LOG LOSS & PROCEED
                 </button>

@@ -24,6 +24,7 @@ import { storageService } from '../services/storageService';
 import { formatShots, formatThb, generateCompositeKey } from '../services/calculationService';
 import { ResizableReorderableTable } from '../components/common/ResizableReorderableTable';
 import { DebouncedNumericInput } from '../components/common/DebouncedNumericInput';
+import { DeleteConfirmationModal } from '../components/common/DeleteConfirmationModal';
 
 interface LineQuickFilter {
   id: string;
@@ -56,6 +57,8 @@ export const PartLifeStandardSetupView: React.FC = () => {
   
   const [isEditing, setIsEditing] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editTargetStd, setEditTargetStd] = useState<PartLifeStandard | null>(null);
+  const [deleteTargetStd, setDeleteTargetStd] = useState<PartLifeStandard | null>(null);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
   
   // Maps standard.id -> { field: value } (supports number, boolean, string)
@@ -210,6 +213,25 @@ export const PartLifeStandardSetupView: React.FC = () => {
     storageService.saveLifeStandard(createdStandard);
     setShowAddModal(false);
     setSaveSuccessMsg(`เพิ่มเกณฑ์มาตรฐานสำหรับ ${newStd.partName} สำเร็จแล้ว`);
+    setTimeout(() => setSaveSuccessMsg(null), 3500);
+    reload();
+  };
+
+  const handleDeleteConfirm = () => {
+    if (!deleteTargetStd) return;
+    storageService.deleteLifeStandard(deleteTargetStd.id);
+    setSaveSuccessMsg(`ลบเกณฑ์มาตรฐานสำหรับ ${deleteTargetStd.partName} (${deleteTargetStd.configKey.partCode}) สำเร็จแล้ว`);
+    setDeleteTargetStd(null);
+    setTimeout(() => setSaveSuccessMsg(null), 3500);
+    reload();
+  };
+
+  const handleSaveSingleEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editTargetStd) return;
+    storageService.saveLifeStandard(editTargetStd);
+    setSaveSuccessMsg(`บันทึกการแก้ไขเกณฑ์มาตรฐาน ${editTargetStd.partName} สำเร็จแล้ว`);
+    setEditTargetStd(null);
     setTimeout(() => setSaveSuccessMsg(null), 3500);
     reload();
   };
@@ -598,8 +620,8 @@ export const PartLifeStandardSetupView: React.FC = () => {
             {
               id: 'notes',
               label: 'NOTE / REMARK',
-              width: 240,
-              minWidth: 150,
+              width: 220,
+              minWidth: 140,
               render: (s) => {
                 const currentNote = (editValues[s.id]?.notes as string) ?? (s.notes || s.regrindStandard?.regrindIntervalNote || s.changeIntervalNotes || '');
                 if (isEditing) {
@@ -621,10 +643,190 @@ export const PartLifeStandardSetupView: React.FC = () => {
                   <span className="text-xs text-slate-600 italic">-</span>
                 );
               }
+            },
+            {
+              id: 'actions',
+              label: 'ACTIONS',
+              width: 90,
+              minWidth: 80,
+              align: 'center',
+              render: (s) => (
+                <div className="flex items-center justify-center gap-1">
+                  <button
+                    onClick={() => setEditTargetStd({ ...s })}
+                    title="แก้ไขเกณฑ์มาตรฐาน (Edit Standard)"
+                    className="p-1.5 text-cyan-400 hover:text-white bg-slate-800 hover:bg-cyan-600 rounded transition-colors"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setDeleteTargetStd(s)}
+                    title="ลบเกณฑ์มาตรฐาน (Delete Standard)"
+                    className="p-1.5 text-rose-400 hover:text-white bg-slate-800 hover:bg-rose-600 rounded transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )
             }
           ]}
         />
       </div>
+
+      {/* Modal: Edit Single Part Life Standard */}
+      {editTargetStd && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-[#0F172A] border border-cyan-700/60 rounded-xl p-6 max-w-xl w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-cyan-400" />
+                <h3 className="text-lg font-bold text-white font-thai">แก้ไขเกณฑ์มาตรฐานอายุการใช้งาน (Edit Standard)</h3>
+              </div>
+              <button 
+                onClick={() => setEditTargetStd(null)}
+                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveSingleEdit} className="space-y-4 font-thai text-sm">
+              <div className="bg-slate-900 border border-slate-800 rounded-lg p-3 flex items-center justify-between">
+                <div>
+                  <div className="text-xs text-slate-400 font-mono">PART CODE: <strong className="text-cyan-400">{editTargetStd.configKey.partCode}</strong></div>
+                  <div className="font-bold text-white">{editTargetStd.partName}</div>
+                </div>
+                <div className="text-xs text-slate-400 text-right">
+                  <div>Line: <span className="text-slate-200 font-bold">{editTargetStd.configKey.lineId}</span></div>
+                  <div>Die: <span className="text-slate-300 font-mono">{editTargetStd.configKey.dieCode || '-'}</span></div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">Material (ประเภทวัสดุ)</label>
+                  <select
+                    value={editTargetStd.configKey.material}
+                    onChange={e => setEditTargetStd({
+                      ...editTargetStd,
+                      configKey: { ...editTargetStd.configKey, material: e.target.value as any }
+                    })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-cyan-300 font-bold text-xs focus:border-cyan-500 focus:outline-none"
+                  >
+                    <option value="PCM">PCM (0.1mm)</option>
+                    <option value="BARE">BARE (0.1mm)</option>
+                    <option value="GOLD">GOLD (0.1mm)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">Tube Diameter (ขนาดท่อ)</label>
+                  <select
+                    value={editTargetStd.configKey.tubeSize}
+                    onChange={e => setEditTargetStd({
+                      ...editTargetStd,
+                      configKey: { ...editTargetStd.configKey, tubeSize: e.target.value as any }
+                    })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-cyan-300 font-bold text-xs focus:border-cyan-500 focus:outline-none"
+                  >
+                    <option value="Ø5">Ø5</option>
+                    <option value="Ø7">Ø7</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">Life Limit (Shots) *</label>
+                  <DebouncedNumericInput
+                    value={editTargetStd.lifeLimitShots}
+                    onChange={val => setEditTargetStd({ ...editTargetStd, lifeLimitShots: val })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-emerald-400 font-bold font-mono text-xs focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">Grinding Depth 1 Time (mm)</label>
+                  <DebouncedNumericInput
+                    step={0.01}
+                    value={editTargetStd.regrindDepthPerTime ?? 0.20}
+                    onChange={val => setEditTargetStd({ ...editTargetStd, regrindDepthPerTime: val })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-mono text-xs focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">Max Total Grinding (mm)</label>
+                  <DebouncedNumericInput
+                    step={0.1}
+                    value={editTargetStd.maxTotalGrindingLimit ?? 3.0}
+                    onChange={val => setEditTargetStd({ ...editTargetStd, maxTotalGrindingLimit: val })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-mono text-xs focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">Standard Shim Thickness (mm)</label>
+                  <DebouncedNumericInput
+                    step={0.01}
+                    value={editTargetStd.standardShimThickness ?? 0.20}
+                    onChange={val => setEditTargetStd({ ...editTargetStd, standardShimThickness: val })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-mono text-xs focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">Note / Remark (หมายเหตุ / ความถี่เปลี่ยน)</label>
+                <input
+                  type="text"
+                  placeholder="ระบุหมายเหตุ..."
+                  value={editTargetStd.notes || ''}
+                  onChange={e => setEditTargetStd({ ...editTargetStd, notes: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs focus:border-cyan-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="chk-edit-dispose"
+                  checked={!!editTargetStd.regrindStandard?.disposeAfterUse}
+                  onChange={e => setEditTargetStd({
+                    ...editTargetStd,
+                    regrindStandard: {
+                      ...editTargetStd.regrindStandard,
+                      oneTimeRegrindMm: (editTargetStd.regrindDepthPerTime || 0.20).toFixed(2),
+                      totalRegrindMm: editTargetStd.maxTotalGrindingLimit || 3.0,
+                      maxRegrindCount: 7,
+                      disposeAfterUse: e.target.checked
+                    }
+                  })}
+                  className="w-4 h-4 rounded bg-slate-900 border-slate-600 text-cyan-500 focus:ring-cyan-500"
+                />
+                <label htmlFor="chk-edit-dispose" className="text-xs text-slate-300 cursor-pointer">
+                  Single Use / Dispose after use (ชิ้นส่วนใช้ครั้งเดียวทิ้ง ไม่นำกลับมาเจียร)
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEditTargetStd(null)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition-colors"
+                >
+                  ยกเลิก (Cancel)
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded-lg text-xs font-extrabold transition-colors shadow-lg shadow-cyan-950 flex items-center gap-1.5"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>บันทึกการแก้ไข</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Modal: Add New Part Life Standard */}
       {showAddModal && (
@@ -791,6 +993,16 @@ export const PartLifeStandardSetupView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        isOpen={!!deleteTargetStd}
+        onClose={() => setDeleteTargetStd(null)}
+        onConfirm={handleDeleteConfirm}
+        itemName={deleteTargetStd ? `[${deleteTargetStd.configKey.partCode}] ${deleteTargetStd.partName}` : ''}
+        itemDetails={deleteTargetStd ? `สายการผลิต: ${deleteTargetStd.configKey.lineId} | วัสดุ: ${deleteTargetStd.configKey.material} | ขนาดท่อ: ${deleteTargetStd.configKey.tubeSize} | มาตรฐานอายุ: ${formatShots(deleteTargetStd.lifeLimitShots)} ช็อต` : undefined}
+        warningText="การลบเกณฑ์มาตรฐานนี้จะส่งผลต่อการคำนวณอายุการใช้งานที่เหลือและการแจ้งเตือนในแดชบอร์ด"
+      />
     </div>
   );
 };

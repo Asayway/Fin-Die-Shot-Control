@@ -7,12 +7,14 @@ import {
   ShieldCheck, 
   Activity,
   History,
-  Star
+  Star,
+  Download
 } from 'lucide-react';
 import { ProductionLineId, ConditionInspectionRecord, LINE_INFO_MAP } from '../types';
 import { storageService } from '../services/storageService';
 import { formatShots } from '../services/calculationService';
 import { LineFilterSelector } from '../components/common/LineFilterSelector';
+import { exportInspectionLogsExcel } from '../utils/excelExport';
 
 export const ConditionInspectionView: React.FC = () => {
   const [lineId, setLineId] = useState<ProductionLineId>('E6');
@@ -311,10 +313,19 @@ export const ConditionInspectionView: React.FC = () => {
 
       {/* History table */}
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-5 space-y-3">
-        <h3 className="font-bold text-slate-100 flex items-center gap-2">
-          <History className="w-4 h-4 text-cyan-400" />
-          <span>Recent Condition Inspection Logs</span>
-        </h3>
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <h3 className="font-bold text-slate-100 flex items-center gap-2">
+            <History className="w-4 h-4 text-cyan-400" />
+            <span>Recent Condition Inspection Logs</span>
+          </h3>
+          <button
+            onClick={() => exportInspectionLogsExcel(inspections, lineId)}
+            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors shadow-md"
+          >
+            <Download className="w-4 h-4" />
+            <span>Export Excel</span>
+          </button>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs font-mono">
             <thead>

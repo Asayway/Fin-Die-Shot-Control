@@ -14,6 +14,7 @@ import {
   Monitor
 } from 'lucide-react';
 import { User, SystemSettings, AppTheme } from '../../types';
+import { getI18n } from '../../i18n';
 
 interface HeaderProps {
   currentUser: User;
@@ -37,6 +38,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [time, setTime] = useState<string>('');
   const isHmi = settings.theme === 'hmi' || settings.theme === 'industrial-dark';
   const isLight = settings.theme === 'light';
+  const t = getI18n(settings.language);
 
   useEffect(() => {
     const updateTime = () => {
@@ -115,7 +117,7 @@ export const Header: React.FC<HeaderProps> = ({
                 }`}
               >
                 <Radio className={`w-2 h-2 animate-pulse ${isHmi ? 'text-green-400' : 'text-cyan-400'}`} />
-                {isHmi ? 'HMI ACTIVE' : 'LIVE ONLINE'}
+                {isHmi ? t.header.hmiStatus : t.header.liveStatus}
               </span>
             </div>
             <p 
@@ -123,7 +125,7 @@ export const Header: React.FC<HeaderProps> = ({
                 isHmi ? 'text-green-500/80 font-mono' : 'text-slate-400 font-sans'
               }`}
             >
-              FIN DIE SHOT & LIFETIME MONITOR <span className="text-zinc-500">|</span> <span className={isHmi ? 'text-green-300/90 font-thai' : 'text-slate-300 font-thai'}>ระบบควบคุมช็อตแม่พิมพ์</span>
+              {t.header.subtitle}
             </p>
           </div>
         </div>

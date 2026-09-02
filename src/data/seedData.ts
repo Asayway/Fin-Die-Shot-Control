@@ -13,7 +13,8 @@ import {
   ConditionInspectionRecord,
   ShotEntryRecord,
   SystemSettings,
-  PLCConfig
+  PLCConfig,
+  DowntimeLogEntry
 } from '../types';
 
 export const SEED_DATA_VERSION = '2025.01.31-REV1';
@@ -3642,3 +3643,282 @@ export const DEFAULT_PLC_CONFIG: PLCConfig = {
     'E6': { lineId: 'E6', lineName: 'LINE E6 (Ø7 Louver)', address: '%MW108', active: true, currentVal: 5452680, lastPulse: '13:05:31' }
   }
 };
+
+const getRelativePastIso = (daysAgo: number, startHourOffset: number = 0, durationHours: number = 2) => {
+  const baseTime = Date.now() - daysAgo * 24 * 3600 * 1000 - startHourOffset * 3600 * 1000;
+  const startTime = new Date(baseTime).toISOString();
+  const endTime = new Date(baseTime + durationHours * 3600 * 1000).toISOString();
+  return { startTime, endTime, durationMinutes: Math.round(durationHours * 60) };
+};
+
+export const INITIAL_DOWNTIME_LOGS: DowntimeLogEntry[] = [
+  // Line E1 (~14.5 hrs)
+  {
+    id: 'DT-E1-001',
+    lineId: 'E1',
+    ...getRelativePastIso(2, 4, 4.5),
+    category: 'TOOLING_REPAIR',
+    reason: 'Die Clearance & Stripper Plate Adjustment',
+    reasonTh: 'ปรับระยะห่างแม่พิมพ์และแผ่นปลดชิ้นงานเนื่องจากฟินติดขัด',
+    operatorOrTech: 'Narongrit Promdee (MAINT)',
+    isResolved: true,
+    notes: 'Checked all guide pins and re-torqued upper die plate bolts.'
+  },
+  {
+    id: 'DT-E1-002',
+    lineId: 'E1',
+    ...getRelativePastIso(12, 8, 6.0),
+    category: 'SCHEDULED_MAINTENANCE',
+    reason: 'Monthly PM & Main Punch Inspection',
+    reasonTh: 'บำรุงรักษาเชิงป้องกันประจำเดือน ตรวจเช็คคมตัดหลัก',
+    operatorOrTech: 'Kittisak Wongsuwan (TOOL)',
+    isResolved: true,
+    notes: 'Cleaned oil sludge and lubricated roller feed unit.'
+  },
+  {
+    id: 'DT-E1-003',
+    lineId: 'E1',
+    ...getRelativePastIso(22, 1, 4.0),
+    category: 'UNPLANNED_DOWN',
+    reason: 'Fin Uncoiler Photoelectric Sensor Fault',
+    reasonTh: 'เซนเซอร์ตรวจจับอลูมิเนียมฟอยล์ขัดข้อง',
+    operatorOrTech: 'Somchai Prasert (ELEC)',
+    isResolved: true,
+    notes: 'Replaced optical reflector head and recalibrated sensitivity.'
+  },
+
+  // Line E2 (~8.2 hrs)
+  {
+    id: 'DT-E2-001',
+    lineId: 'E2',
+    ...getRelativePastIso(5, 2, 3.2),
+    category: 'TOOLING_REPAIR',
+    reason: 'Slit Punch Edge Burr Check & Alignment',
+    reasonTh: 'ตรวจสอบครีบคมตัด Slit Punch และตั้งศูนย์แม่พิมพ์',
+    operatorOrTech: 'Narongrit Promdee (MAINT)',
+    isResolved: true,
+    notes: 'Minor burr observed at station 3. Ground 0.05mm off edge.'
+  },
+  {
+    id: 'DT-E2-002',
+    lineId: 'E2',
+    ...getRelativePastIso(18, 6, 5.0),
+    category: 'SCHEDULED_MAINTENANCE',
+    reason: 'Bi-Weekly PM & Vacuum Chute Cleanout',
+    reasonTh: 'บำรุงรักษาระบบดูดเศษฟินและทำความสะอาดรางลม',
+    operatorOrTech: 'Wichai Raksapol (OP)',
+    isResolved: true,
+    notes: 'Vacuum lines cleared and filter media replaced.'
+  },
+
+  // Line E3-1 (~19.8 hrs)
+  {
+    id: 'DT-E31-001',
+    lineId: 'E3-1',
+    ...getRelativePastIso(1, 10, 8.0),
+    category: 'UNPLANNED_DOWN',
+    reason: 'Upper Die Guide Bushing Seizure & Overhaul',
+    reasonTh: 'บูชไกด์แม่พิมพ์บนติดขัด ต้องถอดประกอบยกชุด',
+    operatorOrTech: 'Narongrit Promdee (MAINT)',
+    isResolved: true,
+    notes: 'Replaced ball cage bearing guide set and re-greased with high-temp lubricant.'
+  },
+  {
+    id: 'DT-E31-002',
+    lineId: 'E3-1',
+    ...getRelativePastIso(9, 3, 3.8),
+    category: 'TOOLING_REPAIR',
+    reason: 'Lubrication Nozzle Clogging on Station 2',
+    reasonTh: 'หัวฉีดน้ำมันหล่อลื่นแม่พิมพ์อุดตันที่สเตชั่น 2',
+    operatorOrTech: 'Kittichai Maneerat (LEAD)',
+    isResolved: true,
+    notes: 'Flushed oil header manifold and tested spray distribution.'
+  },
+  {
+    id: 'DT-E31-003',
+    lineId: 'E3-1',
+    ...getRelativePastIso(16, 8, 6.0),
+    category: 'SCHEDULED_MAINTENANCE',
+    reason: 'Scheduled Tooling Swapping & PM',
+    reasonTh: 'สลับชุดแม่พิมพ์สำรองและตรวจเช็คประจำรอบ',
+    operatorOrTech: 'Kittisak Wongsuwan (TOOL)',
+    isResolved: true,
+    notes: 'Sub-assembly A inspected and certified for next 50M shots.'
+  },
+  {
+    id: 'DT-E31-004',
+    lineId: 'E3-1',
+    ...getRelativePastIso(26, 5, 2.0),
+    category: 'QUALITY_HOLD',
+    reason: 'Fin Pitch Tolerance Verification QA Hold',
+    reasonTh: 'หยุดสายตรวจเช็คระยะพิทช์ฟินตามมาตรฐาน QC',
+    operatorOrTech: 'QC Inspection Team',
+    isResolved: true,
+    notes: 'Pitch measured at 1.45mm within ±0.02mm specification.'
+  },
+
+  // Line E3-2 (~6.5 hrs)
+  {
+    id: 'DT-E32-001',
+    lineId: 'E3-2',
+    ...getRelativePastIso(7, 2, 2.5),
+    category: 'UNPLANNED_DOWN',
+    reason: 'Coil Feeder Aluminum Strip Jam',
+    reasonTh: 'ม้วนฟอยล์อลูมิเนียมติดขัดที่ชุดป้อนฟีด',
+    operatorOrTech: 'Wichai Raksapol (OP)',
+    isResolved: true,
+    notes: 'Trimmed damaged coil lead edge and re-threaded feeder guides.'
+  },
+  {
+    id: 'DT-E32-002',
+    lineId: 'E3-2',
+    ...getRelativePastIso(21, 6, 4.0),
+    category: 'SCHEDULED_MAINTENANCE',
+    reason: 'Feeder Servo Calibration & Belt Inspection',
+    reasonTh: 'เทียบปรับเซอร์โวมอเตอร์ป้อนงานและตรวจสายพาน',
+    operatorOrTech: 'Somchai Prasert (ELEC)',
+    isResolved: true,
+    notes: 'Tension calibrated to 42 Nm. Positional drift resolved.'
+  },
+
+  // Line E3-3 (~12.0 hrs)
+  {
+    id: 'DT-E33-001',
+    lineId: 'E3-3',
+    ...getRelativePastIso(4, 5, 4.0),
+    category: 'UNPLANNED_DOWN',
+    reason: 'Fin Stacking Counting Sensor Optical Error',
+    reasonTh: 'เซนเซอร์นับจำนวนฟินซ้อนทำงานผิดพลาด',
+    operatorOrTech: 'Somchai Prasert (ELEC)',
+    isResolved: true,
+    notes: 'Cleaned oil film from lens and replaced fiber optic cable.'
+  },
+  {
+    id: 'DT-E33-002',
+    lineId: 'E3-3',
+    ...getRelativePastIso(14, 8, 6.0),
+    category: 'SCHEDULED_MAINTENANCE',
+    reason: 'Pneumatic System Valve Bank Replacement',
+    reasonTh: 'เปลี่ยนชุดวาล์วลมโซลินอยด์ควบคุมลิฟท์ฟิน',
+    operatorOrTech: 'Narongrit Promdee (MAINT)',
+    isResolved: true,
+    notes: 'New SMC 5-port solenoid manifold installed.'
+  },
+  {
+    id: 'DT-E33-003',
+    lineId: 'E3-3',
+    ...getRelativePastIso(28, 1, 2.0),
+    category: 'TOOLING_REPAIR',
+    reason: 'Die Cavity Cleaning & Burr Clearing',
+    reasonTh: 'ทำความสะอาดโพรงแม่พิมพ์และกำจัดเศษครีบสะสม',
+    operatorOrTech: 'Kittisak Wongsuwan (TOOL)',
+    isResolved: true,
+    notes: 'All die cavities blown down and dry-lubricated.'
+  },
+
+  // Line E4 (~24.2 hrs - Bottleneck)
+  {
+    id: 'DT-E4-001',
+    lineId: 'E4',
+    ...getRelativePastIso(3, 7, 9.5),
+    category: 'UNPLANNED_DOWN',
+    reason: 'Piercing Punch Chipping & Die Insert Emergency Swap',
+    reasonTh: 'หัวพันช์เจาะรูบิ่นเสียหาย เปลี่ยนชุดอินเสิร์ตด่วน',
+    operatorOrTech: 'Kittisak Wongsuwan & Narongrit',
+    isResolved: true,
+    notes: 'Emergency replacement with spare lot L-4091. Verified clearance.'
+  },
+  {
+    id: 'DT-E4-002',
+    lineId: 'E4',
+    ...getRelativePastIso(11, 4, 6.2),
+    category: 'TOOLING_REPAIR',
+    reason: 'Die Alignment & Ram Parallelism Calibration',
+    reasonTh: 'ตั้งระดับขนานแรมเพรสและศูนย์แม่พิมพ์บน-ล่าง',
+    operatorOrTech: 'Narongrit Promdee (MAINT)',
+    isResolved: true,
+    notes: 'Dial indicator deviation reduced to under 0.015mm.'
+  },
+  {
+    id: 'DT-E4-003',
+    lineId: 'E4',
+    ...getRelativePastIso(19, 8, 6.5),
+    category: 'SCHEDULED_MAINTENANCE',
+    reason: 'Hydraulic Cushion Seal Overhaul',
+    reasonTh: 'เปลี่ยนชุดซีลไฮดรอลิกเบาะรับแรงกระแทก',
+    operatorOrTech: 'Narongrit Promdee (MAINT)',
+    isResolved: true,
+    notes: 'Replaced nitrogen-assisted cushion cylinder seal rings.'
+  },
+  {
+    id: 'DT-E4-004',
+    lineId: 'E4',
+    ...getRelativePastIso(27, 2, 2.0),
+    category: 'UNPLANNED_DOWN',
+    reason: 'Emergency Stop Circuit Safety Interlock Test',
+    reasonTh: 'ทดสอบวงจรเซฟตี้หยุดฉุกเฉินประจำสัปดาห์',
+    operatorOrTech: 'Somchai Prasert (ELEC)',
+    isResolved: true,
+    notes: 'Light curtains and dual-channel safety relays verified.'
+  },
+
+  // Line E5 (~5.4 hrs)
+  {
+    id: 'DT-E5-001',
+    lineId: 'E5',
+    ...getRelativePastIso(8, 6, 4.0),
+    category: 'SCHEDULED_MAINTENANCE',
+    reason: 'Monthly Preventive Mechanical Check',
+    reasonTh: 'ตรวจเช็คระบบกลไกประจำเดือนตามเช็คลิสต์',
+    operatorOrTech: 'Narongrit Promdee (MAINT)',
+    isResolved: true,
+    notes: 'All bearings greased, clutch/brake gap measured at 1.8mm.'
+  },
+  {
+    id: 'DT-E5-002',
+    lineId: 'E5',
+    ...getRelativePastIso(24, 3, 1.4),
+    category: 'UNPLANNED_DOWN',
+    reason: 'Foil Tension Dancer Arm Microswitch Stuck',
+    reasonTh: 'ไมโครสวิตช์ตรวจจับความตึงฟอยล์ค้าง',
+    operatorOrTech: 'Somchai Prasert (ELEC)',
+    isResolved: true,
+    notes: 'Replaced Omron microswitch with sealed IP67 variant.'
+  },
+
+  // Line E6 (~16.5 hrs)
+  {
+    id: 'DT-E6-001',
+    lineId: 'E6',
+    ...getRelativePastIso(2, 6, 7.5),
+    category: 'DIE_CHANGEOVER',
+    reason: 'Louver & Flare Die Reground Full Set Replacement',
+    reasonTh: 'เปลี่ยนชุดอะไหล่ Louver & Flare หลังผ่านการเจียระไน',
+    operatorOrTech: 'Kittisak Wongsuwan (TOOL)',
+    isResolved: true,
+    notes: 'Replaced full set of 24 flare punches and 48 louver blades.'
+  },
+  {
+    id: 'DT-E6-002',
+    lineId: 'E6',
+    ...getRelativePastIso(15, 8, 6.0),
+    category: 'SCHEDULED_MAINTENANCE',
+    reason: 'Main Flywheel Brake Lining Check & PM',
+    reasonTh: 'ตรวจผ้าเบรกล้อตุนกำลังและบำรุงรักษาประจำเดือน',
+    operatorOrTech: 'Narongrit Promdee (MAINT)',
+    isResolved: true,
+    notes: 'Brake torque tested to 850 Nm. Safe operating margin.'
+  },
+  {
+    id: 'DT-E6-003',
+    lineId: 'E6',
+    ...getRelativePastIso(25, 4, 3.0),
+    category: 'UNPLANNED_DOWN',
+    reason: 'Main Air Supply Pressure Drop Interlock',
+    reasonTh: 'แรงดันลมหลักโรงงานตกต่ำกว่า 5.5 Bar ระบบตัดการทำงาน',
+    operatorOrTech: 'Wichai Raksapol (OP)',
+    isResolved: true,
+    notes: 'Utility team switched on auxiliary compressor 3. Reset error.'
+  }
+];
+

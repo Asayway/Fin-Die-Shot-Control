@@ -26,7 +26,11 @@ import {
   UserRole,
   PositionLockRecord,
   PositionLockStatus,
-  MachineStatus
+  MachineStatus,
+  DowntimeLogEntry,
+  DowntimeCategory,
+  DowntimeSummaryByLine,
+  Downtime30DayReport
 } from '../types';
 
 import {
@@ -42,6 +46,7 @@ import {
   INITIAL_INSPECTIONS,
   INITIAL_SHOT_LOGS,
   INITIAL_AUDIT_LOGS,
+  INITIAL_DOWNTIME_LOGS,
   DEFAULT_SYSTEM_SETTINGS,
   DEFAULT_PLC_CONFIG,
   SEED_DATA_VERSION,
@@ -69,6 +74,7 @@ const STORAGE_KEYS = {
   SETTINGS: 'fin_press_settings',
   PLC_CONFIG: 'fin_press_plc_config',
   POSITION_LOCKS: 'fin_press_position_locks',
+  DOWNTIME_LOGS: 'fin_press_downtime_logs',
   SEED_INITIALIZED: 'fin_press_seed_init_v6'
 };
 
@@ -133,6 +139,7 @@ class StorageService {
     localStorage.setItem(STORAGE_KEYS.INSPECTIONS, JSON.stringify(INITIAL_INSPECTIONS));
     localStorage.setItem(STORAGE_KEYS.SHOT_LOGS, JSON.stringify(INITIAL_SHOT_LOGS));
     localStorage.setItem(STORAGE_KEYS.AUDIT_LOGS, JSON.stringify(INITIAL_AUDIT_LOGS));
+    localStorage.setItem(STORAGE_KEYS.DOWNTIME_LOGS, JSON.stringify(INITIAL_DOWNTIME_LOGS));
     localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(DEFAULT_SYSTEM_SETTINGS));
     localStorage.setItem(STORAGE_KEYS.PLC_CONFIG, JSON.stringify(DEFAULT_PLC_CONFIG));
     localStorage.setItem(STORAGE_KEYS.SEED_INITIALIZED, SEED_DATA_VERSION);
@@ -1946,6 +1953,22 @@ class StorageService {
     this.notify();
   }
 
+  public deleteLifeStandard(standardId: string): void {
+    const standards = this.getLifeStandards();
+    const target = standards.find(s => s.id === standardId);
+    const filtered = standards.filter(s => s.id !== standardId);
+    localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(filtered));
+    if (target) {
+      this.addAuditLog(
+        'STANDARD_CHANGE',
+        `Deleted Life Standard for ${target.partName} (${target.configKey?.partCode || target.id})`,
+        `ลบเกณฑ์อายุการใช้งาน ${target.partName}`,
+        target.configKey?.lineId === 'ALL' ? undefined : (target.configKey?.lineId as ProductionLineId)
+      );
+    }
+    this.notify();
+  }
+
   public saveLineConfig(config: LineActiveConfiguration) {
     const configs = this.getLineConfigs();
     const idx = configs.findIndex(c => c.id === config.id);
@@ -1981,29 +2004,105 @@ class StorageService {
     this.notify();
   }
 
-  public updateLineMachineStatus(lineId: ProductionLineId, machineStatus: MachineStatus, isActive?: boolean): void {
-    const monitoring = this.getLinesMonitoring();
-    if (monitoring[lineId]) {
-      monitoring[lineId].machineStatus = machineStatus;
-      localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(monitoring));
+  public updateLineMachineStatus(
+    lineId: ProductionLineId,
+    newStatus: MachineStatus,
+    reason?: string,
+    category?: DowntimeCategory
+  ): { success: boolean; message: string } {
+    const all = this.getLinesMonitoring();
+    const line = all[lineId];
+    if (!line) {
+      return { success: false, message: `Line ${lineId} not found` };
     }
 
+    const previousStatus = line.machineStatus || 'RUNNING';
+    if (previousStatus === newStatus) {
+      return { success: true, message: `Line ${lineId} is already in ${newStatus} state.` };
+    }
+
+    const user = this.getCurrentUser();
+    const nowIso = new Date().toISOString();
+
+    // 1. Update line machine status in live monitoring
+    line.machineStatus = newStatus;
+    line.lastUpdate = nowIso.replace('T', ' ').substring(0, 19);
+    all[lineId] = line;
+    localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(all));
+
+    // 2. Keep active configuration in sync
     const configs = this.getLineConfigs();
     const configIdx = configs.findIndex(c => c.lineId === lineId);
     if (configIdx >= 0) {
       configs[configIdx].isActive = true;
-      configs[configIdx].status = machineStatus === 'RUNNING' ? 'ACTIVE' : 'INACTIVE';
+      configs[configIdx].status = newStatus === 'RUNNING' ? 'ACTIVE' : 'INACTIVE';
       localStorage.setItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
     }
 
-    this.addAuditLog(
-      'CONFIGURATION',
-      `Updated Line ${lineId} operational status to ${machineStatus}`,
-      `อัปเดตสถานะการผลิตของสาย ${lineId} เป็น ${machineStatus}`,
-      lineId
-    );
+    const logs = this.getDowntimeLogs();
+
+    // 3. If changing to MAINTENANCE or STOPPED (DOWN), create active downtime entry
+    if (newStatus === 'MAINTENANCE' || newStatus === 'STOPPED') {
+      const isMaint = newStatus === 'MAINTENANCE';
+      const defaultCat: DowntimeCategory = isMaint ? 'SCHEDULED_MAINTENANCE' : 'UNPLANNED_DOWN';
+      const defaultReason = isMaint 
+        ? (reason || 'Scheduled Die Tooling Inspection / Preventive Maintenance') 
+        : (reason || 'Emergency Line Stop / Mechanical Unplanned Breakdown');
+
+      const newDt: DowntimeLogEntry = {
+        id: `DT-${lineId}-${Date.now().toString().slice(-6)}`,
+        lineId,
+        startTime: nowIso,
+        durationMinutes: 0,
+        category: category || defaultCat,
+        reason: defaultReason,
+        reasonTh: isMaint ? 'บำรุงรักษาแม่พิมพ์/ซ่อมบำรุงตามรอบ' : 'หยุดสายการผลิตฉุกเฉิน/เครื่องจักรขัดข้อง',
+        operatorOrTech: `${user.name} (${user.role})`,
+        isResolved: false,
+        notes: `Switched status from ${previousStatus} to ${newStatus}`
+      };
+      logs.unshift(newDt);
+      localStorage.setItem(STORAGE_KEYS.DOWNTIME_LOGS, JSON.stringify(logs));
+    }
+
+    // 4. If switching back to RUNNING or IDLE, auto-resolve any open ongoing downtime for this line
+    if (newStatus === 'RUNNING' || newStatus === 'IDLE') {
+      let resolvedCount = 0;
+      logs.forEach(l => {
+        if (l.lineId === lineId && !l.isResolved) {
+          const startMs = new Date(l.startTime).getTime();
+          const endMs = new Date(nowIso).getTime();
+          l.endTime = nowIso;
+          l.durationMinutes = Math.max(1, Math.round((endMs - startMs) / (60 * 1000)));
+          l.isResolved = true;
+          resolvedCount++;
+        }
+      });
+      if (resolvedCount > 0) {
+        localStorage.setItem(STORAGE_KEYS.DOWNTIME_LOGS, JSON.stringify(logs));
+      }
+    }
+
+    // 5. Structured Audit Trail
+    this.logStructuredAudit({
+      module: 'SYSTEM',
+      recordId: `LINE-${lineId}`,
+      action: 'STATUS_CHANGE',
+      fieldChanged: 'machineStatus',
+      oldValue: previousStatus,
+      newValue: newStatus,
+      reason: reason || `Line machine status manually updated to ${newStatus}`,
+      details: `Machine status for Line ${lineId} updated from ${previousStatus} to ${newStatus}. (Operator: ${user.name})`,
+      detailsTh: `เปลี่ยนสถานะเครื่องจักรสาย ${lineId} จาก ${previousStatus} เป็น ${newStatus} (โดย: ${user.name})`,
+      lineId,
+      actionCategory: 'CONFIGURATION'
+    });
 
     this.notify();
+    return {
+      success: true,
+      message: `Line ${lineId} status updated to ${newStatus}`
+    };
   }
 
   /**
@@ -2816,7 +2915,147 @@ class StorageService {
     this.addAuditLog('SYSTEM', 'Updated PLC Direct Driver configuration parameters and register mappings');
     this.notify();
   }
+
+  // ==========================================
+  // DOWNTIME TRACKING & STATUS MANAGEMENT (LAST 30 DAYS)
+  // ==========================================
+
+  public getDowntimeLogs(): DowntimeLogEntry[] {
+    const raw = localStorage.getItem(STORAGE_KEYS.DOWNTIME_LOGS);
+    if (!raw) {
+      localStorage.setItem(STORAGE_KEYS.DOWNTIME_LOGS, JSON.stringify(INITIAL_DOWNTIME_LOGS));
+      return INITIAL_DOWNTIME_LOGS;
+    }
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return INITIAL_DOWNTIME_LOGS;
+    }
+  }
+
+  public addDowntimeLog(entry: Omit<DowntimeLogEntry, 'id'>): DowntimeLogEntry {
+    const logs = this.getDowntimeLogs();
+    const newEntry: DowntimeLogEntry = {
+      id: `DT-${entry.lineId}-${Date.now().toString().slice(-6)}`,
+      ...entry
+    };
+    logs.unshift(newEntry);
+    localStorage.setItem(STORAGE_KEYS.DOWNTIME_LOGS, JSON.stringify(logs));
+    this.notify();
+    return newEntry;
+  }
+
+  public resolveDowntimeLog(id: string, endTime?: string): void {
+    const logs = this.getDowntimeLogs();
+    const target = logs.find(l => l.id === id);
+    if (target && !target.isResolved) {
+      const end = endTime || new Date().toISOString();
+      const startMs = new Date(target.startTime).getTime();
+      const endMs = new Date(end).getTime();
+      target.endTime = end;
+      target.durationMinutes = Math.max(1, Math.round((endMs - startMs) / (60 * 1000)));
+      target.isResolved = true;
+      localStorage.setItem(STORAGE_KEYS.DOWNTIME_LOGS, JSON.stringify(logs));
+      this.notify();
+    }
+  }
+
+  public getLineDowntimeSummary30Days(): Downtime30DayReport {
+    const logs = this.getDowntimeLogs();
+    const lineIds: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5', 'E6'];
+    const now = Date.now();
+    const thirtyDaysAgoMs = now - (30 * 24 * 3600 * 1000);
+    const plannedHoursPerLine = 30 * 24; // 720 hours in 30 days
+
+    const lineSummaries: Record<ProductionLineId, DowntimeSummaryByLine> = {} as any;
+
+    let totalFactoryMinutes = 0;
+
+    lineIds.forEach(lId => {
+      // Filter events in the last 30 days for this line
+      const lineLogs = logs.filter(l => {
+        const startMs = new Date(l.startTime).getTime();
+        return l.lineId === lId && (startMs >= thirtyDaysAgoMs || !l.isResolved);
+      });
+
+      let totalMinutes = 0;
+      let unplannedMinutes = 0;
+      let maintenanceMinutes = 0;
+      let changeoverMinutes = 0;
+      let lastIncident: DowntimeLogEntry | undefined = undefined;
+
+      lineLogs.forEach(l => {
+        const startMs = new Date(l.startTime).getTime();
+        let eventMinutes = l.durationMinutes || 0;
+        if (!l.isResolved) {
+          eventMinutes = Math.max(1, Math.round((now - startMs) / (60 * 1000)));
+        }
+        totalMinutes += eventMinutes;
+
+        if (l.category === 'UNPLANNED_DOWN' || l.category === 'QUALITY_HOLD') {
+          unplannedMinutes += eventMinutes;
+        } else if (l.category === 'SCHEDULED_MAINTENANCE' || l.category === 'TOOLING_REPAIR') {
+          maintenanceMinutes += eventMinutes;
+        } else if (l.category === 'DIE_CHANGEOVER') {
+          changeoverMinutes += eventMinutes;
+        } else {
+          unplannedMinutes += eventMinutes;
+        }
+
+        if (!lastIncident || new Date(l.startTime).getTime() > new Date(lastIncident.startTime).getTime()) {
+          lastIncident = l;
+        }
+      });
+
+      const totalHours = Number((totalMinutes / 60).toFixed(1));
+      const unplannedHours = Number((unplannedMinutes / 60).toFixed(1));
+      const maintenanceHours = Number((maintenanceMinutes / 60).toFixed(1));
+      const changeoverHours = Number((changeoverMinutes / 60).toFixed(1));
+      const uptimePercent = Number(Math.max(0, Math.min(100, ((plannedHoursPerLine - totalHours) / plannedHoursPerLine) * 100)).toFixed(1));
+
+      totalFactoryMinutes += totalMinutes;
+
+      lineSummaries[lId] = {
+        lineId: lId,
+        lineName: `Line ${lId}`,
+        totalDowntimeMinutes: totalMinutes,
+        totalDowntimeHours: totalHours,
+        eventCount: lineLogs.length,
+        uptimePercent,
+        unplannedHours,
+        maintenanceHours,
+        changeoverHours,
+        lastIncident
+      };
+    });
+
+    const totalFactoryHours = Number((totalFactoryMinutes / 60).toFixed(1));
+    const averageLineDowntimeHours = Number((totalFactoryHours / lineIds.length).toFixed(1));
+    const totalFactoryPlannedHours = plannedHoursPerLine * lineIds.length;
+    const factoryUptimePercent = Number(Math.max(0, Math.min(100, ((totalFactoryPlannedHours - totalFactoryHours) / totalFactoryPlannedHours) * 100)).toFixed(1));
+
+    // Find bottleneck line with highest downtime
+    let bottleneckLineId: ProductionLineId = 'E4';
+    let maxHours = -1;
+    lineIds.forEach(lId => {
+      if (lineSummaries[lId].totalDowntimeHours > maxHours) {
+        maxHours = lineSummaries[lId].totalDowntimeHours;
+        bottleneckLineId = lId;
+      }
+    });
+
+    return {
+      startDate: new Date(thirtyDaysAgoMs).toISOString().substring(0, 10),
+      endDate: new Date(now).toISOString().substring(0, 10),
+      totalFactoryDowntimeHours: totalFactoryHours,
+      averageLineDowntimeHours,
+      factoryUptimePercent,
+      bottleneckLineId,
+      lineSummaries
+    };
+  }
 }
 
 export const storageService = new StorageService();
+
 

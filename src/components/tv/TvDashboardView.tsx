@@ -287,12 +287,12 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
     }`}>
       
       {/* Top TV Controls Bar (Line Switcher, Auto Cycle, High Contrast, Fullscreen) - flex-none */}
-      <div className={`flex-none flex flex-wrap items-center justify-between gap-2 pb-2 mb-1.5 border-b z-30 relative ${
+      <div className={`flex-none flex flex-wrap items-center justify-between gap-2 pb-1.5 mb-1.5 border-b z-30 relative ${
         highContrast ? 'border-yellow-400 border-b-2' : 'border-slate-800/80'
       }`}>
         <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-          <span className={`text-xs sm:text-sm font-mono font-black uppercase tracking-wider mr-1 ${
-            highContrast ? 'text-yellow-300 text-base' : 'text-cyan-400'
+          <span className={`text-sm sm:text-base font-mono font-black uppercase tracking-wider mr-1 ${
+            highContrast ? 'text-yellow-300' : 'text-cyan-400'
           }`}>{t.controls.line}:</span>
           {linesList.map(line => {
             const info = LINE_INFO_MAP[line];
@@ -303,24 +303,24 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
               <button
                 key={line}
                 onClick={() => setSelectedLineId(line)}
-                className={`px-2.5 py-1 sm:px-3 sm:py-1.5 md:px-3.5 md:py-1.5 rounded-lg text-xs sm:text-sm md:text-base font-mono font-black transition-all flex items-center gap-1.5 border whitespace-nowrap ${
+                className={`px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg text-sm sm:text-base font-mono font-black transition-all flex items-center gap-1.5 border whitespace-nowrap active:scale-95 shadow-sm ${
                   isSelected
                     ? highContrast
-                      ? 'bg-yellow-400 text-black border-2 border-white shadow-xl scale-105 font-black'
-                      : 'bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-400/40 ring-2 ring-cyan-300 scale-105'
+                      ? 'bg-yellow-400 text-black border-2 border-white shadow-md font-black ring-2 ring-yellow-400'
+                      : 'bg-cyan-400 text-slate-950 shadow-md ring-2 ring-cyan-300 font-black'
                     : highContrast
-                      ? 'bg-zinc-900 text-white border-2 border-zinc-600 hover:bg-zinc-800'
+                      ? 'bg-zinc-900 text-white border border-zinc-600 hover:bg-zinc-800'
                       : 'bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/90'
                 }`}
               >
-                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
                   lineStatus === 'RUNNING' ? 'bg-emerald-400 animate-pulse' :
                   lineStatus === 'IDLE' ? 'bg-amber-400' :
                   lineStatus === 'MAINTENANCE' ? 'bg-cyan-400' : 'bg-rose-500'
                 }`} />
                 <span>{displayLine}</span>
-                <span className={`text-[10px] px-1 py-0.2 rounded ${
-                  isSelected ? 'bg-slate-950/80 text-cyan-300 font-bold' : 'bg-slate-800 text-slate-400'
+                <span className={`text-[11px] sm:text-xs px-1.5 py-0.5 rounded font-bold ${
+                  isSelected ? 'bg-slate-950 text-cyan-300' : 'bg-slate-800 text-slate-300'
                 }`}>
                   {info?.shortTag || line}
                 </span>
@@ -330,20 +330,19 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-
-          {/* AUTO-CYCLE TIMER SELECTOR BUTTON (OFF, 5s, 10s, 15s, 30s) */}
+          {/* AUTO-CYCLE TIMER SELECTOR BUTTON */}
           <button
             onClick={handleToggleAutoCycle}
-            className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-mono font-black border-2 transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-lg text-xs sm:text-sm font-mono font-bold border transition-all active:scale-95 ${
               autoCycleSeconds > 0
-                ? 'bg-amber-400 text-slate-950 border-amber-200 shadow-md ring-2 ring-amber-300'
+                ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-md font-black'
                 : 'bg-slate-900 text-slate-300 border-slate-700 hover:text-white'
             }`}
             title="Click to cycle Auto-Switch timer: OFF -> 5s -> 10s -> 15s -> 30s -> OFF"
           >
-            <RotateCw className={`w-4 h-4 ${autoCycleSeconds > 0 ? 'animate-spin text-slate-950' : ''}`} />
+            <RotateCw className={`w-3.5 h-3.5 ${autoCycleSeconds > 0 ? 'animate-spin text-slate-950' : ''}`} />
             <span className="hidden sm:inline">{t.controls.autoCycle}</span>
-            <span className="font-extrabold px-1.5 py-0.5 bg-black/40 text-white rounded text-xs">
+            <span className="font-bold px-1.5 py-0.5 bg-black/40 text-white rounded text-xs">
               {autoCycleSeconds > 0 ? `${autoCycleSeconds}s` : t.controls.off}
             </span>
           </button>
@@ -351,48 +350,60 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
           {onToggleFullscreen && (
             <button
               onClick={onToggleFullscreen}
-              className="p-1.5 sm:p-2 rounded-lg bg-slate-800 text-cyan-300 border border-slate-700 hover:bg-slate-700 transition-colors shadow-sm"
-              title={isFullscreenMode ? "Exit Fullscreen TV (ย่อหน้าจอ)" : "Expand Fullscreen TV (ขยายเต็มจอ)"}
+              className="p-1.5 rounded-lg bg-slate-800 text-cyan-300 border border-slate-700 hover:bg-slate-700 transition-colors shadow-sm"
+              title={isFullscreenMode ? "Exit Fullscreen TV" : "Expand Fullscreen TV"}
             >
-              {isFullscreenMode ? <Minimize2 className="w-4 h-4 sm:w-5 sm:h-5" /> : <Maximize2 className="w-4 h-4 sm:w-5 sm:h-5" />}
+              {isFullscreenMode ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
           )}
         </div>
       </div>
 
       {/* TOP HEADER: CLEAN INDUSTRIAL DISPLAY - flex-none */}
-      <div className="flex-none grid grid-cols-12 items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 bg-[#0E172A] border border-slate-800/90 rounded-lg mb-1 shadow-sm">
+      <div className={`flex-none grid grid-cols-12 items-center gap-2 px-3 py-1.5 bg-[#0E172A] border border-slate-800/90 rounded-lg mb-1.5 shadow-md ${
+        isFullscreenMode ? 'lg:py-2.5 lg:px-4' : ''
+      }`}>
         {/* Center Title & Line Specs */}
-        <div className="col-span-9 text-left pl-1">
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 bg-cyan-950 text-cyan-300 border border-cyan-500/60 rounded font-mono font-black text-xs sm:text-sm md:text-base">
+        <div className="col-span-9 text-left pl-0.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`px-2 py-0.5 bg-cyan-950 text-cyan-300 border border-cyan-500/80 rounded-md font-mono font-black ${
+              isFullscreenMode ? 'text-sm sm:text-base lg:text-lg' : 'text-xs sm:text-sm'
+            }`}>
               LINE {selectedLineId}
             </span>
-            <h2 className="text-xs sm:text-sm md:text-base lg:text-[1.1vw] font-black tracking-wide text-white uppercase font-['Plus_Jakarta_Sans'] leading-tight">
+            <h2 className={`font-black tracking-wide text-white uppercase font-['Plus_Jakarta_Sans'] leading-tight ${
+              isFullscreenMode ? 'text-base sm:text-lg md:text-xl lg:text-2xl' : 'text-sm sm:text-base md:text-lg'
+            }`}>
               FIN DIE SPARE PARTS SHOT COUNT ({LINE_INFO_MAP[selectedLineId]?.nameTh || selectedLineId})
             </h2>
           </div>
-          <div className="text-[10px] sm:text-xs font-mono text-cyan-300/90 flex flex-wrap items-center justify-start gap-1.5 sm:gap-2.5 mt-0.5">
-            <span className="bg-slate-900/90 px-1.5 py-0.2 rounded border border-slate-800 text-slate-300">
-              DIE: <strong className="text-white font-extrabold">{lineData.activeConfig?.dieCode || `FD-${selectedLineId}-07`}</strong>
+          <div className={`font-mono text-cyan-300 flex flex-wrap items-center justify-start gap-2 mt-1 ${
+            isFullscreenMode ? 'text-xs sm:text-sm lg:text-base' : 'text-xs sm:text-sm'
+          }`}>
+            <span className="bg-slate-900/95 px-2 py-0.5 rounded border border-slate-800 text-slate-300">
+              DIE: <strong className="text-white font-bold">{lineData.activeConfig?.dieCode || `FD-${selectedLineId}-07`}</strong>
             </span>
-            <span className="bg-slate-900/90 px-1.5 py-0.2 rounded border border-slate-800 text-slate-300">
-              TUBE: <strong className="text-white font-extrabold">{lineData.activeConfig?.tubeSize || 'Ø7'}</strong>
+            <span className="bg-slate-900/95 px-2 py-0.5 rounded border border-slate-800 text-slate-300">
+              TUBE: <strong className="text-white font-bold">{lineData.activeConfig?.tubeSize || 'Ø7'}</strong>
             </span>
-            <span className="bg-slate-900/90 px-1.5 py-0.2 rounded border border-slate-800 text-slate-300">
-              MAT: <strong className="text-white font-extrabold">{lineData.activeConfig?.material || 'PCM'} ({lineData.activeConfig?.thicknessMm || 0.10}mm)</strong>
+            <span className="bg-slate-900/95 px-2 py-0.5 rounded border border-slate-800 text-slate-300">
+              MAT: <strong className="text-white font-bold">{lineData.activeConfig?.material || 'PCM'} ({lineData.activeConfig?.thicknessMm || 0.10}mm)</strong>
             </span>
-            <span className="bg-slate-900/90 px-1.5 py-0.2 rounded border border-slate-800 text-slate-300 hidden sm:inline">
-              TYPE: <strong className="text-white font-extrabold">{lineData.activeConfig?.finType || 'Slit (half)'}</strong>
+            <span className="bg-slate-900/95 px-2 py-0.5 rounded border border-slate-800 text-slate-300 hidden sm:inline">
+              TYPE: <strong className="text-white font-bold">{lineData.activeConfig?.finType || 'Slit (half)'}</strong>
             </span>
           </div>
         </div>
 
         {/* Right Timestamp Box */}
         <div className="col-span-3 text-right">
-          <div className="inline-block px-2 sm:px-3 py-0.5 bg-slate-900/90 border border-slate-800 rounded text-right shadow-inner">
-            <div className="text-[9px] font-mono tracking-wider text-slate-400 font-extrabold">LAST UPDATE</div>
-            <div className="text-xs sm:text-sm md:text-base font-mono font-black text-slate-100">
+          <div className="inline-block px-3 py-1 bg-slate-900/95 border border-slate-800 rounded-lg text-right shadow-inner">
+            <div className={`font-mono tracking-wider text-slate-400 font-bold uppercase ${
+              isFullscreenMode ? 'text-xs sm:text-sm' : 'text-[10px] sm:text-xs'
+            }`}>LAST UPDATE</div>
+            <div className={`font-mono font-black text-cyan-300 ${
+              isFullscreenMode ? 'text-sm sm:text-base lg:text-lg xl:text-xl' : 'text-xs sm:text-sm md:text-base'
+            }`}>
               {currentTime || lineData.lastUpdate}
             </div>
           </div>
@@ -400,117 +411,147 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
       </div>
 
       {/* KPI METRIC CARDS ROW - flex-none */}
-      <div className="flex-none grid grid-cols-2 sm:grid-cols-5 gap-1 sm:gap-1.5 mb-1">
+      <div className="flex-none grid grid-cols-2 sm:grid-cols-5 gap-1.5 mb-1.5">
         {/* Machine Status */}
-        <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg py-1 px-1.5 text-center flex flex-col justify-center shadow-sm">
-          <div className="text-[9px] sm:text-[10px] font-sans font-extrabold tracking-wide text-slate-400 uppercase">
+        <div className={`border rounded-lg py-1.5 px-2 text-center flex flex-col justify-center shadow-md transition-all ${
+          lineData.machineStatus === 'MAINTENANCE'
+            ? 'bg-amber-950/80 border-amber-500 animate-pulse ring-1 ring-amber-400/40'
+            : lineData.machineStatus === 'STOPPED'
+            ? 'bg-rose-950/90 border-rose-500 animate-pulse ring-1 ring-rose-500/50'
+            : 'bg-[#0E172A] border-slate-800/90'
+        }`}>
+          <div className={`font-sans font-bold tracking-wider text-slate-400 uppercase mb-0.5 ${
+            isFullscreenMode ? 'text-xs sm:text-sm' : 'text-[10px] sm:text-xs'
+          }`}>
             {t.table.status}
           </div>
-          <div className="flex items-center justify-center gap-1 font-black text-xs sm:text-sm md:text-base lg:text-[1.15vw] font-mono">
+          <div className={`flex items-center justify-center gap-1.5 font-black font-mono ${
+            isFullscreenMode ? 'text-base sm:text-lg md:text-xl lg:text-2xl' : 'text-sm sm:text-base md:text-lg'
+          }`}>
             {lineData.machineStatus === 'RUNNING' && <span className="text-emerald-400 flex items-center gap-1">🟢 {t.controls.running}</span>}
-            {lineData.machineStatus === 'IDLE' && <span className="text-amber-300 flex items-center gap-1">🟡 {t.controls.idle}</span>}
-            {lineData.machineStatus === 'MAINTENANCE' && <span className="text-cyan-300 flex items-center gap-1">🔧 {t.controls.maintenance}</span>}
-            {lineData.machineStatus === 'STOPPED' && <span className="text-rose-400 flex items-center gap-1">🔴 {t.controls.stopped}</span>}
+            {lineData.machineStatus === 'IDLE' && <span className="text-yellow-300 flex items-center gap-1">🟡 {t.controls.idle}</span>}
+            {lineData.machineStatus === 'MAINTENANCE' && <span className="text-amber-300 font-black flex items-center gap-1">🔧 {t.controls.maintenance}</span>}
+            {lineData.machineStatus === 'STOPPED' && <span className="text-rose-200 font-black flex items-center gap-1">🔴 {t.controls.stopped}</span>}
             {(!lineData.machineStatus) && <span className="text-emerald-400 flex items-center gap-1">🟢 {t.controls.running}</span>}
           </div>
         </div>
 
         {/* Machine Shot Total */}
-        <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg py-1 px-1.5 text-center shadow-sm">
-          <div className="text-[9px] sm:text-[10px] font-sans font-extrabold tracking-wide text-slate-400 uppercase">
+        <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg py-1.5 px-2 text-center shadow-md">
+          <div className={`font-sans font-bold tracking-wider text-slate-400 uppercase mb-0.5 ${
+            isFullscreenMode ? 'text-xs sm:text-sm' : 'text-[10px] sm:text-xs'
+          }`}>
             {t.controls.totalShot}
           </div>
-          <div className="text-emerald-400 font-black text-xs sm:text-sm md:text-base lg:text-[1.2vw] font-mono tracking-tight tabular-nums">
-            {formatShots(lineData.machineShotTotal)} <span className="text-[9px] font-normal text-emerald-500/70">Shot</span>
+          <div className={`text-emerald-400 font-black font-mono tracking-tight tabular-nums ${
+            isFullscreenMode ? 'text-base sm:text-xl md:text-2xl lg:text-3xl' : 'text-sm sm:text-base md:text-xl'
+          }`}>
+            {formatShots(lineData.machineShotTotal)} <span className="text-xs sm:text-sm font-bold text-emerald-500/80">Shot</span>
           </div>
         </div>
 
         {/* Shift Shot */}
-        <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg py-1 px-1.5 text-center shadow-sm">
-          <div className="text-[9px] sm:text-[10px] font-sans font-extrabold tracking-wide text-slate-400 uppercase">
+        <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg py-1.5 px-2 text-center shadow-md">
+          <div className={`font-sans font-bold tracking-wider text-slate-400 uppercase mb-0.5 ${
+            isFullscreenMode ? 'text-xs sm:text-sm' : 'text-[10px] sm:text-xs'
+          }`}>
             {t.controls.shiftShot}
           </div>
-          <div className="text-slate-100 font-black text-xs sm:text-sm md:text-base lg:text-[1.2vw] font-mono tabular-nums">
-            {formatShots(lineData.shiftShot)} <span className="text-[9px] font-normal text-slate-400">Shot</span>
+          <div className={`text-white font-black font-mono tabular-nums ${
+            isFullscreenMode ? 'text-base sm:text-xl md:text-2xl lg:text-3xl' : 'text-sm sm:text-base md:text-xl'
+          }`}>
+            {formatShots(lineData.shiftShot)} <span className="text-xs sm:text-sm font-bold text-slate-400">Shot</span>
           </div>
         </div>
 
         {/* Daily Shot */}
-        <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg py-1 px-1.5 text-center shadow-sm">
-          <div className="text-[9px] sm:text-[10px] font-sans font-extrabold tracking-wide text-slate-400 uppercase">
+        <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg py-1.5 px-2 text-center shadow-md">
+          <div className={`font-sans font-bold tracking-wider text-slate-400 uppercase mb-0.5 ${
+            isFullscreenMode ? 'text-xs sm:text-sm' : 'text-[10px] sm:text-xs'
+          }`}>
             {t.controls.dailyShot}
           </div>
-          <div className="text-slate-100 font-black text-xs sm:text-sm md:text-base lg:text-[1.2vw] font-mono tabular-nums">
-            {formatShots(lineData.dailyShot)} <span className="text-[9px] font-normal text-slate-400">Shot</span>
+          <div className={`text-white font-black font-mono tabular-nums ${
+            isFullscreenMode ? 'text-base sm:text-xl md:text-2xl lg:text-3xl' : 'text-sm sm:text-base md:text-xl'
+          }`}>
+            {formatShots(lineData.dailyShot)} <span className="text-xs sm:text-sm font-bold text-slate-400">Shot</span>
           </div>
         </div>
 
         {/* Monthly Shot */}
-        <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg py-1 px-1.5 text-center shadow-sm">
-          <div className="text-[9px] sm:text-[10px] font-sans font-extrabold tracking-wide text-slate-400 uppercase">
+        <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg py-1.5 px-2 text-center shadow-md">
+          <div className={`font-sans font-bold tracking-wider text-slate-400 uppercase mb-0.5 ${
+            isFullscreenMode ? 'text-xs sm:text-sm' : 'text-[10px] sm:text-xs'
+          }`}>
             {t.controls.monthlyShot}
           </div>
-          <div className="text-slate-100 font-black text-xs sm:text-sm md:text-base lg:text-[1.2vw] font-mono tabular-nums">
-            {formatShots(lineData.monthlyShot)} <span className="text-[9px] font-normal text-slate-400">Shot</span>
+          <div className={`text-cyan-300 font-black font-mono tabular-nums ${
+            isFullscreenMode ? 'text-base sm:text-xl md:text-2xl lg:text-3xl' : 'text-sm sm:text-base md:text-xl'
+          }`}>
+            {formatShots(lineData.monthlyShot)} <span className="text-xs sm:text-sm font-bold text-slate-400">Shot</span>
           </div>
         </div>
       </div>
 
       {/* TABLE SECTION TITLE - flex-none */}
-      <div className="flex-none bg-[#0C1A33] border border-slate-800 text-center py-0.5 rounded-t-lg text-xs sm:text-sm font-black tracking-wider text-cyan-200 uppercase font-sans flex items-center justify-between px-3">
+      <div className={`flex-none bg-[#0C1A33] border border-slate-800 text-center py-1 rounded-t-lg font-black tracking-wider text-cyan-200 uppercase font-sans flex items-center justify-between px-3 ${
+        isFullscreenMode ? 'text-sm sm:text-base lg:text-lg py-1.5' : 'text-xs sm:text-sm md:text-base'
+      }`}>
         <span>FIN DIE PART LIFE MONITORING - LINE {selectedLineId}</span>
-        <span className="text-[10px] sm:text-xs text-slate-400 font-mono">{t.controls.clickStatusHint}</span>
+        <span className="text-xs lg:text-sm font-mono text-slate-400 font-medium hidden sm:inline">{t.controls.clickStatusHint}</span>
       </div>
 
       {/* TV MAIN MONITORING CONTAINER (FLEX-1 AUTO-STRETCH TO FILL 100% SCREEN HEIGHT) */}
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-[#070F1E] border-x border-b border-slate-800/90 mb-1 rounded-b-lg shadow-inner table-container">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-[#070F1E] border-x border-b border-slate-800/90 mb-1.5 rounded-b-lg shadow-inner table-container">
         {/* Horizontal Scroll Wrapper to ensure crisp formatting without squishing or header overlap */}
         <div className="w-full flex-1 flex flex-col min-h-0 overflow-x-auto custom-scrollbar">
-          <div className="min-w-[1020px] w-full flex-1 flex flex-col min-h-0">
+          <div className="min-w-[960px] w-full flex-1 flex flex-col min-h-0">
             {/* Table Header Row (flex-none) */}
-            <div className="flex-none bg-[#0B172E] border-b border-slate-800 text-cyan-300 font-black uppercase flex items-center px-1.5 py-1.5 select-none relative min-h-[40px] text-[11px] sm:text-xs md:text-sm tracking-wider font-mono">
+            <div className={`flex-none bg-[#0B172E] border-b-2 border-slate-700 text-cyan-300 font-black uppercase flex items-center px-1.5 py-2 select-none relative tracking-wider font-mono ${
+              isFullscreenMode ? 'min-h-[44px] lg:min-h-[52px] text-xs sm:text-sm md:text-base lg:text-lg' : 'min-h-[38px] text-xs sm:text-sm md:text-base'
+            }`}>
               <div className="h-full flex items-center justify-center flex-shrink-0 border-r border-slate-800/70 relative text-center leading-tight min-w-[40px] p-0.5" style={{ width: `${colWidths.no}%` }}>
-                <span className="break-words">{t.table.no}</span>
+                <span className="break-words drop-shadow-sm">{t.table.no}</span>
                 <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'no')} />
               </div>
-              <div className="h-full flex items-center justify-start px-2 font-sans border-r border-slate-800/70 flex-shrink-0 relative leading-tight min-w-[140px] p-0.5" style={{ width: `${colWidths.stage}%` }}>
-                <span className="break-words">{t.table.partName}</span>
+              <div className="h-full flex items-center justify-start px-2 sm:px-3 font-sans border-r border-slate-800/70 flex-shrink-0 relative leading-tight min-w-[140px] p-0.5" style={{ width: `${colWidths.stage}%` }}>
+                <span className="break-words drop-shadow-sm">{t.table.partName}</span>
                 <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'stage')} />
               </div>
-              <div className="h-full flex items-center justify-end px-1.5 border-r border-slate-800/70 flex-shrink-0 relative text-right leading-tight min-w-[85px] p-0.5" style={{ width: `${colWidths.lifeLimit}%` }}>
-                <span className="break-words">{t.table.limit}</span>
+              <div className="h-full flex items-center justify-end px-2 sm:px-3 border-r border-slate-800/70 flex-shrink-0 relative text-right leading-tight min-w-[85px] p-0.5" style={{ width: `${colWidths.lifeLimit}%` }}>
+                <span className="break-words drop-shadow-sm">{t.table.limit}</span>
                 <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'lifeLimit')} />
               </div>
-              <div className="h-full flex items-center justify-end px-1.5 border-r border-slate-800/70 flex-shrink-0 relative text-right leading-tight min-w-[95px] p-0.5" style={{ width: `${colWidths.currentShot}%` }}>
-                <span className="break-words">{t.table.current}</span>
+              <div className="h-full flex items-center justify-end px-2 sm:px-3 border-r border-slate-800/70 flex-shrink-0 relative text-right leading-tight min-w-[90px] p-0.5" style={{ width: `${colWidths.currentShot}%` }}>
+                <span className="break-words drop-shadow-sm">{t.table.current}</span>
                 <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'currentShot')} />
               </div>
-              <div className="h-full flex items-center justify-center px-1 border-r border-slate-800/70 flex-shrink-0 relative text-center leading-tight min-w-[70px] p-0.5" style={{ width: `${colWidths.usage}%` }}>
-                <span className="break-words">{t.table.usage}</span>
+              <div className="h-full flex items-center justify-center px-1.5 sm:px-2 border-r border-slate-800/70 flex-shrink-0 relative text-center leading-tight min-w-[70px] p-0.5" style={{ width: `${colWidths.usage}%` }}>
+                <span className="break-words drop-shadow-sm">{t.table.usage}</span>
                 <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'usage')} />
               </div>
-              <div className="h-full flex items-center justify-end px-1.5 border-r border-slate-800/70 flex-shrink-0 relative text-right leading-tight min-w-[95px] p-0.5" style={{ width: `${colWidths.remaining}%` }}>
-                <span className="break-words">{t.table.remain}</span>
+              <div className="h-full flex items-center justify-end px-2 sm:px-3 border-r border-slate-800/70 flex-shrink-0 relative text-right leading-tight min-w-[90px] p-0.5" style={{ width: `${colWidths.remaining}%` }}>
+                <span className="break-words drop-shadow-sm">{t.table.remain}</span>
                 <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'remaining')} />
               </div>
-              <div className="h-full flex items-center justify-center px-1.5 border-r border-slate-800/70 flex-shrink-0 relative text-center leading-tight min-w-[95px] p-0.5" style={{ width: `${colWidths.progress}%` }}>
-                <span className="break-words">{t.table.progress}</span>
+              <div className="h-full flex items-center justify-center px-1.5 sm:px-2 border-r border-slate-800/70 flex-shrink-0 relative text-center leading-tight min-w-[90px] p-0.5" style={{ width: `${colWidths.progress}%` }}>
+                <span className="break-words drop-shadow-sm">{t.table.progress}</span>
                 <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'progress')} />
               </div>
-              <div className="h-full flex items-center justify-end px-1.5 border-r border-slate-800/70 flex-shrink-0 relative text-right leading-tight min-w-[95px] p-0.5" style={{ width: `${colWidths.lastChange}%` }}>
-                <span className="break-words">{t.table.lastChange}</span>
+              <div className="h-full flex items-center justify-end px-2 sm:px-3 border-r border-slate-800/70 flex-shrink-0 relative text-right leading-tight min-w-[90px] p-0.5" style={{ width: `${colWidths.lastChange}%` }}>
+                <span className="break-words drop-shadow-sm">{t.table.lastChange}</span>
                 <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'lastChange')} />
               </div>
-              <div className="h-full flex items-center justify-center px-1 border-r border-slate-800/70 flex-shrink-0 relative text-center leading-tight min-w-[65px] p-0.5" style={{ width: `${colWidths.installQty}%` }}>
-                <span className="break-words">{t.table.installed}</span>
+              <div className="h-full flex items-center justify-center px-1.5 sm:px-2 border-r border-slate-800/70 flex-shrink-0 relative text-center leading-tight min-w-[60px] p-0.5" style={{ width: `${colWidths.installQty}%` }}>
+                <span className="break-words drop-shadow-sm">{t.table.installed}</span>
                 <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'installQty')} />
               </div>
-              <div className="h-full flex items-center justify-center px-1 border-r border-slate-800/70 flex-shrink-0 relative text-center leading-tight min-w-[65px] p-0.5" style={{ width: `${colWidths.spareQty}%` }}>
-                <span className="break-words">{t.table.spare}</span>
+              <div className="h-full flex items-center justify-center px-1.5 sm:px-2 border-r border-slate-800/70 flex-shrink-0 relative text-center leading-tight min-w-[60px] p-0.5" style={{ width: `${colWidths.spareQty}%` }}>
+                <span className="break-words drop-shadow-sm">{t.table.spare}</span>
                 <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'spareQty')} />
               </div>
-              <div className="h-full flex items-center justify-center px-1 flex-shrink-0 relative text-center leading-tight min-w-[85px] p-0.5" style={{ width: `${colWidths.status}%` }}>
-                <span className="break-words">{t.table.status}</span>
+              <div className="h-full flex items-center justify-center px-1.5 sm:px-2 flex-shrink-0 relative text-center leading-tight min-w-[80px] p-0.5" style={{ width: `${colWidths.status}%` }}>
+                <span className="break-words drop-shadow-sm">{t.table.status}</span>
                 <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'status')} />
               </div>
             </div>
@@ -525,6 +566,7 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
                   colWidths={colWidths}
                   onSelectModalItem={setSelectedModalItem}
                   t={t}
+                  isFullscreen={isFullscreenMode}
                 />
               ))}
             </div>
@@ -533,12 +575,18 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
       </div>
 
       {/* BOTTOM MARQUEE / ALERT BANNER - flex-none */}
-      <div className="flex-none bg-[#2E0909] border border-red-700/80 rounded flex items-center overflow-hidden font-mono text-xs sm:text-sm md:text-base shadow-md">
-        <div className="bg-red-600 text-white font-black px-2.5 sm:px-4 py-1.5 flex items-center gap-1.5 uppercase flex-shrink-0 tracking-wider">
+      <div className={`flex-none bg-[#2E0909] border border-red-700/80 rounded-lg flex items-center overflow-hidden font-mono shadow-md ${
+        isFullscreenMode ? 'py-1 lg:py-1.5' : ''
+      }`}>
+        <div className={`bg-red-600 text-white font-black px-3 py-1.5 flex items-center gap-1.5 uppercase flex-shrink-0 tracking-wider ${
+          isFullscreenMode ? 'text-xs sm:text-sm lg:text-base' : 'text-xs sm:text-sm'
+        }`}>
           <AlertTriangle className="w-4 h-4 fill-white text-red-600" />
           <span>ALERT</span>
         </div>
-        <div className="px-3 py-1.5 text-red-100 font-bold truncate flex-1 tracking-wide">
+        <div className={`px-3 py-1.5 text-red-100 font-black truncate flex-1 tracking-wide ${
+          isFullscreenMode ? 'text-xs sm:text-sm md:text-base lg:text-lg' : 'text-xs sm:text-sm md:text-base'
+        }`}>
           {dynamicTickerMessage}
         </div>
       </div>

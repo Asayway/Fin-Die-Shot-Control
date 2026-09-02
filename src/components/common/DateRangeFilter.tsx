@@ -173,28 +173,28 @@ export const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
   const hasFilter = Boolean(startDate || endDate);
 
   return (
-    <div className={`relative inline-flex flex-col gap-1 ${className}`}>
+    <div className={`relative inline-flex flex-col gap-0.5 ${className}`}>
       {/* Date Range Control Toolbar */}
-      <div className={`flex items-center gap-1.5 sm:gap-2 flex-wrap ${
+      <div className={`flex items-center gap-1 sm:gap-1.5 flex-wrap ${
         isHmi ? 'text-green-300' : 'text-slate-200'
       }`}>
         {/* Main Calendar Trigger & Quick Input Group */}
-        <div className={`flex items-center gap-2 p-1.5 rounded-xl border transition-all ${
+        <div className={`flex items-center gap-1.5 p-1 rounded-md border transition-all ${
           hasFilter
             ? isHmi
-              ? 'bg-zinc-950 border-green-500 shadow-lg shadow-green-950/50 ring-1 ring-green-500/40'
-              : 'bg-slate-950 border-cyan-500 shadow-lg shadow-cyan-950/50 ring-1 ring-cyan-500/40'
+              ? 'bg-zinc-950 border-green-500 shadow-sm ring-1 ring-green-500/40'
+              : 'bg-slate-950 border-cyan-500 shadow-sm ring-1 ring-cyan-500/40'
             : isHmi
             ? 'bg-zinc-900/90 border-zinc-800'
             : 'bg-slate-900/90 border-slate-700/80 hover:border-slate-600'
         }`}>
-          <div className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-mono font-bold">
-            <Calendar className={`w-4 h-4 flex-shrink-0 ${
+          <div className="flex items-center gap-1 px-1 py-0.5 text-xs font-mono font-bold">
+            <Calendar className={`w-3.5 h-3.5 flex-shrink-0 ${
               hasFilter 
                 ? isHmi ? 'text-green-400 animate-pulse' : 'text-cyan-400 animate-pulse'
                 : 'text-slate-400'
             }`} />
-            <span className="hidden sm:inline font-thai text-[11px] text-slate-300">ช่วงวันที่:</span>
+            <span className="hidden sm:inline font-thai text-[10.5px] text-slate-300">ช่วงวันที่:</span>
           </div>
 
           {/* Start Date Input */}
@@ -203,7 +203,7 @@ export const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
               type="date"
               value={startDate}
               onChange={(e) => handleStartDateChange(e.target.value)}
-              className={`bg-slate-900 border text-xs font-mono font-bold rounded-lg px-2 py-1 outline-none transition-all ${
+              className={`bg-slate-900 border text-[11px] font-mono font-bold rounded px-1.5 py-0.5 outline-none transition-all h-7 ${
                 isHmi
                   ? 'border-green-800 focus:border-green-400 text-green-300'
                   : 'border-slate-700 focus:border-cyan-400 text-slate-100'
@@ -212,7 +212,7 @@ export const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
             />
           </div>
 
-          <span className="text-slate-500 text-xs font-mono font-bold">-</span>
+          <span className="text-slate-500 text-[11px] font-mono font-bold">-</span>
 
           {/* End Date Input */}
           <div className="relative flex items-center">
@@ -220,7 +220,7 @@ export const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
               type="date"
               value={endDate}
               onChange={(e) => handleEndDateChange(e.target.value)}
-              className={`bg-slate-900 border text-xs font-mono font-bold rounded-lg px-2 py-1 outline-none transition-all ${
+              className={`bg-slate-900 border text-[11px] font-mono font-bold rounded px-1.5 py-0.5 outline-none transition-all h-7 ${
                 isHmi
                   ? 'border-green-800 focus:border-green-400 text-green-300'
                   : 'border-slate-700 focus:border-cyan-400 text-slate-100'
@@ -231,7 +231,7 @@ export const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
 
           {/* Days Indicator Badge */}
           {hasFilter && selectedDaysCount > 0 && (
-            <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-black border ${
+            <span className={`px-1.5 py-0 rounded text-[9.5px] font-mono font-bold border ${
               selectedDaysCount > maxDaysAllowed
                 ? 'bg-rose-950 text-rose-300 border-rose-800'
                 : isHmi
@@ -247,21 +247,21 @@ export const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
             <button
               type="button"
               onClick={handleClear}
-              className="p-1 hover:bg-slate-800 text-slate-400 hover:text-rose-400 rounded-md transition-colors"
+              className="p-0.5 hover:bg-slate-800 text-slate-400 hover:text-rose-400 rounded transition-colors"
               title="ล้างช่วงวันที่ (Clear Filter)"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-3 h-3" />
             </button>
           )}
         </div>
 
         {/* Preset Buttons */}
         {!compact && (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5">
             <button
               type="button"
               onClick={() => handlePresetDays(7)}
-              className={`px-2 py-1 rounded-lg text-[11px] font-mono font-bold transition-all border ${
+              className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold transition-all border ${
                 selectedDaysCount === 7 && startDate && endDate
                   ? 'bg-cyan-600 text-white border-cyan-400 shadow-sm'
                   : 'bg-slate-950 text-slate-400 hover:text-slate-200 border-slate-800 hover:border-slate-700'
@@ -273,7 +273,7 @@ export const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
             <button
               type="button"
               onClick={() => handlePresetDays(30)}
-              className={`px-2 py-1 rounded-lg text-[11px] font-mono font-bold transition-all border ${
+              className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold transition-all border ${
                 selectedDaysCount === 30 && startDate && endDate
                   ? 'bg-cyan-600 text-white border-cyan-400 shadow-sm'
                   : 'bg-slate-950 text-slate-400 hover:text-slate-200 border-slate-800 hover:border-slate-700'
@@ -285,7 +285,7 @@ export const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
             <button
               type="button"
               onClick={handlePresetThisMonth}
-              className="px-2 py-1 rounded-lg text-[11px] font-mono font-bold transition-all border bg-slate-950 text-slate-400 hover:text-slate-200 border-slate-800 hover:border-slate-700"
+              className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold transition-all border bg-slate-950 text-slate-400 hover:text-slate-200 border-slate-800 hover:border-slate-700"
             >
               เดือนนี้
             </button>

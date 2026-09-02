@@ -172,6 +172,7 @@ export default function App() {
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
           theme={settings.theme}
+          language={settings.language}
         />
 
         {/* Content Body - Independent scrollable view container */}

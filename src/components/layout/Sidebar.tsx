@@ -20,11 +20,11 @@ import {
   Lock
 } from 'lucide-react';
 import { UserRole, AppTheme } from '../../types';
+import { getI18n, LanguageCode } from '../../i18n';
 
 interface NavItem {
   id: string;
   label: string;
-  labelTh: string;
   icon: React.ElementType;
   badge?: string;
   badgeColor?: string;
@@ -33,7 +33,6 @@ interface NavItem {
 
 interface NavSection {
   title: string;
-  titleTh: string;
   items: NavItem[];
 }
 
@@ -44,6 +43,7 @@ interface SidebarProps {
   collapsed?: boolean;
   onToggleCollapse?: () => void;
   theme?: AppTheme;
+  language?: LanguageCode;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -52,36 +52,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
   userRole,
   collapsed = false,
   onToggleCollapse,
-  theme = 'hmi'
+  theme = 'hmi',
+  language = 'EN' as LanguageCode
 }) => {
   const isHmi = theme === 'hmi' || theme === 'industrial-dark';
   const isLight = theme === 'light';
+  const t = getI18n(language);
 
   const sections: NavSection[] = [
     {
-      title: 'OPERATIONS',
-      titleTh: 'การทำงาน',
+      title: t.sidebar.operations,
       items: [
         {
           id: 'shot-entry',
-          label: 'Shot Entry',
-          labelTh: 'บันทึกช็อต',
+          label: t.sidebar.shotEntry,
           icon: PlusCircle,
           badge: 'HMI',
           badgeColor: 'bg-green-950 text-green-300 border-green-500'
         },
         {
           id: 'tv-monitoring',
-          label: 'TV Dashboard',
-          labelTh: 'มอนิเตอร์ช็อต',
+          label: t.sidebar.tvDashboard,
           icon: Tv,
           badge: 'LIVE',
           badgeColor: 'bg-green-950 text-green-300 border-green-500'
         },
         {
           id: 'replacement-entry',
-          label: 'Part Replacement',
-          labelTh: 'เปลี่ยนอะไหล่ & ผัง 2D',
+          label: t.sidebar.partReplacement,
           icon: Wrench,
           badge: 'Hub',
           badgeColor: 'bg-cyan-950 text-cyan-300 border-cyan-500'
@@ -89,13 +87,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ]
     },
     {
-      title: 'TOOLING SETUP',
-      titleTh: 'ตั้งค่าแม่พิมพ์',
+      title: t.sidebar.toolingSetup,
       items: [
         {
           id: 'unified-tooling-setup',
-          label: 'Die & Part Master',
-          labelTh: 'จัดการแม่พิมพ์/อะไหล่',
+          label: t.sidebar.dieAndPartMaster,
           icon: SlidersHorizontal,
           badge: 'HUB',
           badgeColor: 'bg-cyan-950 text-cyan-300 border-cyan-500'
@@ -104,13 +100,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
 
     {
-      title: 'SETTINGS',
-      titleTh: 'ตั้งค่าระบบ',
+      title: t.sidebar.settings,
       items: [
         {
           id: 'system-settings',
-          label: 'System Settings',
-          labelTh: 'ตั้งค่าระบบ',
+          label: t.sidebar.systemSettings,
           icon: SlidersHorizontal
         }
       ]
@@ -139,18 +133,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
         } ${
           // Mobile vs Desktop responsive positioning
           collapsed 
-            ? 'hidden md:flex md:w-16' 
-            : 'fixed inset-y-0 left-0 w-72 md:relative md:inset-auto md:w-64 lg:w-72'
+            ? 'hidden md:flex md:w-14' 
+            : 'fixed inset-y-0 left-0 w-56 md:relative md:inset-auto md:w-52 lg:w-56'
         }`}
       >
       {/* Top Toggle Button Inside Sidebar */}
       {onToggleCollapse && (
-        <div className={`p-2 border-b flex items-center justify-between ${
+        <div className={`p-1.5 border-b flex items-center justify-between ${
           isHmi ? 'border-green-900/60 bg-zinc-950' : isLight ? 'border-slate-300 bg-slate-100' : 'border-slate-800/60 bg-slate-950/40'
         }`}>
           <button
             onClick={onToggleCollapse}
-            className={`p-1.5 rounded transition-colors border ${
+            className={`p-1 rounded transition-colors border ${
               isHmi
                 ? 'hover:bg-green-950 text-green-400 hover:text-green-200 border-green-900/50'
                 : isLight
@@ -161,29 +155,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
             aria-label="Toggle Sidebar Collapse"
           >
             {collapsed ? (
-              <ChevronRight className={`w-4 h-4 ${isHmi ? 'text-green-400' : isLight ? 'text-cyan-600' : 'text-cyan-400'}`} />
+              <ChevronRight className={`w-3.5 h-3.5 ${isHmi ? 'text-green-400' : isLight ? 'text-cyan-600' : 'text-cyan-400'}`} />
             ) : (
-              <ChevronLeft className={`w-4 h-4 ${isHmi ? 'text-green-400' : isLight ? 'text-slate-600' : 'text-slate-400'}`} />
+              <ChevronLeft className={`w-3.5 h-3.5 ${isHmi ? 'text-green-400' : isLight ? 'text-slate-600' : 'text-slate-400'}`} />
             )}
           </button>
         </div>
       )}
 
       {/* Navigation Links */}
-      <div className={`flex-1 overflow-y-auto py-2 px-1.5 space-y-2.5 custom-scrollbar ${
+      <div className={`flex-1 overflow-y-auto py-1.5 px-1 space-y-1.5 custom-scrollbar ${
         isHmi ? 'bg-black' : isLight ? 'bg-slate-50' : 'bg-[#0B1120]'
       }`}>
         {sections.map((section, sIdx) => (
           <div key={sIdx} className="space-y-0.5">
             {!collapsed && (
-              <div className={`px-2.5 pb-0.5 border-b ${isHmi ? 'border-green-950' : 'border-slate-800/60'}`}>
-                <div className={`text-[9px] font-bold font-mono tracking-widest uppercase ${
+              <div className={`px-2 pb-0.5 border-b ${isHmi ? 'border-green-950' : 'border-slate-800/60'}`}>
+                <div className={`text-[8.5px] font-bold font-mono tracking-widest uppercase ${
                   isHmi ? 'text-green-500' : 'text-slate-400'
                 }`}>
                   {section.title}
-                </div>
-                <div className={`text-[8.5px] font-thai ${isHmi ? 'text-green-600/90' : 'text-slate-500'}`}>
-                  {section.titleTh}
                 </div>
               </div>
             )}
@@ -200,16 +191,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         onToggleCollapse();
                       }
                     }}
-                    className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-left transition-all group ${
+                    className={`w-full flex items-center gap-2 px-2 py-1 rounded text-left transition-all group ${
                       isHmi
                         ? isActive
                           ? 'bg-green-500 text-black border border-green-400 font-extrabold shadow-sm'
                           : 'bg-zinc-950/80 text-green-400 border border-zinc-900 hover:border-green-500/50 hover:bg-green-950/60'
                         : isActive
-                          ? 'bg-cyan-500/15 text-cyan-200 border-l-4 border-cyan-400 font-semibold shadow-sm'
+                          ? 'bg-cyan-500/15 text-cyan-200 border-l-2 border-cyan-400 font-semibold shadow-sm'
                           : 'text-slate-300 hover:bg-slate-800/70 hover:text-white border border-transparent'
                     } ${collapsed ? 'justify-center px-0' : ''}`}
-                    title={`${item.label} (${item.labelTh})`}
+                    title={item.label}
                   >
                     <Icon
                       className={`w-3.5 h-3.5 flex-shrink-0 transition-colors ${
@@ -221,31 +212,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     {!collapsed && (
                       <div className="flex-1 min-w-0 flex items-center justify-between">
                         <div className="truncate">
-                          <div className={`text-xs tracking-tight truncate leading-tight ${
+                          <div className={`text-[11.5px] tracking-tight truncate leading-tight ${
                             isHmi
                               ? isActive ? 'text-black font-extrabold' : 'text-green-300 group-hover:text-green-200'
                               : isActive ? 'text-white font-medium' : 'text-slate-200 group-hover:text-white'
                           }`}>
                             {item.label}
                           </div>
-                          <div className={`text-[9.5px] truncate leading-tight font-thai mt-0.5 ${
-                            isHmi
-                              ? isActive ? 'text-zinc-900 font-semibold' : 'text-green-500/80'
-                              : isActive ? 'text-cyan-300/80' : 'text-slate-400'
-                          }`}>
-                            {item.labelTh}
-                          </div>
                         </div>
                         {item.badge && (
                           <span
-                            className={`ml-1.5 text-[8.5px] font-mono px-1 py-0.2 rounded border font-bold ${
+                            className={`ml-1 text-[8px] font-mono px-1 py-0 rounded border font-bold ${
                               isHmi
                                 ? isActive
-                                  ? 'bg-black text-green-400 border-black'
-                                  : item.badgeColor || 'bg-green-950 text-green-400 border-green-600'
+                                ? 'bg-black text-green-400 border-black'
+                                : item.badgeColor || 'bg-green-950 text-green-400 border-green-600'
                                 : isActive
-                                  ? 'bg-cyan-950 text-cyan-300 border-cyan-600'
-                                  : item.badgeColor || 'bg-slate-800/90 text-slate-400 border-slate-700/80'
+                                ? 'bg-cyan-950 text-cyan-300 border-cyan-600'
+                                : item.badgeColor || 'bg-slate-800/90 text-slate-400 border-slate-700/80'
                             }`}
                           >
                             {item.badge}
@@ -263,7 +247,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Footer Info */}
       {!collapsed && (
-        <div className={`p-2.5 border-t text-[10px] space-y-1 ${
+        <div className={`p-2 border-t text-[9px] space-y-0.5 ${
           isHmi 
             ? 'border-green-900/80 bg-zinc-950 text-green-500/80' 
             : 'border-slate-800/80 bg-slate-950/40 text-slate-400'
@@ -274,7 +258,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               EXCEL 31.01.2025
             </span>
           </div>
-          <div className={`text-[9px] truncate font-mono ${isHmi ? 'text-green-600' : 'text-slate-500'}`}>
+          <div className={`text-[8.5px] truncate font-mono ${isHmi ? 'text-green-600' : 'text-slate-500'}`}>
             HE FIN DIE SHOT CONTROL SYSTEM
           </div>
         </div>

@@ -512,46 +512,6 @@ export const PartMasterView: React.FC = () => {
             <span>{feedback.message}</span>
           </div>
         )}
-
-        {/* Line & Tube Size Configuration Guide Banner */}
-        <div className="bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-indigo-500/30 rounded-xl p-4 space-y-3 shadow-lg">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <Info className="w-5 h-5 text-indigo-400 flex-shrink-0" />
-              <div>
-                <h4 className="text-xs font-bold text-indigo-300 uppercase tracking-wide">
-                  คำแนะนำการกำหนดชิ้นส่วนตามไลน์ (Line & Tube Size Configuration Guide)
-                </h4>
-                <p className="text-xs text-slate-300 mt-0.5 font-thai">
-                  เพื่อป้องกันการใช้ชื่อซ้ำซ้อนระหว่างไลน์ และกำหนดขนาดท่อให้ตรงกับสเปกแม่พิมพ์:
-                </p>
-              </div>
-            </div>
-            
-            <button
-              onClick={handleAutoAlignTubeSizes}
-              className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg text-xs shadow-md flex items-center gap-2 transition-all whitespace-nowrap"
-            >
-              <Sparkles className="w-4 h-4 text-amber-300" />
-              <span>✨ จัดระเบียบและจับคู่ขนาดท่อตามสเปกไลน์อัตโนมัติ</span>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 border-t border-indigo-900/40 text-xs">
-            <div className="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800">
-              <span className="font-bold text-cyan-400 block mb-1">📌 ไลน์ท่อ Ø5 (E2, E4, E5)</span>
-              <span className="text-slate-300">ใช้รหัสชิ้นส่วนลงท้ายด้วย <strong className="text-white">-05</strong> (เช่น P-SLIT-05, D-SLIT-A05-4R) กำหนดขนาดท่อเป็น <strong>Ø5</strong></span>
-            </div>
-            <div className="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800">
-              <span className="font-bold text-indigo-300 block mb-1">📌 ไลน์ท่อ Ø7 (E1, E3-1, E3-2, E3-3, E6)</span>
-              <span className="text-slate-300">ใช้รหัสชิ้นส่วนลงท้ายด้วย <strong className="text-white">-07</strong> หรือ <strong className="text-white">WL</strong> (เช่น P-SLIT-NEW-07, P-LOUV-WL-UP) กำหนดขนาดท่อเป็น <strong>Ø7</strong></span>
-            </div>
-            <div className="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800">
-              <span className="font-bold text-emerald-400 block mb-1">📌 ชิ้นส่วนใช้ร่วมกัน (BOTH / Common)</span>
-              <span className="text-slate-300">เช่น Punch/Die ทั่วไป (P-BUCK-001, P-IRON-001, D-IRON-001, P-LOUV-001) สามารถตั้งค่าเป็น <strong>BOTH</strong></span>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* TAB 1: MASTER PART CATALOG */}
@@ -639,30 +599,18 @@ export const PartMasterView: React.FC = () => {
               },
               {
                 id: 'partName',
-                label: 'PART NAME (EN & THAI)',
+                label: 'PART NAME',
                 width: 220,
                 render: (p) => isEditing ? (
-                  <div className="space-y-1">
-                    <input
-                      type="text"
-                      value={editValues[p.partCode]?.partName ?? p.partName}
-                      onChange={(e) => handleValueChange(p.partCode, 'partName', e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100 font-sans font-bold"
-                      placeholder="English Name"
-                    />
-                    <input
-                      type="text"
-                      value={editValues[p.partCode]?.partNameTh ?? p.partNameTh ?? ''}
-                      onChange={(e) => handleValueChange(p.partCode, 'partNameTh', e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300 font-thai"
-                      placeholder="ชื่อภาษาไทย"
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    value={editValues[p.partCode]?.partName ?? p.partName}
+                    onChange={(e) => handleValueChange(p.partCode, 'partName', e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-100 font-sans font-bold focus:border-cyan-500 focus:outline-none"
+                    placeholder="Part Name"
+                  />
                 ) : (
-                  <div>
-                    <div className="font-sans font-bold text-slate-100">{p.partName}</div>
-                    {p.partNameTh && <div className="text-xs text-slate-400 font-thai">{p.partNameTh}</div>}
-                  </div>
+                  <div className="font-sans font-bold text-slate-100 text-xs sm:text-sm">{p.partName}</div>
                 )
               },
               {
@@ -901,18 +849,18 @@ export const PartMasterView: React.FC = () => {
               </span>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-340px)] min-h-[300px] border border-slate-800 rounded-lg custom-scrollbar">
               <table className="w-full text-left border-collapse text-xs font-mono">
-                <thead>
+                <thead className="sticky top-0 z-20 bg-slate-950 shadow-md">
                   <tr className="bg-slate-950 text-slate-400 border-b border-slate-800 font-bold uppercase">
-                    <th className="py-2.5 px-3 text-center w-12">ลำดับ</th>
-                    <th className="py-2.5 px-3 text-center w-16">เปิดใช้</th>
-                    <th className="py-2.5 px-3">รหัสชิ้นส่วน (PART CODE)</th>
-                    <th className="py-2.5 px-3">ชื่อชิ้นส่วน (PART NAME)</th>
-                    <th className="py-2.5 px-3">หมวดหมู่ & STAGE</th>
-                    <th className="py-2.5 px-3 text-center">จำนวนติดตั้ง (INSTALLED QTY)</th>
-                    <th className="py-2.5 px-3 text-center">คลังอะไหล่ (SPARE STOCK)</th>
-                    <th className="py-2.5 px-3 text-center w-24">ลำดับ / จัดการ</th>
+                    <th className="sticky top-0 bg-slate-950 py-2.5 px-3 text-center w-12 z-20">ลำดับ</th>
+                    <th className="sticky top-0 bg-slate-950 py-2.5 px-3 text-center w-16 z-20">เปิดใช้</th>
+                    <th className="sticky top-0 bg-slate-950 py-2.5 px-3 z-20">รหัสชิ้นส่วน (PART CODE)</th>
+                    <th className="sticky top-0 bg-slate-950 py-2.5 px-3 z-20">ชื่อชิ้นส่วน (PART NAME)</th>
+                    <th className="sticky top-0 bg-slate-950 py-2.5 px-3 z-20">หมวดหมู่ & STAGE</th>
+                    <th className="sticky top-0 bg-slate-950 py-2.5 px-3 text-center z-20">จำนวนติดตั้ง (INSTALLED QTY)</th>
+                    <th className="sticky top-0 bg-slate-950 py-2.5 px-3 text-center z-20">คลังอะไหล่ (SPARE STOCK)</th>
+                    <th className="sticky top-0 bg-slate-950 py-2.5 px-3 text-center w-24 z-20">ลำดับ / จัดการ</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/80">
@@ -1081,24 +1029,14 @@ export const PartMasterView: React.FC = () => {
                 </div>
               </div>
               <div>
-                <label className="block text-slate-400 mb-1 font-bold">PART NAME (ENGLISH) *</label>
+                <label className="block text-slate-400 mb-1 font-bold">PART NAME *</label>
                 <input
                   type="text"
                   value={newPart.partName}
                   onChange={e => setNewPart({ ...newPart, partName: e.target.value })}
-                  placeholder="ชื่อภาษาอังกฤษ..."
+                  placeholder="Part Name..."
                   className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-slate-100 font-sans font-semibold focus:border-cyan-500 focus:outline-none"
                   required
-                />
-              </div>
-              <div>
-                <label className="block text-slate-400 mb-1 font-bold font-thai">ชื่อชิ้นส่วนภาษาไทย (THAI NAME)</label>
-                <input
-                  type="text"
-                  value={newPart.partNameTh || ''}
-                  onChange={e => setNewPart({ ...newPart, partNameTh: e.target.value })}
-                  placeholder="ชื่อภาษาไทย..."
-                  className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-thai focus:border-cyan-500 focus:outline-none"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">

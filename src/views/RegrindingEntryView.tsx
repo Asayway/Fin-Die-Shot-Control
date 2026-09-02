@@ -35,6 +35,7 @@ import {
 } from '../types';
 import { storageService } from '../services/storageService';
 import { formatShots } from '../services/calculationService';
+import { exportRegrindingHistoryExcel } from '../utils/excelExport';
 
 export const RegrindingEntryView: React.FC = () => {
   const [selectedLineId, setSelectedLineId] = useState<ProductionLineId>('E6');
@@ -1103,6 +1104,14 @@ export const RegrindingEntryView: React.FC = () => {
                 <option value="SCRAP">SCRAP</option>
                 <option value="HOLD">HOLD</option>
               </select>
+
+              <button
+                onClick={() => exportRegrindingHistoryExcel(filteredHistory, 'ALL')}
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors shadow-md"
+              >
+                <Download className="w-4 h-4" />
+                <span>Export Excel</span>
+              </button>
             </div>
           </div>
 

@@ -297,16 +297,19 @@ export function ResizableReorderableTable<T>({
         <div style={{ width: `${totalTableWidth}px`, height: '1px' }}></div>
       </div>
 
-      {/* Main Resizable & Scrollable Table */}
-      <div ref={tableContainerRef} onScroll={handleTableScroll} className="overflow-x-auto border border-slate-800 rounded-xl bg-[#070F1E] shadow-inner custom-scrollbar">
-
+      {/* Main Resizable & Scrollable Table with Fixed Sticky Header */}
+      <div 
+        ref={tableContainerRef} 
+        onScroll={handleTableScroll} 
+        className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] min-h-[350px] border border-slate-800 rounded-xl bg-[#070F1E] shadow-inner custom-scrollbar relative"
+      >
         <table 
           style={{ width: `${Math.max(totalTableWidth, 100)}px`, minWidth: '100%' }} 
-          className="table-fixed text-left border-collapse font-sans text-sm sm:text-base"
+          className="table-fixed text-left border-collapse font-sans text-sm sm:text-base relative"
         >
-          {/* Table Header */}
-          <thead>
-            <tr className="bg-[#0B172E] border-b border-slate-800 text-cyan-300 font-mono font-black uppercase select-none text-xs sm:text-sm">
+          {/* Table Header (Sticky Locked at Top of Container) */}
+          <thead className="sticky top-0 z-20 bg-[#0B172E] shadow-[0_4px_12px_rgba(0,0,0,0.6)]">
+            <tr className="bg-[#0B172E] border-b-2 border-slate-700 text-cyan-300 font-mono font-black uppercase select-none text-xs sm:text-sm">
               {orderedColumns.map((col, idx) => {
                 const width = colWidths[col.id] || col.width || 140;
                 const alignClass = col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : 'text-left';
@@ -315,10 +318,10 @@ export function ResizableReorderableTable<T>({
                   <th
                     key={col.id}
                     style={{ width: `${width}px`, minWidth: `${col.minWidth || 45}px`, maxWidth: `${width}px` }}
-                    className={`relative px-3 py-3.5 font-extrabold tracking-wider border-r border-slate-800/80 ${alignClass} group`}
+                    className={`sticky top-0 bg-[#0B172E] px-3 py-3 font-extrabold tracking-wider border-r border-slate-800/90 ${alignClass} group z-20`}
                   >
                     <div className="flex items-center justify-between gap-1">
-                      <span className="truncate" title={col.label}>{col.label}</span>
+                      <span className="truncate drop-shadow-sm" title={col.label}>{col.label}</span>
                       
                       {/* Reorder arrows in header on hover */}
                       <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
@@ -348,7 +351,7 @@ export function ResizableReorderableTable<T>({
                     {/* Resizer Handle */}
                     <div
                       onMouseDown={e => handleResizeStart(e, col.id)}
-                      className="absolute right-0 top-0 bottom-0 w-3 -mr-1.5 cursor-col-resize hover:bg-cyan-400 active:bg-cyan-300 transition-colors z-20 flex items-center justify-center opacity-0 group-hover:opacity-100"
+                      className="absolute right-0 top-0 bottom-0 w-3 -mr-1.5 cursor-col-resize hover:bg-cyan-400 active:bg-cyan-300 transition-colors z-30 flex items-center justify-center opacity-0 group-hover:opacity-100"
                       title="คลิกลากเพื่อปรับขนาดคอลัมน์ได้อย่างอิสระ"
                     >
                       <div className="w-0.5 h-4 bg-cyan-400 rounded-full" />
