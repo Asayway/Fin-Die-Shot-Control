@@ -41,6 +41,7 @@ import { storageService } from '../services/storageService';
 import { formatShots } from '../services/calculationService';
 import { LineFilterSelector } from '../components/common/LineFilterSelector';
 import { InteractiveDieLayoutView } from './InteractiveDieLayoutView';
+import { ErrorBoundary } from '../components/common/ErrorBoundary';
 
 interface ReplacementEntryViewProps {
   initialLineId?: ProductionLineId;
@@ -596,7 +597,9 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
 
       {/* TAB 0: 2D INTERACTIVE DIE LAYOUT */}
       {activeTab === 'layout' && (
-        <InteractiveDieLayoutView initialLineId={selectedLineId} showLineSelector={false} />
+        <ErrorBoundary fallbackTitle="เกิดข้อผิดพลาดใน 2D Die Layout">
+          <InteractiveDieLayoutView initialLineId={selectedLineId} showLineSelector={false} />
+        </ErrorBoundary>
       )}
 
       {/* TAB 1: NEW REPLACEMENT ENTRY */}

@@ -18,6 +18,7 @@ import { UnifiedToolingMasterView } from './views/UnifiedToolingMasterView';
 import { SpareStockProcurementView } from './views/SpareStockProcurementView';
 import { ReportsView } from './views/ReportsView';
 import { SystemSettingsView, LoginView } from './views/SystemSettingsView';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User>(storageService.getCurrentUser());
@@ -186,7 +187,9 @@ export default function App() {
           isHmi ? 'bg-black text-green-400' : isLight ? 'bg-slate-100 text-slate-900' : 'bg-[#080E1B] text-slate-100'
         }`}>
           <div className="max-w-[1440px] mx-auto pb-10">
-            {renderActiveView()}
+            <ErrorBoundary>
+              {renderActiveView()}
+            </ErrorBoundary>
           </div>
         </main>
       </div>
