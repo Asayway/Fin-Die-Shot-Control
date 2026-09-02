@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { 
   ArrowLeft, 
   ArrowRight,
@@ -27,6 +27,44 @@ interface ResizableReorderableTableProps<T> {
   className?: string;
   emptyMessage?: string;
 }
+
+// Memoized Table Row Component to prevent full re-renders on single row value change
+const MemoizedTableRow = React.memo(function TableRowItem<T>({
+  row,
+  rowIndex,
+  orderedColumns,
+  colWidths
+}: {
+  row: T;
+  rowIndex: number;
+  orderedColumns: ColumnDef<T>[];
+  colWidths: Record<string, number>;
+}) {
+  return (
+    <tr className="hover:bg-slate-900/60 transition-colors">
+      {orderedColumns.map(col => {
+        const width = colWidths[col.id] || col.width || 140;
+        const alignClass = col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : 'text-left';
+
+        return (
+          <td
+            key={col.id}
+            style={{ width: `${width}px`, minWidth: `${col.minWidth || 45}px`, maxWidth: `${width}px` }}
+            className={`px-3 py-2.5 border-r border-slate-800/60 ${alignClass} truncate`}
+          >
+            {col.render(row, rowIndex)}
+          </td>
+        );
+      })}
+    </tr>
+  );
+}) as <T>(props: {
+  key?: React.Key;
+  row: T;
+  rowIndex: number;
+  orderedColumns: ColumnDef<T>[];
+  colWidths: Record<string, number>;
+}) => React.ReactElement;
 
 export function ResizableReorderableTable<T>({
   columns: initialColumns,
@@ -133,12 +171,16 @@ export function ResizableReorderableTable<T>({
     setColVisibility(vis);
   };
 
-  // Map active columns in order
-  const orderedColumns = colOrder
-    .map(id => initialColumns.find(c => c.id === id))
-    .filter((c): c is ColumnDef<T> => c !== undefined && colVisibility[c.id] !== false);
+  // Map active columns in order (memoized)
+  const orderedColumns = useMemo(() => {
+    return colOrder
+      .map(id => initialColumns.find(c => c.id === id))
+      .filter((c): c is ColumnDef<T> => c !== undefined && colVisibility[c.id] !== false);
+  }, [colOrder, initialColumns, colVisibility]);
 
-  const totalTableWidth = orderedColumns.reduce((sum, col) => sum + (colWidths[col.id] || col.width || 140), 0);
+  const totalTableWidth = useMemo(() => {
+    return orderedColumns.reduce((sum, col) => sum + (colWidths[col.id] || col.width || 140), 0);
+  }, [orderedColumns, colWidths]);
 
   return (
     <div className={`space-y-2 ${className}`}>
@@ -327,22 +369,13 @@ export function ResizableReorderableTable<T>({
               </tr>
             ) : (
               data.map((row, rowIndex) => (
-                <tr key={keyExtractor(row, rowIndex)} className="hover:bg-slate-900/60 transition-colors">
-                  {orderedColumns.map(col => {
-                    const width = colWidths[col.id] || col.width || 140;
-                    const alignClass = col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : 'text-left';
-
-                    return (
-                      <td
-                        key={col.id}
-                        style={{ width: `${width}px`, minWidth: `${col.minWidth || 45}px`, maxWidth: `${width}px` }}
-                        className={`px-3 py-2.5 border-r border-slate-800/60 ${alignClass} truncate`}
-                      >
-                        {col.render(row, rowIndex)}
-                      </td>
-                    );
-                  })}
-                </tr>
+                <MemoizedTableRow
+                  key={keyExtractor(row, rowIndex)}
+                  row={row}
+                  rowIndex={rowIndex}
+                  orderedColumns={orderedColumns}
+                  colWidths={colWidths}
+                />
               ))
             )}
           </tbody>

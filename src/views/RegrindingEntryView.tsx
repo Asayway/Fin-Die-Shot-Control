@@ -57,8 +57,8 @@ export const RegrindingEntryView: React.FC = () => {
   const [measuredRa, setMeasuredRa] = useState<number>(0.12);
   const [hardnessHrc, setHardnessHrc] = useState<number>(62.5);
   const [inspectionResult, setInspectionResult] = useState<'PENDING' | 'PASSED' | 'FAILED' | 'CONDITIONAL'>('PASSED');
-  const [verifiedBy, setVerifiedBy] = useState<string>('K. Anan (QC Inspection Lead)');
-  const [performedBy, setPerformedBy] = useState<string>(currentUser.name);
+  const [verifiedBy, setVerifiedBy] = useState<string>('');
+  const [performedBy, setPerformedBy] = useState<string>('');
   const [regrindReason, setRegrindReason] = useState<string>('Periodic Preventive Maintenance');
   const [regrindDate, setRegrindDate] = useState<string>(new Date().toISOString().substring(0, 10));
   const [note, setNote] = useState<string>('');
@@ -86,10 +86,12 @@ export const RegrindingEntryView: React.FC = () => {
   };
 
   useEffect(() => {
+    setPerformedBy('');
+    setVerifiedBy('');
     reloadData();
     const unsub = storageService.subscribe(reloadData);
     return () => unsub();
-  }, []);
+  }, [selectedLineId]);
 
   // When selectedPartCode changes, auto-fill default nominals from standard
   useEffect(() => {
@@ -213,6 +215,8 @@ export const RegrindingEntryView: React.FC = () => {
     });
 
     if (result.success) {
+      setPerformedBy('');
+      setVerifiedBy('');
       setNotification({
         type: 'success',
         message: `Successfully logged re-grinding job ${result.record?.jobCode} for ${selectedStandard.partName}. Status: ${result.record?.status}`

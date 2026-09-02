@@ -1,24 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { User, ProductionLineId, SystemSettings } from './types';
 import { storageService } from './services/storageService';
 import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
-
-// Views
-import { TvDashboardView } from './components/tv/TvDashboardView';
-import { ShotEntryView } from './views/ShotEntryView';
-import { ReplacementEntryView } from './views/ReplacementEntryView';
-import { RegrindingEntryView } from './views/RegrindingEntryView';
-import { LockPositionView } from './views/LockPositionView';
-import { InteractiveDieLayoutView } from './views/InteractiveDieLayoutView';
-
-import { PartMasterView } from './views/PartMasterView';
-import { PartLifeStandardSetupView, InstallQuantitySetupView } from './views/PartLifeStandardSetupView';
-import { UnifiedToolingMasterView } from './views/UnifiedToolingMasterView';
-import { SpareStockProcurementView } from './views/SpareStockProcurementView';
-import { ReportsView } from './views/ReportsView';
-import { SystemSettingsView, LoginView } from './views/SystemSettingsView';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { ViewSkeleton } from './components/common/ViewSkeleton';
+
+// Code Splitting & Lazy Loading for Views
+const TvDashboardView = React.lazy(() => import('./components/tv/TvDashboardView').then(m => ({ default: m.TvDashboardView })));
+const ShotEntryView = React.lazy(() => import('./views/ShotEntryView').then(m => ({ default: m.ShotEntryView })));
+const ReplacementEntryView = React.lazy(() => import('./views/ReplacementEntryView').then(m => ({ default: m.ReplacementEntryView })));
+const UnifiedToolingMasterView = React.lazy(() => import('./views/UnifiedToolingMasterView').then(m => ({ default: m.UnifiedToolingMasterView })));
+const SystemSettingsView = React.lazy(() => import('./views/SystemSettingsView').then(m => ({ default: m.SystemSettingsView })));
+const LoginView = React.lazy(() => import('./views/SystemSettingsView').then(m => ({ default: m.LoginView })));
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User>(storageService.getCurrentUser());
@@ -85,11 +79,10 @@ export default function App() {
       case 'shot-entry':
         return <ShotEntryView initialLineId={targetLineId} />;
       case 'replacement-entry':
+      case 'regrinding-entry':
       case 'lock-position':
       case 'die-layout':
         return <ReplacementEntryView initialLineId={targetLineId} />;
-      case 'regrinding-entry':
-        return <RegrindingEntryView />;
       case 'line-configuration':
         return <UnifiedToolingMasterView initialTab="install" />;
       case 'unified-tooling-setup':
@@ -102,9 +95,6 @@ export default function App() {
         return <UnifiedToolingMasterView initialTab="install" />;
       case 'spare-stock':
         return <UnifiedToolingMasterView initialTab="install" />;
-      case 'replacement-history':
-      case 'reports':
-        return <ReportsView />;
       case 'system-settings':
         return <SystemSettingsView />;
       case 'login':
@@ -136,11 +126,13 @@ export default function App() {
       <div className={`fixed inset-0 z-50 overflow-hidden flex flex-col h-screen w-screen max-h-screen max-w-screen p-0 m-0 ${
         isHmi ? 'theme-hmi bg-black text-green-400 font-mono' : isLight ? 'theme-light bg-slate-100 text-slate-900 font-sans' : 'theme-dark bg-[#070D18] text-slate-100 font-sans'
       }`}>
-        <TvDashboardView
-          initialLineId={targetLineId}
-          isFullscreenMode={true}
-          onToggleFullscreen={handleToggleFullscreen}
-        />
+        <Suspense fallback={<ViewSkeleton />}>
+          <TvDashboardView
+            initialLineId={targetLineId}
+            isFullscreenMode={true}
+            onToggleFullscreen={handleToggleFullscreen}
+          />
+        </Suspense>
       </div>
     );
   }
@@ -183,12 +175,14 @@ export default function App() {
         />
 
         {/* Content Body - Independent scrollable view container */}
-        <main className={`flex-1 min-h-0 overflow-y-auto p-3 sm:p-5 lg:p-6 custom-scrollbar transition-all duration-300 ${
+        <main className={`flex-1 min-h-0 overflow-y-auto p-2 sm:p-3 lg:p-3.5 custom-scrollbar transition-all duration-300 ${
           isHmi ? 'bg-black text-green-400' : isLight ? 'bg-slate-100 text-slate-900' : 'bg-[#080E1B] text-slate-100'
         }`}>
-          <div className="max-w-[1440px] mx-auto pb-10">
+          <div className="max-w-[1440px] mx-auto pb-6">
             <ErrorBoundary>
-              {renderActiveView()}
+              <Suspense fallback={<ViewSkeleton />}>
+                {renderActiveView()}
+              </Suspense>
             </ErrorBoundary>
           </div>
         </main>

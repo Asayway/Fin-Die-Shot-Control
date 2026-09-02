@@ -86,12 +86,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           badge: 'Hub',
           badgeColor: 'bg-cyan-950 text-cyan-300 border-cyan-500'
         },
-        {
-          id: 'regrinding-entry',
-          label: 'Regrinding',
-          labelTh: 'ส่งเจียระไน',
-          icon: RotateCcw
-        },
       ]
     },
     {
@@ -108,18 +102,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         }
       ]
     },
-    {
-      title: 'REPORTS',
-      titleTh: 'รายงาน',
-      items: [
-        {
-          id: 'reports',
-          label: 'Reports',
-          labelTh: 'รายงานสรุป',
-          icon: BarChart3
-        }
-      ]
-    },
+
     {
       title: 'SETTINGS',
       titleTh: 'ตั้งค่าระบบ',
@@ -165,13 +148,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className={`p-2 border-b flex items-center justify-between ${
           isHmi ? 'border-green-900/60 bg-zinc-950' : isLight ? 'border-slate-300 bg-slate-100' : 'border-slate-800/60 bg-slate-950/40'
         }`}>
-          {!collapsed && (
-            <span className={`text-[11px] font-bold px-2 tracking-wider uppercase ${
-              isHmi ? 'font-mono text-green-400' : isLight ? 'font-mono text-slate-700' : 'font-mono text-slate-400'
-            }`}>
-              {isHmi ? 'HMI MENU' : 'NAVIGATION'}
-            </span>
-          )}
           <button
             onClick={onToggleCollapse}
             className={`p-1.5 rounded transition-colors border ${
@@ -194,24 +170,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       {/* Navigation Links */}
-      <div className={`flex-1 overflow-y-auto py-3 px-2 space-y-4 custom-scrollbar ${
+      <div className={`flex-1 overflow-y-auto py-2 px-1.5 space-y-2.5 custom-scrollbar ${
         isHmi ? 'bg-black' : isLight ? 'bg-slate-50' : 'bg-[#0B1120]'
       }`}>
         {sections.map((section, sIdx) => (
-          <div key={sIdx} className="space-y-1">
+          <div key={sIdx} className="space-y-0.5">
             {!collapsed && (
-              <div className={`px-3 pb-1 border-b ${isHmi ? 'border-green-950' : 'border-slate-800/60'}`}>
-                <div className={`text-[10px] font-bold font-mono tracking-widest uppercase ${
+              <div className={`px-2.5 pb-0.5 border-b ${isHmi ? 'border-green-950' : 'border-slate-800/60'}`}>
+                <div className={`text-[9px] font-bold font-mono tracking-widest uppercase ${
                   isHmi ? 'text-green-500' : 'text-slate-400'
                 }`}>
                   {section.title}
                 </div>
-                <div className={`text-[9px] font-thai ${isHmi ? 'text-green-600/90' : 'text-slate-500'}`}>
+                <div className={`text-[8.5px] font-thai ${isHmi ? 'text-green-600/90' : 'text-slate-500'}`}>
                   {section.titleTh}
                 </div>
               </div>
             )}
-            <div className="space-y-1 pt-1">
+            <div className="space-y-0.5 pt-0.5">
               {section.items.map(item => {
                 const Icon = item.icon;
                 const isActive = activeRoute === item.id;
@@ -224,10 +200,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         onToggleCollapse();
                       }
                     }}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded text-left transition-all group ${
+                    className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-left transition-all group ${
                       isHmi
                         ? isActive
-                          ? 'bg-green-500 text-black border border-green-400 font-extrabold shadow-md shadow-green-500/20'
+                          ? 'bg-green-500 text-black border border-green-400 font-extrabold shadow-sm'
                           : 'bg-zinc-950/80 text-green-400 border border-zinc-900 hover:border-green-500/50 hover:bg-green-950/60'
                         : isActive
                           ? 'bg-cyan-500/15 text-cyan-200 border-l-4 border-cyan-400 font-semibold shadow-sm'
@@ -236,7 +212,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     title={`${item.label} (${item.labelTh})`}
                   >
                     <Icon
-                      className={`w-4 h-4 flex-shrink-0 transition-colors ${
+                      className={`w-3.5 h-3.5 flex-shrink-0 transition-colors ${
                         isHmi
                           ? isActive ? 'text-black font-bold' : 'text-green-400 group-hover:text-green-300'
                           : isActive ? 'text-cyan-400' : 'text-slate-400 group-hover:text-cyan-300'
@@ -252,7 +228,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           }`}>
                             {item.label}
                           </div>
-                          <div className={`text-[10px] truncate leading-tight font-thai mt-0.5 ${
+                          <div className={`text-[9.5px] truncate leading-tight font-thai mt-0.5 ${
                             isHmi
                               ? isActive ? 'text-zinc-900 font-semibold' : 'text-green-500/80'
                               : isActive ? 'text-cyan-300/80' : 'text-slate-400'
@@ -262,7 +238,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         </div>
                         {item.badge && (
                           <span
-                            className={`ml-2 text-[9px] font-mono px-1.5 py-0.5 rounded border font-bold ${
+                            className={`ml-1.5 text-[8.5px] font-mono px-1 py-0.2 rounded border font-bold ${
                               isHmi
                                 ? isActive
                                   ? 'bg-black text-green-400 border-black'

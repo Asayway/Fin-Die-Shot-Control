@@ -343,12 +343,10 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
     return () => unsub();
   }, [selectedLineId]);
 
-  // Set technician name when opening modal
+  // Force technician name to be blank when pin or line changes
   useEffect(() => {
-    if (currentUser?.name) {
-      setTechnicianName(currentUser.name);
-    }
-  }, [currentUser]);
+    setTechnicianName('');
+  }, [selectedPin, selectedLineId]);
 
   // Save pins helper
   const persistPins = (updated: DiePinItem[]) => {
@@ -421,6 +419,14 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
   // Toggle Lock switch directly in modal
   const handleToggleLockSwitch = () => {
     if (!selectedPin) return;
+
+    if (!technicianName.trim()) {
+      setFeedback({
+        type: 'error',
+        message: 'กรุณากรอกชื่อช่างซ่อม / ผู้บันทึก (Technician Name is required)'
+      });
+      return;
+    }
     const nextIsLocked = !selectedPin.isLocked;
     const nextStatus: PinStatus = nextIsLocked ? 'locked' : (selectedPin.currentShots >= selectedPin.maxShots * 0.9 ? 'warning' : 'normal');
 
@@ -465,6 +471,14 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
   const handleSaveAction = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPin) return;
+
+    if (!technicianName.trim()) {
+      setFeedback({
+        type: 'error',
+        message: 'กรุณากรอกชื่อช่างซ่อม / ผู้บันทึก (Technician Name is required)'
+      });
+      return;
+    }
 
     const lineMonitoring = storageService.getLineMonitoring(selectedLineId);
     const currentMachineShot = lineMonitoring?.machineShotTotal || 128450190;

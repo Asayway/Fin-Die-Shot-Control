@@ -83,8 +83,8 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
   );
   const [replacementReason, setReplacementReason] = useState<string>('Normal Preventive Life Limit Reached');
   const [workOrderNumber, setWorkOrderNumber] = useState<string>('');
-  const [changedBy, setChangedBy] = useState<string>(currentUser.name);
-  const [verifiedBy, setVerifiedBy] = useState<string>('Somchai M. (Tooling Lead)');
+  const [changedBy, setChangedBy] = useState<string>('');
+  const [verifiedBy, setVerifiedBy] = useState<string>('');
   const [quantityMismatchReason, setQuantityMismatchReason] = useState<string>('');
   const [quantityMismatchApprovedBy, setQuantityMismatchApprovedBy] = useState<string>('');
   const [evidenceFileName, setEvidenceFileName] = useState<string | null>(null);
@@ -115,6 +115,8 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
   };
 
   useEffect(() => {
+    setChangedBy('');
+    setVerifiedBy('');
     reloadData();
     const unsub = storageService.subscribe(reloadData);
     return () => unsub();
@@ -293,6 +295,8 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
 
     if (result.success) {
       setShowPreviewModal(false);
+      setChangedBy('');
+      setVerifiedBy('');
       setNotification({
         type: 'success',
         message: `Successfully executed replacement transaction ${result.record?.id}. Tooling life counter reset to 0 with preserved removed history.`
@@ -836,6 +840,7 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
                       type="number"
                       value={machineShotAtReplacement}
                       onChange={e => setMachineShotAtReplacement(parseInt(e.target.value, 10) || 0)}
+                      onFocus={(e) => e.target.select()}
                       className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm font-mono text-cyan-300 font-bold focus:border-cyan-500 focus:outline-none"
                       required
                     />

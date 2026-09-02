@@ -12,7 +12,8 @@ import {
   RegrindMasterStandard,
   ConditionInspectionRecord,
   ShotEntryRecord,
-  SystemSettings
+  SystemSettings,
+  PLCConfig
 } from '../types';
 
 export const SEED_DATA_VERSION = '2025.01.31-REV1';
@@ -3617,4 +3618,27 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   theme: 'industrial-dark',
   enableSoundAlerts: true,
   tvAutoCycleIntervalSec: 15
+};
+
+export const DEFAULT_PLC_CONFIG: PLCConfig = {
+  connectionMode: 'MODBUS_TCP',
+  protocol: 'MODBUS_TCP',
+  ip: '192.168.1.120',
+  port: 502,
+  slaveId: 1,
+  pollingIntervalMs: 1000,
+  wsUrl: 'ws://192.168.1.120:1880/ws/plc',
+  restApiUrl: 'http://192.168.1.120:8080/api/v1/plc/shots',
+  uiThrottleMs: 1000,
+  isAutoPolling: false,
+  lineRegisters: {
+    'E1': { lineId: 'E1', lineName: 'LINE E1 (Ø7 Slit)', address: '%MW101', active: true, currentVal: 1185, lastPulse: '13:05:31' },
+    'E2': { lineId: 'E2', lineName: 'LINE E2 (Ø5 Slit)', address: '%MW102', active: true, currentVal: 2450, lastPulse: '13:05:30' },
+    'E3-1': { lineId: 'E3-1', lineName: 'LINE E3-1 (Slit 3P)', address: '%MW103', active: true, currentVal: 890, lastPulse: '13:05:28' },
+    'E3-2': { lineId: 'E3-2', lineName: 'LINE E3-2 (WL+ 4P)', address: '%MW104', active: true, currentVal: 1420, lastPulse: '13:05:29' },
+    'E3-3': { lineId: 'E3-3', lineName: 'LINE E3-3 (Corr 4P)', address: '%MW105', active: true, currentVal: 3110, lastPulse: '13:05:31' },
+    'E4': { lineId: 'E4', lineName: 'LINE E4 (Ø5 Slit)', address: '%MW106', active: true, currentVal: 670, lastPulse: '13:05:25' },
+    'E5': { lineId: 'E5', lineName: 'LINE E5 (Ø5 Slit)', address: '%MW107', active: true, currentVal: 4890, lastPulse: '13:05:29' },
+    'E6': { lineId: 'E6', lineName: 'LINE E6 (Ø7 Louver)', address: '%MW108', active: true, currentVal: 5452680, lastPulse: '13:05:31' }
+  }
 };

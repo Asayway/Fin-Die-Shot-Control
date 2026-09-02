@@ -23,6 +23,7 @@ import { PartLifeStandard, FinMaterial, TubeDiameter, FinType, ProductionLineId,
 import { storageService } from '../services/storageService';
 import { formatShots, formatThb, generateCompositeKey } from '../services/calculationService';
 import { ResizableReorderableTable } from '../components/common/ResizableReorderableTable';
+import { DebouncedNumericInput } from '../components/common/DebouncedNumericInput';
 
 interface LineQuickFilter {
   id: string;
@@ -507,10 +508,9 @@ export const PartLifeStandardSetupView: React.FC = () => {
               minWidth: 110,
               align: 'right',
               render: (s) => isEditing ? (
-                <input
-                  type="number"
+                <DebouncedNumericInput
                   value={editValues[s.id]?.lifeLimitShots as number}
-                  onChange={(e) => handleValueChange(s.id, 'lifeLimitShots', e.target.value)}
+                  onChange={(val) => handleValueChange(s.id, 'lifeLimitShots', val)}
                   className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-right text-white font-mono text-xs focus:border-cyan-400 focus:outline-none"
                 />
               ) : (
@@ -526,11 +526,10 @@ export const PartLifeStandardSetupView: React.FC = () => {
               minWidth: 95,
               align: 'right',
               render: (s) => isEditing ? (
-                <input
-                  type="number"
-                  step="0.01"
+                <DebouncedNumericInput
+                  step={0.01}
                   value={editValues[s.id]?.regrindDepthPerTime as number}
-                  onChange={(e) => handleValueChange(s.id, 'regrindDepthPerTime', e.target.value)}
+                  onChange={(val) => handleValueChange(s.id, 'regrindDepthPerTime', val)}
                   className="w-20 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-right text-white font-mono text-xs focus:border-cyan-400 focus:outline-none"
                 />
               ) : (
@@ -546,11 +545,10 @@ export const PartLifeStandardSetupView: React.FC = () => {
               minWidth: 90,
               align: 'right',
               render: (s) => isEditing ? (
-                <input
-                  type="number"
-                  step="0.1"
+                <DebouncedNumericInput
+                  step={0.1}
                   value={editValues[s.id]?.maxTotalGrindingLimit as number}
-                  onChange={(e) => handleValueChange(s.id, 'maxTotalGrindingLimit', e.target.value)}
+                  onChange={(val) => handleValueChange(s.id, 'maxTotalGrindingLimit', val)}
                   className="w-20 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-right text-white font-mono text-xs focus:border-cyan-400 focus:outline-none"
                 />
               ) : (
@@ -566,11 +564,10 @@ export const PartLifeStandardSetupView: React.FC = () => {
               minWidth: 80,
               align: 'right',
               render: (s) => isEditing ? (
-                <input
-                  type="number"
-                  step="0.01"
+                <DebouncedNumericInput
+                  step={0.01}
                   value={editValues[s.id]?.standardShimThickness as number}
-                  onChange={(e) => handleValueChange(s.id, 'standardShimThickness', e.target.value)}
+                  onChange={(val) => handleValueChange(s.id, 'standardShimThickness', val)}
                   className="w-20 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-right text-white font-mono text-xs focus:border-cyan-400 focus:outline-none"
                 />
               ) : (
@@ -970,11 +967,10 @@ export const InstallQuantitySetupView: React.FC = () => {
               align: 'center' as const,
               render: (row: any) => (
                 isEditing ? (
-                  <input
-                    type="number"
-                    min="0"
+                  <DebouncedNumericInput
+                    min={0}
                     value={row[lId]}
-                    onChange={(e) => handleCellValueChange(row.code, lId, e.target.value)}
+                    onChange={(val) => handleCellValueChange(row.code, lId, val)}
                     className="w-14 sm:w-16 bg-slate-900 border border-slate-600 rounded px-1 py-1 text-center text-white focus:outline-none focus:border-cyan-400 font-mono"
                   />
                 ) : (

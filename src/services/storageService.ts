@@ -21,6 +21,7 @@ import {
   AuditLogEntry,
   User,
   SystemSettings,
+  PLCConfig,
   ProductionLineId,
   UserRole,
   PositionLockRecord,
@@ -42,6 +43,7 @@ import {
   INITIAL_SHOT_LOGS,
   INITIAL_AUDIT_LOGS,
   DEFAULT_SYSTEM_SETTINGS,
+  DEFAULT_PLC_CONFIG,
   SEED_DATA_VERSION,
   SEED_SOURCE_LABEL
 } from '../data/seedData';
@@ -65,6 +67,7 @@ const STORAGE_KEYS = {
   SHOT_DRAFTS: 'fin_press_shot_drafts',
   AUDIT_LOGS: 'fin_press_audit_logs',
   SETTINGS: 'fin_press_settings',
+  PLC_CONFIG: 'fin_press_plc_config',
   POSITION_LOCKS: 'fin_press_position_locks',
   SEED_INITIALIZED: 'fin_press_seed_init_v6'
 };
@@ -131,6 +134,7 @@ class StorageService {
     localStorage.setItem(STORAGE_KEYS.SHOT_LOGS, JSON.stringify(INITIAL_SHOT_LOGS));
     localStorage.setItem(STORAGE_KEYS.AUDIT_LOGS, JSON.stringify(INITIAL_AUDIT_LOGS));
     localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(DEFAULT_SYSTEM_SETTINGS));
+    localStorage.setItem(STORAGE_KEYS.PLC_CONFIG, JSON.stringify(DEFAULT_PLC_CONFIG));
     localStorage.setItem(STORAGE_KEYS.SEED_INITIALIZED, SEED_DATA_VERSION);
 
     this.notify();
@@ -962,11 +966,12 @@ class StorageService {
 
   public executeCounterReset(params: {
     lineId?: ProductionLineId;
-    targetLine?: 'ALL' | ProductionLineId;
+    targetLine?: ProductionLineId | 'ALL';
     previousTotal?: number;
     newResetTotal: number;
-    approvalId: string;
-    approvedBy: string;
+    approvalId?: string;
+    approvedBy?: string;
+    resettedBy?: string;
     resetReason: string;
     shift?: 'Shift 1 (Day)' | 'Shift 2 (Night)' | 'Shift 3 (Overtime)';
     productionDate?: string;
@@ -974,8 +979,8 @@ class StorageService {
     resetShiftCounters?: boolean;
     notes?: string;
   }): { success: boolean; records?: ShotEntryRecord[]; record?: ShotEntryRecord; affectedLines?: ProductionLineId[]; error?: string } {
-    if (!params.approvalId || !params.approvedBy || !params.resetReason) {
-      return { success: false, error: 'Approval ID, Approver Name, and Reset Reason are required for Counter Reset (ต้องระบุรหัสอนุมัติ, ผู้อนุมัติ และเหตุผล)' };
+    if (!params.resetReason || !params.resetReason.trim()) {
+      return { success: false, error: 'กรุณาระบุเหตุผลการรีเซ็ต (Reset Reason is required)' };
     }
     if (!Number.isInteger(params.newResetTotal) || params.newResetTotal < 0) {
       return { success: false, error: 'Reset counter base reading must be a non-negative whole number (เลขมิเตอร์ต้องเป็นจำนวนเต็มบวกหรือศูนย์)' };
@@ -986,13 +991,21 @@ class StorageService {
     const stocks = this.getSpareStocks();
     const user = this.getCurrentUser();
     const logs = this.getShotLogs();
-    const isAllLines = params.targetLine === 'ALL' || (!params.lineId && !params.targetLine);
-    const targetLineIds: ProductionLineId[] = isAllLines
-      ? (['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5', 'E6'] as ProductionLineId[])
-      : [params.lineId || (params.targetLine as ProductionLineId)];
+
+    // Enforce single line reset
+    const rawTarget = params.lineId || params.targetLine || 'E1';
+    const targetLineId: ProductionLineId = (rawTarget === 'ALL' ? 'E1' : rawTarget) as ProductionLineId;
+    const targetLineIds: ProductionLineId[] = [targetLineId];
+
+    const approvalId = params.approvalId && params.approvalId.trim()
+      ? params.approvalId.trim()
+      : `RST-APPR-${new Date().toISOString().substring(0, 10).replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const resettedBy = params.resettedBy && params.resettedBy.trim() ? params.resettedBy.trim() : user.name;
+    const approvedBy = params.approvedBy && params.approvedBy.trim() ? params.approvedBy.trim() : resettedBy;
 
     const createdRecords: ShotEntryRecord[] = [];
-    const resetDate = params.productionDate || new Date().toISOString().substring(0, 10);
+    const executionTimestamp = new Date().toISOString();
+    const resetDate = params.productionDate || executionTimestamp.substring(0, 10);
     const resetShift = params.shift || 'Shift 1 (Day)';
     const resetParts = params.resetPartWear !== false; // default true
     const resetTallies = params.resetShiftCounters !== false; // default true
@@ -1047,13 +1060,13 @@ class StorageService {
         newTotal: params.newResetTotal,
         entryReason: `Machine Counter Reset: ${params.resetReason}`,
         notes: params.notes || `Counter & Part wear reset from ${oldTotal.toLocaleString()} -> ${params.newResetTotal.toLocaleString()} shots`,
-        operatorName: user.name,
+        operatorName: resettedBy,
         operatorId: user.employeeId,
-        timestamp: new Date().toISOString(),
+        timestamp: executionTimestamp,
         status: 'COUNTER_RESET',
         isCounterReset: true,
-        resetApprovalId: params.approvalId,
-        resetApprovedBy: params.approvedBy,
+        resetApprovalId: approvalId,
+        resetApprovedBy: approvedBy,
         resetReason: params.resetReason
       };
 
@@ -1064,12 +1077,12 @@ class StorageService {
     localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(all));
     localStorage.setItem(STORAGE_KEYS.SHOT_LOGS, JSON.stringify(logs.slice(0, 500)));
 
-    const linesDesc = isAllLines ? 'ALL LINES (E1-E6)' : `Line ${targetLineIds.join(', ')}`;
+    const linesDesc = `Line ${targetLineId}`;
     this.addAuditLog(
       'SHOT_ADJUSTMENT',
-      `EXECUTED SHOT RESET on ${linesDesc}: Base meter -> ${params.newResetTotal.toLocaleString()} shots (Parts reset: ${resetParts ? 'YES' : 'NO'}, Shift tallies reset: ${resetTallies ? 'YES' : 'NO'}) [Approval: ${params.approvalId} by ${params.approvedBy}]`,
-      `รีเซ็ตยอดช็อตและมิเตอร์ ${linesDesc}: ค่าฐานใหม่ ${params.newResetTotal.toLocaleString()} ช็อต (รีเซ็ตชิ้นส่วน: ${resetParts ? 'ใช่' : 'ไม่'}, รีเซ็ตกะ: ${resetTallies ? 'ใช่' : 'ไม่'}) [รหัสอนุมัติ: ${params.approvalId}]`,
-      isAllLines ? undefined : targetLineIds[0]
+      `EXECUTED SHOT RESET on ${linesDesc}: Base meter -> ${params.newResetTotal.toLocaleString()} shots (Parts reset: ${resetParts ? 'YES' : 'NO'}, Shift tallies reset: ${resetTallies ? 'YES' : 'NO'}) [Approval: ${approvalId} by ${approvedBy}, Resetted by: ${resettedBy}]`,
+      `รีเซ็ตยอดช็อตและมิเตอร์ ${linesDesc}: ค่าฐานใหม่ ${params.newResetTotal.toLocaleString()} ช็อต (ผู้ทำรายการ: ${resettedBy}, ผู้อนุมัติ: ${approvedBy}) [เหตุผล: ${params.resetReason}]`,
+      targetLineId
     );
 
     try {
@@ -1077,7 +1090,7 @@ class StorageService {
         window.dispatchEvent(new CustomEvent('findie-shot-reset', {
           detail: {
             affectedLines: targetLineIds,
-            isAllLines,
+            isAllLines: false,
             newResetTotal: params.newResetTotal,
             resetParts,
             resetTallies,
@@ -2777,6 +2790,30 @@ class StorageService {
     localStorage.setItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(regrindMasters));
     localStorage.setItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
     localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(lifeStandards));
+    this.notify();
+  }
+
+  // ==========================================
+  // PLC DIRECT INTEGRATION DRIVER CONFIGURATION
+  // ==========================================
+
+  public getPLCConfig(): PLCConfig {
+    const raw = localStorage.getItem(STORAGE_KEYS.PLC_CONFIG);
+    if (!raw) {
+      localStorage.setItem(STORAGE_KEYS.PLC_CONFIG, JSON.stringify(DEFAULT_PLC_CONFIG));
+      return DEFAULT_PLC_CONFIG;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      return { ...DEFAULT_PLC_CONFIG, ...parsed };
+    } catch {
+      return DEFAULT_PLC_CONFIG;
+    }
+  }
+
+  public savePLCConfig(config: PLCConfig): void {
+    localStorage.setItem(STORAGE_KEYS.PLC_CONFIG, JSON.stringify(config));
+    this.addAuditLog('SYSTEM', 'Updated PLC Direct Driver configuration parameters and register mappings');
     this.notify();
   }
 }

@@ -305,3 +305,40 @@ export function exportAllInOneMasterExcel(
   saveWorkbookAsExcel(workbook, `FinDie_Master_All_In_One_Report_${dateStr}.xlsx`);
 }
 
+/**
+ * Export Shot Counter Reset History to Excel (.xlsx)
+ */
+export function exportResetLogsExcel(
+  logs: ShotEntryRecord[],
+  lineFilter: string = 'ALL'
+) {
+  const data = logs.map((log, idx) => ({
+    'NO.': idx + 1,
+    'DATE TIME (เวลาบันทึก)': log.timestamp ? new Date(log.timestamp).toLocaleString('th-TH') : 'N/A',
+    'LINE (สายการผลิต)': `LINE ${log.lineId}`,
+    'RESETTED BY (ผู้ทำรายการ)': log.operatorName || 'System',
+    'PREVIOUS SHOT (ยอดเดิม)': log.previousTotal ?? 0,
+    'NEW SHOT (ยอดตั้งใหม่)': log.newTotal ?? 0,
+    'RESET REASON (เหตุผลการรีเซ็ต)': log.resetReason || log.entryReason || '-',
+    'APPROVAL REF (รหัสอนุมัติ)': log.resetApprovalId || log.id.slice(-8)
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(data);
+  worksheet['!cols'] = [
+    { wch: 6 },  // NO.
+    { wch: 22 }, // TIME
+    { wch: 14 }, // LINE
+    { wch: 22 }, // RESETTED BY
+    { wch: 18 }, // PREVIOUS SHOT
+    { wch: 18 }, // NEW SHOT
+    { wch: 35 }, // RESET REASON
+    { wch: 20 }, // APPROVAL REF
+  ];
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Reset History Logs');
+
+  const dateStr = new Date().toISOString().slice(0, 10);
+  saveWorkbookAsExcel(workbook, `FinDie_Shot_Reset_History_${lineFilter}_${dateStr}.xlsx`);
+}
+

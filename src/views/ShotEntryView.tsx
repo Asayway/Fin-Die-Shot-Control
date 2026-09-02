@@ -47,6 +47,7 @@ import {
 import { storageService } from '../services/storageService';
 import { formatShots } from '../services/calculationService';
 import { LineFilterSelector } from '../components/common/LineFilterSelector';
+import { exportResetLogsExcel } from '../utils/excelExport';
 
 interface ShotEntryViewProps {
   initialLineId?: ProductionLineId;
@@ -135,10 +136,10 @@ function getShiftInfo(date: Date = new Date()): { shiftName: string; shiftKey: '
 
 export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E6' }) => {
   const [selectedLineId, setSelectedLineId] = useState<ProductionLineId>(initialLineId);
-  const [activeTab, setActiveTab] = useState<'entry' | 'history' | 'drafts'>('entry');
+  const [activeTab, setActiveTab] = useState<'entry' | 'history' | 'reset-logs' | 'drafts'>('entry');
 
-  // Input Fields & 2 Entry Modes
-  const [entryMode, setEntryMode] = useState<'MODE_1' | 'MODE_2'>('MODE_1');
+  // Input Fields - Pure Manual Meter Reading Mode
+  const [entryMode] = useState<'MODE_1'>('MODE_1');
   const [inputMethod, setInputMethod] = useState<ShotInputMethod>('METER_READING');
   const [productionDate, setProductionDate] = useState<string>(new Date().toISOString().substring(0, 10));
   
@@ -205,13 +206,31 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
   const [previewData, setPreviewData] = useState<any>(null);
 
   const [counterResetModalOpen, setCounterResetModalOpen] = useState<boolean>(false);
-  const [resetTargetScope, setResetTargetScope] = useState<'ALL' | ProductionLineId>('ALL');
+  const [resetTargetScope, setResetTargetScope] = useState<ProductionLineId>('E1');
   const [resetNewMeterInput, setResetNewMeterInput] = useState<string>('0');
   const [resetPartWearOption, setResetPartWearOption] = useState<boolean>(true);
   const [resetShiftCountersOption, setResetShiftCountersOption] = useState<boolean>(true);
   const [resetApprovalIdInput, setResetApprovalIdInput] = useState<string>('RST-APPR-2026-001');
-  const [resetApprovedByInput, setResetApprovedByInput] = useState<string>(currentUser.name || 'Somchai Prasert');
-  const [resetReasonInput, setResetReasonInput] = useState<string>('Full Factory Shot Reset & Calibration (รีเซ็ตยอดช็อตทุกสายการผลิต)');
+  const [resetApprovedByInput, setResetApprovedByInput] = useState<string>('');
+  const [resetterNameInput, setResetterNameInput] = useState<string>('');
+  const [resetReasonInput, setResetReasonInput] = useState<string>('เปลี่ยนมิเตอร์ใหม่ (New Counter Installation)');
+  const [resetModalTab, setResetModalTab] = useState<'FORM' | 'LOGS'>('FORM');
+  const [resetLogSearch, setResetLogSearch] = useState<string>('');
+  const [resetLogLineFilter, setResetLogLineFilter] = useState<string>('ALL');
+  const [resetLogStartDate, setResetLogStartDate] = useState<string>('');
+  const [resetLogEndDate, setResetLogEndDate] = useState<string>('');
+
+  const handleOpenResetModal = (lineId?: ProductionLineId) => {
+    const target = lineId || selectedLineId || 'E1';
+    setResetTargetScope(target);
+    setResetterNameInput(''); // Force operator signature every single time
+    setResetApprovedByInput('');
+    setResetApprovalIdInput(`RST-APPR-${new Date().toISOString().substring(0, 10).replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`);
+    setResetNewMeterInput('0');
+    setResetReasonInput('เปลี่ยนมิเตอร์ใหม่ (New Counter Installation)');
+    setResetModalTab('FORM');
+    setCounterResetModalOpen(true);
+  };
 
   // History Filters
   const [historyLineFilter, setHistoryLineFilter] = useState<string>('ALL');
@@ -271,6 +290,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
   };
 
   useEffect(() => {
+    setOperatorName(''); // Force operator signature every time line changes
     reloadData();
     const unsub = storageService.subscribe(reloadData);
     return () => unsub();
@@ -410,6 +430,17 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
 
   // Submission handler with Mode 2 Loss Time Catcher Check
   const handleOpenSubmissionPreview = () => {
+    const isLineStopped = !!(currentLine?.machineStatus && currentLine.machineStatus !== 'RUNNING');
+    if (isLineStopped) {
+      const statusLabel = currentLine.machineStatus === 'STOPPED' 
+        ? 'ปิดไลน์ผลิต (STOPPED)' 
+        : currentLine.machineStatus === 'MAINTENANCE' 
+        ? 'ซ่อมบำรุง (MAINTENANCE)' 
+        : 'พักสายการผลิต (IDLE)';
+      showNotification('error', `ไม่สามารถบันทึกยอดช็อตได้ เนื่องจากสายการผลิต ${selectedLineId} อยู่ในสถานะ "${statusLabel}"`);
+      return;
+    }
+
     if (!operatorName.trim()) {
       showNotification('error', 'กรุณาระบุชื่อพนักงานผู้บันทึก (Operator Name is required) - บังคับลงชื่อพนักงานทุกครั้งก่อนทำรายการ');
       return;
@@ -487,6 +518,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
       if (entryMode === 'MODE_2') setMode2ActualShotsInput('');
       showNotification('success', `SUBMITTED: +${incrementVal.toLocaleString()} shots on Line ${selectedLineId}. New Meter Total: ${resultingTotal.toLocaleString()} shots.`);
       setNotes('');
+      setOperatorName(''); // Clear operator signature after submit
       reloadData();
     } else {
       showNotification('error', result.error || 'Submission failed.');
@@ -541,35 +573,69 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
       return;
     }
 
-    const isAll = resetTargetScope === 'ALL';
+    if (!resetterNameInput.trim()) {
+      showNotification('error', 'กรุณาระบุชื่อผู้ทำรายการรีเซ็ต (Please enter Resetted By name)');
+      return;
+    }
+
+    if (!resetReasonInput.trim()) {
+      showNotification('error', 'กรุณาระบุเหตุผลการรีเซ็ต (Please enter Reset Reason)');
+      return;
+    }
+
+    const currentLineData = storageService.getLineMonitoring(resetTargetScope);
+    const oldMeterVal = currentLineData?.machineShotTotal || 0;
+
     const result = storageService.executeCounterReset({
       targetLine: resetTargetScope,
-      lineId: isAll ? undefined : resetTargetScope,
-      previousTotal: prevShotsVal,
+      lineId: resetTargetScope,
+      previousTotal: oldMeterVal,
       newResetTotal: newMeter,
       resetPartWear: resetPartWearOption,
       resetShiftCounters: resetShiftCountersOption,
       approvalId: resetApprovalIdInput,
-      approvedBy: resetApprovedByInput,
+      approvedBy: resetApprovedByInput || resetterNameInput,
+      resettedBy: resetterNameInput,
       resetReason: resetReasonInput,
       shift,
       productionDate,
-      notes: isAll
-        ? `Factory-wide reset across all 8 lines to ${newMeter.toLocaleString()} shots (Parts reset: ${resetPartWearOption ? 'YES' : 'NO'}, Shift reset: ${resetShiftCountersOption ? 'YES' : 'NO'})`
-        : `Line ${resetTargetScope} counter reset to ${newMeter.toLocaleString()} shots (Parts reset: ${resetPartWearOption ? 'YES' : 'NO'}, Shift reset: ${resetShiftCountersOption ? 'YES' : 'NO'})`
+      notes: `Line ${resetTargetScope} counter reset from ${oldMeterVal.toLocaleString()} -> ${newMeter.toLocaleString()} shots by ${resetterNameInput}. Reason: ${resetReasonInput}`
     });
 
     if (result.success) {
-      setCounterResetModalOpen(false);
-      const targetText = isAll ? 'ALL 8 LINES (E1-E6)' : `Line ${resetTargetScope}`;
-      showNotification('success', `✅ รีเซ็ตช็อตสำเร็จ: ${targetText} -> ฐานใหม่ ${newMeter.toLocaleString()} ช็อต (เชื่อมต่อข้อมูล TV Monitor และทั้งระบบเรียบร้อย)`);
-      setPreviousReadingInput(String(newMeter));
-      setNewReadingInput(String(newMeter + 50000));
+      const nowFormatted = new Date().toLocaleTimeString('th-TH');
+      showNotification('success', `✅ รีเซ็ตช็อตสำเร็จ: สาย ${resetTargetScope} -> มิเตอร์ใหม่ ${newMeter.toLocaleString()} ช็อต [บันทึกเวลา ${nowFormatted}]`);
+      if (resetTargetScope === selectedLineId) {
+        setPreviousReadingInput(String(newMeter));
+        setNewReadingInput(String(newMeter + 50000));
+      }
       reloadData();
+      setResetModalTab('LOGS');
     } else {
       showNotification('error', result.error || 'Counter reset failed');
     }
   };
+
+  // Filtered Counter Reset History Logs
+  const resetLogs = useMemo(() => {
+    return shotLogs
+      .filter(log => {
+        const isReset = log.isCounterReset || log.entryType === 'COUNTER_RESET' || (log.entryReason && log.entryReason.includes('Counter Reset'));
+        if (!isReset) return false;
+        if (resetLogLineFilter !== 'ALL' && log.lineId !== resetLogLineFilter) return false;
+        if (!isDateInSelectedRange(log.productionDate || log.timestamp, resetLogStartDate, resetLogEndDate)) return false;
+        if (resetLogSearch.trim()) {
+          const q = resetLogSearch.toLowerCase();
+          const matchLine = log.lineId.toLowerCase().includes(q);
+          const matchOp = (log.operatorName || '').toLowerCase().includes(q);
+          const matchReason = (log.resetReason || log.entryReason || '').toLowerCase().includes(q);
+          const matchAppr = (log.resetApprovedBy || log.resetApprovalId || '').toLowerCase().includes(q);
+          if (!matchLine && !matchOp && !matchReason && !matchAppr) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }, [shotLogs, resetLogLineFilter, resetLogSearch, resetLogStartDate, resetLogEndDate]);
 
   // Filtered History
   const filteredShotLogs = useMemo(() => {
@@ -591,32 +657,32 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
   const isHmi = systemSettings?.theme === 'hmi' || systemSettings?.theme === 'industrial-dark';
 
   return (
-    <div className={`space-y-3 select-none ${isHmi ? 'font-mono' : 'font-sans'}`}>
+    <div className={`space-y-2.5 select-none ${isHmi ? 'font-mono' : 'font-sans'}`}>
       
       {/* Top Header: Integrated Line Bar + Terminal Header + Action Tabs (Sticky Locked at Top) */}
-      <div className={`sticky top-0 z-30 backdrop-blur-md rounded-xl p-3 sm:p-4 shadow-2xl space-y-3 border ${
+      <div className={`sticky top-0 z-30 backdrop-blur-md rounded-lg p-2 sm:p-2.5 shadow-xl space-y-2 border ${
         isHmi 
           ? 'bg-black/95 border-2 border-green-500 text-green-400' 
           : 'bg-[#0E172A]/95 border-slate-800/90 text-slate-100'
       }`}>
         
         {/* Row 1: Terminal Title & Line Selector Tabs */}
-        <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-800/80">
-          <div className="flex items-center gap-2.5">
-            <div className={`p-1.5 rounded-lg border ${
+        <div className="flex flex-wrap items-center justify-between gap-1.5 pb-1.5 border-b border-slate-800/80">
+          <div className="flex items-center gap-2">
+            <div className={`p-1 rounded-md border ${
               isHmi 
                 ? 'bg-green-950 border-green-500 text-green-400' 
                 : 'bg-cyan-950/60 border-cyan-500/50 text-cyan-300'
             }`}>
-              <Zap className="w-4 h-4" />
+              <Zap className="w-3.5 h-3.5" />
             </div>
             <div>
-              <h2 className={`text-sm sm:text-base font-bold uppercase tracking-wider ${
+              <h2 className={`text-xs sm:text-sm font-bold uppercase tracking-wider ${
                 isHmi ? 'text-green-400 font-mono font-extrabold' : 'text-white font-["Plus_Jakarta_Sans"]'
               }`}>
                 SHOT CONTROL (LINE {selectedLineId})
               </h2>
-              <p className={`text-[11px] flex items-center gap-2 ${isHmi ? 'text-green-500/80 font-mono' : 'text-slate-400'}`}>
+              <p className={`text-[10px] flex items-center gap-1.5 ${isHmi ? 'text-green-500/80 font-mono' : 'text-slate-400'}`}>
                 <span>DIE: <strong className="text-cyan-300">{currentLine?.activeConfig?.dieCode || `FD-${selectedLineId}-07`}</strong></span>
                 <span>•</span>
                 <span className="text-emerald-400 font-bold">{detectedShiftInfo.shiftName}</span>
@@ -625,7 +691,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
           </div>
 
           {/* Line Selector Pills */}
-          <div className="w-full sm:w-auto flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1.5 pt-1 custom-scrollbar flex-nowrap sm:flex-wrap">
+          <div className="w-full sm:w-auto flex items-center gap-1 sm:gap-1.5 overflow-x-auto pb-0.5 pt-0.5 custom-scrollbar flex-nowrap sm:flex-wrap">
             <LineFilterSelector
               selectedLine={selectedLineId}
               onSelectLine={(line) => setSelectedLineId(line)}
@@ -636,17 +702,17 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
         </div>
 
         {/* Row 2: Action Tabs & Help Toggle */}
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
-          <div className={`flex items-center gap-1.5 p-1 rounded-lg border ${
+        <div className="flex flex-wrap items-center justify-between gap-1.5 pt-0.5">
+          <div className={`flex items-center gap-1 p-0.5 rounded-md border ${
             isHmi ? 'bg-zinc-950 border-green-900' : 'bg-slate-950 border-slate-800'
           }`}>
             <button
               onClick={() => setActiveTab('entry')}
-              className={`px-3.5 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 active:ring-4 ${
+              className={`px-2.5 py-1 rounded text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 ${
                 activeTab === 'entry'
                   ? isHmi
-                    ? 'bg-green-500 text-black shadow-lg shadow-green-500/30 font-extrabold ring-2 ring-green-300'
-                    : 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/30 font-bold ring-2 ring-cyan-300'
+                    ? 'bg-green-500 text-black shadow-sm font-extrabold ring-1 ring-green-300'
+                    : 'bg-cyan-500 text-slate-950 shadow-sm font-bold ring-1 ring-cyan-300'
                   : isHmi
                     ? 'text-green-400 hover:bg-green-950/80'
                     : 'text-slate-400 hover:text-white hover:bg-slate-900'
@@ -658,11 +724,11 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
 
             <button
               onClick={() => setActiveTab('history')}
-              className={`px-3.5 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 active:ring-4 ${
+              className={`px-2.5 py-1 rounded text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 ${
                 activeTab === 'history'
                   ? isHmi
-                    ? 'bg-green-500 text-black shadow-lg shadow-green-500/30 font-extrabold ring-2 ring-green-300'
-                    : 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/30 font-bold ring-2 ring-cyan-300'
+                    ? 'bg-green-500 text-black shadow-sm font-extrabold ring-1 ring-green-300'
+                    : 'bg-cyan-500 text-slate-950 shadow-sm font-bold ring-1 ring-cyan-300'
                   : isHmi
                     ? 'text-green-400 hover:bg-green-950/80'
                     : 'text-slate-400 hover:text-white hover:bg-slate-900'
@@ -673,8 +739,8 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
             </button>
 
             <button
-              onClick={() => setCounterResetModalOpen(true)}
-              className={`px-3 py-1.5 rounded-md text-xs font-bold border transition-all flex items-center gap-1.5 active:scale-95 active:ring-4 ${
+              onClick={() => handleOpenResetModal(selectedLineId)}
+              className={`px-2.5 py-1 rounded text-xs font-bold border transition-all flex items-center gap-1.5 active:scale-95 ${
                 isHmi
                   ? 'bg-zinc-900 hover:bg-amber-950 text-amber-400 border-amber-600/70'
                   : 'bg-slate-900 hover:bg-amber-950/60 text-amber-300 border-amber-600/60'
@@ -684,12 +750,29 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
               <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
               <span>RESET METER</span>
             </button>
+
+            <button
+              onClick={() => setActiveTab('reset-logs')}
+              className={`px-2.5 py-1 rounded text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 ${
+                activeTab === 'reset-logs'
+                  ? isHmi
+                    ? 'bg-amber-500 text-black shadow-sm font-extrabold ring-1 ring-amber-300'
+                    : 'bg-amber-500 text-slate-950 shadow-sm font-bold ring-1 ring-amber-300'
+                  : isHmi
+                    ? 'bg-zinc-900 hover:bg-amber-950/80 text-amber-400 border border-amber-600/70'
+                    : 'bg-slate-900 hover:bg-amber-950/60 text-amber-300 border border-amber-600/60'
+              }`}
+              title="ดูประวัติการรีเซ็ตมิเตอร์"
+            >
+              <History className="w-3.5 h-3.5" />
+              <span>RESET LOGS ({resetLogs.length})</span>
+            </button>
           </div>
 
           <button
             type="button"
             onClick={() => setShowGuide(!showGuide)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${
+            className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 border ${
               showGuide
                 ? isHmi ? 'bg-green-950 text-green-300 border-green-700' : 'bg-cyan-950 text-cyan-300 border-cyan-700'
                 : isHmi ? 'bg-black text-green-400 border-green-900 hover:bg-zinc-900' : 'bg-slate-900 text-slate-300 border-slate-800 hover:text-white'
@@ -754,147 +837,94 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
         </div>
       )}
 
-      {/* TAB 1: MAIN ENTRY FORM (STREAMLINED MINIMALIST OPERATOR INTERFACE) */}
-      {activeTab === 'entry' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5">
+      {/* TAB 1: MAIN ENTRY FORM (STREAMLINED MINIMALIST MANUAL OPERATOR INTERFACE) */}
+      {activeTab === 'entry' && (() => {
+        const isLineStopped = !!(currentLine?.machineStatus && currentLine.machineStatus !== 'RUNNING');
+        return (
+        <div className="max-w-2xl mx-auto w-full space-y-2.5">
           
-          {/* Main Operator Form Column (Col 8) */}
-          <div className={`lg:col-span-8 rounded-xl p-3.5 sm:p-4 space-y-4 shadow-xl border ${
+          <div className={`rounded-xl p-3 sm:p-4 space-y-3 shadow-lg border ${
             isHmi 
               ? 'bg-black border-2 border-green-500/90' 
               : 'bg-[#0E172A] border-slate-800/90'
           }`}>
             
-            {/* Operator Instructions / Help Guide (Collapsible - Updated) */}
+            {/* Line Stopped / Maintenance Warning Notice */}
+            {isLineStopped && (
+              <div className="p-3 rounded-lg border-2 border-rose-500/90 bg-rose-950/80 text-rose-200 text-xs font-mono flex items-start gap-2.5 shadow-md">
+                <AlertOctagon className="w-4 h-4 flex-shrink-0 text-rose-400 mt-0.5 animate-pulse" />
+                <div className="space-y-0.5">
+                  <div className="font-bold text-xs text-rose-300 font-sans flex items-center gap-1.5">
+                    <span>🔒 ปิดรับการกรอกช็อต: สายการผลิต {selectedLineId} อยู่ในสถานะ {
+                      currentLine?.machineStatus === 'STOPPED' ? '🔴 ปิดไลน์ผลิต (STOPPED)' :
+                      currentLine?.machineStatus === 'MAINTENANCE' ? '🔧 ซ่อมบำรุง (MAINTENANCE)' :
+                      '🟡 พักสายการผลิต (IDLE)'
+                    }</span>
+                  </div>
+                  <p className="text-[10px] font-thai leading-relaxed text-rose-200">
+                    ไม่อนุญาตให้บันทึกยอดช็อตหรือแก้ไขมิเตอร์สำหรับสายการผลิตที่ปิดหรืออยู่ระหว่างซ่อมบำรุง สามารถเปลี่ยนสถานะกลับเป็น <strong>RUNNING</strong> ได้ที่หน้า "LINE CONFIG"
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Operator Instructions / Help Guide (Collapsible) */}
             {showGuide && (
-              <div className={`p-3.5 sm:p-4 rounded-xl border text-xs space-y-3 animate-fadeIn ${
+              <div className={`p-2.5 rounded-lg border text-xs space-y-2 animate-fadeIn ${
                 isHmi ? 'bg-zinc-950 border-green-800 text-green-300' : 'bg-slate-900 border-slate-700 text-slate-200'
               }`}>
-                <div className="flex items-start gap-2.5">
-                  <Info className={`w-5 h-5 mt-0.5 flex-shrink-0 ${isHmi ? 'text-green-400' : 'text-cyan-400'}`} />
-                  <div className="space-y-2.5 w-full">
-                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-700/80 pb-1.5">
-                      <h3 className={`text-sm font-bold uppercase tracking-wider ${isHmi ? 'text-green-400' : 'text-white'}`}>
-                        คู่มือการใช้งานระบบบันทึกยอดช็อตและการสะสมอายุอะไหล่แม่พิมพ์ (SHOT ENTRY GUIDE)
+                <div className="flex items-start gap-2">
+                  <Info className={`w-4 h-4 mt-0.5 flex-shrink-0 ${isHmi ? 'text-green-400' : 'text-cyan-400'}`} />
+                  <div className="space-y-1.5 w-full">
+                    <div className="flex items-center justify-between border-b border-slate-700/80 pb-1">
+                      <h3 className={`text-xs font-bold uppercase tracking-wider ${isHmi ? 'text-green-400' : 'text-white'}`}>
+                        คู่มือบันทึกยอดช็อต (MANUAL METER ENTRY GUIDE)
                       </h3>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-cyan-950 text-cyan-300 border border-cyan-700">
-                        VERSION 2.4 - UPDATED
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-cyan-950 text-cyan-300 border border-cyan-700">
+                        MANUAL MODE
                       </span>
                     </div>
 
-                    {/* Section 1: 2 Recording Modes */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] font-thai">
-                      <div className="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800 space-y-1">
-                        <div className="font-bold text-cyan-300 flex items-center gap-1.5 font-mono text-xs">
-                          <Gauge className="w-3.5 h-3.5" />
-                          MODE 1: MANUAL METER
-                        </div>
-                        <p className="text-slate-300 leading-relaxed">
-                          กรอกตัวเลขมิเตอร์จริงที่อ่านได้จากหน้าตู้ควบคุม (Panel Meter) ระบบจะคำนวณผลต่างยอดช็อต <code className="text-emerald-400 font-mono font-bold">(New - Previous)</code> และสะสมเข้าอะไหล่อัตโนมัติ
-                        </p>
-                      </div>
+                    <p className="text-slate-300 leading-relaxed text-[10px] font-thai">
+                      กรอกตัวเลขมิเตอร์จริงที่อ่านได้จากหน้าตู้ควบคุม (Panel Meter) ระบบจะคำนวณผลต่างยอดช็อต <code className="text-emerald-400 font-mono font-bold">(New - Previous)</code> และสะสมเข้าอะไหล่อัตโนมัติ
+                    </p>
 
-                      <div className="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800 space-y-1">
-                        <div className="font-bold text-amber-300 flex items-center gap-1.5 font-mono text-xs">
-                          <Activity className="w-3.5 h-3.5" />
-                          MODE 2: SPM SIMULATION
-                        </div>
-                        <p className="text-slate-300 leading-relaxed">
-                          คำนวณจากความเร็วรอบ SPM × เวลาทำงาน พร้อมระบบ <strong>หักเวลาพักเบรกอัตโนมัติ (Break Deduction 30-60 นาที)</strong> และระบบ <strong>Loss Time OEE Catcher</strong> บันทึกสาเหตุยอดสูญเสีย
-                        </p>
+                    <div className="text-[10px] space-y-0.5 font-thai leading-relaxed bg-slate-950/60 p-2 rounded border border-slate-800">
+                      <div className="font-bold text-emerald-400 flex items-center gap-1 text-[10px]">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                        ข้อกำหนดสำคัญ:
                       </div>
-                    </div>
-
-                    {/* Section 2: Core Workflow & Mandatory Rules */}
-                    <div className="text-xs space-y-1.5 font-thai leading-relaxed bg-slate-950/60 p-3 rounded-lg border border-slate-800">
-                      <div className="font-bold text-emerald-400 flex items-center gap-1.5">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                        ข้อกำหนดและการสะสมอายุอะไหล่แม่พิมพ์ (Key Rules & Accumulation):
-                      </div>
-                      <ul className="list-disc pl-5 space-y-1 text-slate-300 text-[11px]">
-                        <li>
-                          <strong className="text-white">บังคับลงชื่อพนักงาน (Mandatory Operator Name):</strong> ช่องลงชื่อจะเริ่มต้นเป็นค่าว่างเสมอ และบังคับกรอกชื่อพนักงานผู้บันทึกทุกครั้งเพื่อความโปร่งใสของ Audit Trail
-                        </li>
-                        <li>
-                          <strong className="text-white">การสะสมอายุอะไหล่ (Parts Wear Accumulation):</strong> ยอดผลต่างช็อตที่บันทึก (<span className="text-emerald-300 font-mono font-bold">+Shots Added</span>) จะถูกนำไปสะสมเข้าชิ้นส่วนอะไหล่แม่พิมพ์ทุกชิ้นที่ติดตั้งในสายผลิตนั้นทันที
-                        </li>
-                        <li>
-                          <strong className="text-white">การเปลี่ยนแม่พิมพ์ในกะ (Multi-Die / Split Shift):</strong> หากมีการเปลี่ยนสลับแม่พิมพ์ระหว่างกะ ให้เลือก <em>"บันทึกแยกช่วงเวลาตามแม่พิมพ์ (Split Shift)"</em> เพื่อเฉลี่ยยอดช็อตตามแม่พิมพ์ที่ใช้งานจริง
-                        </li>
-                        <li>
-                          <strong className="text-white">การรีเซ็ตมิเตอร์ (Counter Reset):</strong> หากมิเตอร์หน้าตู้ถูกหมุนกลับหรือเปลี่ยนเกจใหม่ ให้กดปุ่ม <strong>RESET METER</strong> ด้านบนเพื่อบันทึกฐานนับใหม่พร้อมลายเซ็นอนุมัติ
-                        </li>
+                      <ul className="list-disc pl-3.5 space-y-0.5 text-slate-300 text-[10px]">
+                        <li><strong className="text-white">ลงชื่อพนักงานผู้บันทึกทุกครั้ง</strong> เพื่อการตรวจสอบ Audit Trail</li>
+                        <li>ยอดช็อตเพิ่มขึ้นจะสะสมเข้าอะไหล่แม่พิมพ์ที่ติดตั้งในสายผลิตนั้นทันที</li>
                       </ul>
                     </div>
                   </div>
                 </div>
               </div>
             )}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-xs font-bold font-mono">
-                <span className={isHmi ? 'text-green-400' : 'text-cyan-300'}>SELECT SHOT RECORDING MODE (เลือกโหมดบันทึกข้อมูล):</span>
-                <span className="text-[11px] text-slate-400 font-thai">รองรับ 2 รูปแบบตามหน้างานจริง</span>
-              </div>
-              <div className={`grid grid-cols-1 sm:grid-cols-2 gap-2 p-1.5 rounded-lg border ${
-                isHmi ? 'bg-zinc-950 border-green-800' : 'bg-slate-950 border-slate-800'
-              }`}>
-                <button
-                  type="button"
-                  onClick={() => setEntryMode('MODE_1')}
-                  className={`py-2.5 px-2 rounded-md text-xs font-bold transition-all flex items-center justify-center gap-1.5 active:scale-95 active:ring-2 touch-manipulation ${
-                    entryMode === 'MODE_1'
-                      ? isHmi
-                        ? 'bg-green-500 text-black font-black shadow-lg shadow-green-500/30 ring-2 ring-green-300'
-                        : 'bg-cyan-500 text-slate-950 font-bold shadow-lg shadow-cyan-500/30 ring-2 ring-cyan-300'
-                      : isHmi
-                        ? 'text-green-400 hover:text-green-200'
-                        : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <Gauge className="w-4 h-4 flex-shrink-0" />
-                  <span>MODE 1: MANUAL METER</span>
-                </button>
 
-                <button
-                  type="button"
-                  onClick={() => setEntryMode('MODE_2')}
-                  className={`py-2.5 px-2 rounded-md text-xs font-bold transition-all flex items-center justify-center gap-1.5 active:scale-95 active:ring-2 touch-manipulation ${
-                    entryMode === 'MODE_2'
-                      ? isHmi
-                        ? 'bg-green-500 text-black font-black shadow-lg shadow-green-500/30 ring-2 ring-green-300'
-                        : 'bg-cyan-500 text-slate-950 font-bold shadow-lg shadow-cyan-500/30 ring-2 ring-cyan-300'
-                      : isHmi
-                        ? 'text-green-400 hover:text-green-200'
-                        : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <Activity className="w-4 h-4 flex-shrink-0" />
-                  <span>MODE 2: SPM SIMULATION</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Core Operator Dropdowns: Production Line, Shift & Operator Name */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+            {/* Core Operator Controls: Line, Shift & Operator Name */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               
               {/* 1. Production Line Dropdown */}
-              <div className="space-y-1.5">
-                <label className={`block text-xs font-bold uppercase tracking-wider flex items-center justify-between ${
+              <div className="space-y-1">
+                <label className={`block text-[10px] font-bold uppercase tracking-wider flex items-center justify-between ${
                   isHmi ? 'text-green-400' : 'text-slate-300'
                 }`}>
-                  <span className="flex items-center gap-1.5">
-                    <Gauge className={`w-4 h-4 ${isHmi ? 'text-green-400' : 'text-cyan-400'}`} />
-                    1. PRODUCTION LINE (สายการผลิต)
+                  <span className="flex items-center gap-1">
+                    <Gauge className={`w-3 h-3 ${isHmi ? 'text-green-400' : 'text-cyan-400'}`} />
+                    1. LINE (สายผลิต)
                   </span>
                   <span className="text-rose-400">*</span>
                 </label>
                 <select
                   value={selectedLineId}
                   onChange={e => setSelectedLineId(e.target.value as ProductionLineId)}
-                  className={`w-full rounded-lg px-3.5 py-2.5 text-sm sm:text-base font-bold font-mono focus:outline-none focus:ring-1 border transition-colors ${
+                  className={`w-full rounded-md px-2.5 py-1.5 text-xs font-bold font-mono focus:outline-none focus:ring-1 border transition-colors ${
                     isHmi
-                      ? 'bg-zinc-950 border-2 border-green-500/80 text-green-300 focus:border-green-400 focus:ring-green-400'
-                      : 'bg-slate-950 border-slate-700/90 text-white focus:border-cyan-400 focus:ring-cyan-400'
+                      ? 'bg-zinc-950 border border-green-500/80 text-green-300 focus:border-green-400'
+                      : 'bg-slate-950 border-slate-700/90 text-white focus:border-cyan-400'
                   }`}
                 >
                   {linesList.map(line => {
@@ -911,289 +941,192 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                 </select>
               </div>
 
-              {/* 2. Shift Dropdown (With Auto-detected Shift Hint) */}
-              <div className="space-y-1.5">
-                <label className={`block text-xs font-bold uppercase tracking-wider flex items-center justify-between ${
+              {/* 2. Shift Dropdown */}
+              <div className="space-y-1">
+                <label className={`block text-[10px] font-bold uppercase tracking-wider flex items-center justify-between ${
                   isHmi ? 'text-green-400' : 'text-slate-300'
                 }`}>
-                  <span className="flex items-center gap-1.5">
-                    <Clock className={`w-4 h-4 ${isHmi ? 'text-green-400' : 'text-cyan-400'}`} />
-                    2. SHIFT (กะการทำงาน)
+                  <span className="flex items-center gap-1">
+                    <Clock className={`w-3 h-3 ${isHmi ? 'text-green-400' : 'text-cyan-400'}`} />
+                    2. SHIFT (กะ)
                   </span>
-                  <span className="text-emerald-400 text-[10px] font-mono">[AUTO: {detectedShiftInfo.shiftKey.slice(0, 7)}]</span>
+                  <span className="text-emerald-400 text-[9px] font-mono">[{detectedShiftInfo.shiftKey.slice(0, 7)}]</span>
                 </label>
                 <select
                   value={shift}
+                  disabled={isLineStopped}
                   onChange={e => setShift(e.target.value as any)}
-                  className={`w-full rounded-lg px-3.5 py-2.5 text-sm sm:text-base font-bold font-mono focus:outline-none focus:ring-1 border transition-colors ${
-                    isHmi
-                      ? 'bg-zinc-950 border-2 border-green-500/80 text-green-300 focus:border-green-400 focus:ring-green-400'
-                      : 'bg-slate-950 border-slate-700/90 text-white focus:border-cyan-400 focus:ring-cyan-400'
+                  className={`w-full rounded-md px-2.5 py-1.5 text-xs font-bold font-mono focus:outline-none focus:ring-1 border transition-colors ${
+                    isLineStopped
+                      ? 'bg-slate-900/50 border-slate-800 text-slate-500 cursor-not-allowed'
+                      : isHmi
+                      ? 'bg-zinc-950 border border-green-500/80 text-green-300 focus:border-green-400'
+                      : 'bg-slate-950 border-slate-700/90 text-white focus:border-cyan-400'
                   }`}
                 >
-                  <option value="Shift 1 (Day)" className={isHmi ? 'bg-black text-green-400' : 'bg-slate-900 text-slate-100'}>กะ 1 (DAY: 08:00 - 17:00 / 20:00)</option>
-                  <option value="Shift 2 (Night)" className={isHmi ? 'bg-black text-green-400' : 'bg-slate-900 text-slate-100'}>กะ 2 (NIGHT: 19:30 - 05:30 / 08:00)</option>
-                  <option value="Shift 3 (Overtime)" className={isHmi ? 'bg-black text-green-400' : 'bg-slate-900 text-slate-100'}>กะ 3 (OVERTIME: 17:30-21:30 / 06:30-07:30)</option>
+                  <option value="Shift 1 (Day)" className={isHmi ? 'bg-black text-green-400' : 'bg-slate-900 text-slate-100'}>กะ 1 (DAY)</option>
+                  <option value="Shift 2 (Night)" className={isHmi ? 'bg-black text-green-400' : 'bg-slate-900 text-slate-100'}>กะ 2 (NIGHT)</option>
+                  <option value="Shift 3 (Overtime)" className={isHmi ? 'bg-black text-green-400' : 'bg-slate-900 text-slate-100'}>กะ 3 (OT)</option>
                 </select>
               </div>
 
-              {/* 3. Operator Name Input (Strictly Mandatory) */}
-              <div className="space-y-1.5">
-                <label className={`block text-xs font-bold uppercase tracking-wider flex items-center justify-between ${
+              {/* 3. Operator Name Input */}
+              <div className="space-y-1">
+                <label className={`block text-[10px] font-bold uppercase tracking-wider flex items-center justify-between ${
                   isHmi ? 'text-green-400' : 'text-slate-300'
                 }`}>
-                  <span className="flex items-center gap-1.5">
-                    <UserCheck className={`w-4 h-4 ${isHmi ? 'text-green-400' : 'text-cyan-400'}`} />
-                    3. OPERATOR NAME (ชื่อพนักงานผู้บันทึก)
+                  <span className="flex items-center gap-1">
+                    <UserCheck className={`w-3 h-3 ${isHmi ? 'text-green-400' : 'text-cyan-400'}`} />
+                    3. OPERATOR (ผู้บันทึก)
                   </span>
-                  <span className="text-rose-400 font-mono text-[10px] font-bold">(จำเป็นต้องลงชื่อ) *</span>
+                  <span className="text-rose-400 font-mono text-[9px] font-bold">*</span>
                 </label>
                 <div className="relative">
                   <input
                     type="text"
+                    disabled={isLineStopped}
                     value={operatorName}
                     onChange={e => setOperatorName(e.target.value)}
-                    placeholder="กรอกชื่อพนักงาน..."
-                    className={`w-full rounded-lg px-3.5 py-2.5 text-sm sm:text-base font-bold font-mono focus:outline-none focus:ring-2 transition-all ${
-                      !operatorName.trim()
-                        ? 'border-2 border-rose-500/80 bg-rose-950/20 text-rose-200 placeholder-rose-400/60 focus:border-rose-400 focus:ring-rose-500/40'
+                    placeholder={isLineStopped ? "สายการผลิตปิด..." : "ชื่อพนักงาน..."}
+                    className={`w-full rounded-md px-2.5 py-1.5 text-xs font-bold font-mono focus:outline-none focus:ring-1 transition-all ${
+                      isLineStopped
+                        ? 'bg-slate-900/50 border border-slate-800 text-slate-500 cursor-not-allowed'
+                        : !operatorName.trim()
+                        ? 'border border-rose-500/80 bg-rose-950/20 text-rose-200 placeholder-rose-400/60 focus:border-rose-400'
                         : isHmi
-                        ? 'bg-zinc-950 border-2 border-green-500/80 text-green-300 focus:border-green-400 focus:ring-green-400 placeholder-green-800'
-                        : 'bg-slate-950 border border-slate-700/90 text-white focus:border-cyan-400 focus:ring-cyan-400 placeholder-slate-600'
+                        ? 'bg-zinc-950 border border-green-500/80 text-green-300 focus:border-green-400'
+                        : 'bg-slate-950 border border-slate-700/90 text-white focus:border-cyan-400'
                     }`}
                     required
                   />
-                  {!operatorName.trim() && (
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-rose-400 pointer-events-none">
-                      ยังไม่ระบุชื่อ
+                  {!isLineStopped && !operatorName.trim() && (
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-bold text-rose-400 pointer-events-none">
+                      จำเป็น
                     </span>
                   )}
                 </div>
               </div>
             </div>
 
-            {/* Readouts & Extra Large Numeric Input for Active Mode */}
-            <div className={`rounded-xl p-4 sm:p-5 space-y-4 shadow-inner border ${
-              isHmi ? 'bg-zinc-950 border-2 border-green-500/80' : 'bg-slate-950 border border-slate-800/90'
+            {/* Readouts & Input Section */}
+            <div className={`rounded-lg p-2.5 sm:p-3 space-y-2.5 border ${
+              isHmi ? 'bg-zinc-950 border border-green-500/80' : 'bg-slate-950 border border-slate-800/90'
             }`}>
               
-              {/* Previous Reading & Calculated Result Header */}
-              <div className={`grid grid-cols-1 sm:grid-cols-2 gap-3 pb-3 border-b ${
+              {/* Previous Reading & Calculated Result */}
+              <div className={`grid grid-cols-2 gap-2 pb-2 border-b ${
                 isHmi ? 'border-green-900/80' : 'border-slate-800'
               }`}>
-                <div className={`p-3 rounded-lg border ${
+                <div className={`p-2 rounded-md border ${
                   isHmi ? 'bg-black border-green-900' : 'bg-slate-900/90 border-slate-800'
                 }`}>
-                  <div className={`text-[11px] font-bold uppercase tracking-wider ${
+                  <div className={`text-[9px] font-bold uppercase tracking-wider ${
                     isHmi ? 'text-green-500' : 'text-slate-400'
                   }`}>
-                    PREVIOUS READING (ยอดอ่านเดิม)
+                    PREVIOUS READING (เดิม)
                   </div>
-                  <div className={`text-2xl sm:text-3xl font-extrabold font-mono mt-0.5 ${
+                  <div className={`text-base sm:text-lg font-extrabold font-mono mt-0.5 ${
                     isHmi ? 'text-green-300' : 'text-slate-100'
                   }`}>
-                    {formatShots(prevShotsVal)} <span className="text-xs font-normal text-slate-500">shots</span>
+                    {formatShots(prevShotsVal)} <span className="text-[9px] font-normal text-slate-500">shots</span>
                   </div>
                 </div>
 
-                <div className={`p-3 rounded-lg border ${
+                <div className={`p-2 rounded-md border ${
                   isHmi ? 'bg-black border-green-900' : 'bg-slate-900/90 border-slate-800'
                 }`}>
-                  <div className={`text-[11px] font-bold uppercase tracking-wider ${
+                  <div className={`text-[9px] font-bold uppercase tracking-wider ${
                     isHmi ? 'text-green-500' : 'text-slate-400'
                   }`}>
-                    {entryMode === 'MODE_1' ? 'CALCULATED INCREMENT (ยอดช็อตเพิ่ม)' : 'RESULTING METER (ยอดมิเตอร์สะสม)'}
+                    INCREMENT (ยอดเพิ่ม)
                   </div>
-                  <div className={`text-2xl sm:text-3xl font-extrabold font-mono mt-0.5 flex items-center justify-between ${
+                  <div className={`text-base sm:text-lg font-extrabold font-mono mt-0.5 flex items-center justify-between ${
                     isHmi ? 'text-green-400' : 'text-emerald-400'
                   }`}>
-                    <span>
-                      {entryMode === 'MODE_1'
-                        ? `+${formatShots(incrementVal)}`
-                        : formatShots(resultingTotal)}
-                    </span>
-                    <span className="text-xs font-normal text-slate-500">shots</span>
+                    <span>+{formatShots(incrementVal)}</span>
+                    <span className="text-[9px] font-normal text-slate-500">shots</span>
                   </div>
                 </div>
               </div>
 
-              {/* ============================================== */}
-              {/* MODE 1: PURE MANUAL METER READING INTERFACE   */}
-              {/* ============================================== */}
-              {entryMode === 'MODE_1' && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <label className={`text-xs sm:text-sm font-extrabold uppercase tracking-widest flex items-center gap-1.5 ${
-                      isHmi ? 'text-green-400 text-matrix-glow font-mono' : 'text-cyan-300'
-                    }`}>
-                      <Hash className="w-4 h-4" />
-                      NEW READING (กรอกเลขมิเตอร์หน้าเครื่อง 100% Manual)
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setShowTouchKeypad(!showTouchKeypad)}
-                      className={`text-[11px] px-2.5 py-1 rounded-md border font-bold transition-colors ${
-                        isHmi 
-                          ? 'bg-green-950 text-green-300 border-green-600 hover:bg-green-900'
-                          : 'bg-slate-900 text-cyan-300 border-slate-700 hover:bg-slate-800'
-                      }`}
-                    >
-                      {showTouchKeypad ? '✕ HIDE KEYPAD' : '⌨ TOUCH KEYPAD'}
-                    </button>
-                  </div>
-
-                  <div className="relative">
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={newReadingInput}
-                      onChange={e => handleNewReadingChange(e.target.value)}
-                      className={`w-full text-4xl sm:text-6xl font-black font-mono py-4 px-4 text-center rounded-xl tracking-wider focus:outline-none border-2 transition-all ${
-                        isHmi
-                          ? 'bg-black border-green-500 focus:border-green-300 text-green-400 box-matrix-glow selection:bg-green-500 selection:text-black'
-                          : 'bg-slate-900 border-cyan-500/80 focus:border-cyan-300 text-cyan-400 selection:bg-cyan-500 selection:text-slate-950 shadow-inner'
-                      }`}
-                      placeholder="0"
-                      required
-                    />
-                    <div className={`text-center text-xs mt-1 font-mono ${isHmi ? 'text-green-500/80' : 'text-slate-400'}`}>
-                      Delta: <strong className={isHmi ? 'text-green-300' : 'text-emerald-400'}>+{formatShots(incrementVal)} shots</strong> ({newShotsVal.toLocaleString()} - {prevShotsVal.toLocaleString()})
-                    </div>
-                  </div>
-
-                  {/* Quick Add Step Buttons */}
-                  <div className="space-y-1.5 pt-1">
-                    <div className={`text-[10px] font-bold uppercase tracking-wider ${isHmi ? 'text-green-500' : 'text-slate-400'}`}>
-                      QUICK ADD (บวกยอดด่วน):
-                    </div>
-                    <div className="grid grid-cols-5 gap-1 sm:gap-1.5">
-                      {[5000, 10000, 25000, 50000, 100000].map(addQty => (
-                        <button
-                          key={addQty}
-                          type="button"
-                          onClick={() => handleQuickAddIncrement(addQty)}
-                          className={`py-2 px-0.5 rounded-md text-[11px] sm:text-xs font-bold font-mono transition-all border active:scale-90 active:ring-2 touch-manipulation select-none flex items-center justify-center ${
-                            isHmi
-                              ? 'bg-black hover:bg-green-950 text-green-300 border-green-600 active:bg-green-400 active:text-black active:ring-green-400'
-                              : 'bg-slate-900 hover:bg-cyan-500 hover:text-slate-950 text-cyan-300 border-slate-700/90 active:bg-cyan-400 active:text-slate-950 active:ring-cyan-300'
-                          }`}
-                        >
-                          +{addQty >= 1000 ? `${addQty / 1000}k` : addQty}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* =================================================================== */}
-              {/* MODE 2: SPM MACHINE SIMULATION & DEDUCTION WITH LOSS CATCHER        */}
-              {/* =================================================================== */}
-              {entryMode === 'MODE_2' && (
-                <div className="space-y-3.5 font-mono">
-                  <div className={`p-3.5 rounded-xl border space-y-3 ${
-                    isHmi ? 'bg-black border-green-500' : 'bg-slate-900/90 border-cyan-500/80'
+              {/* MANUAL METER READING INPUT */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${
+                    isHmi ? 'text-green-400 font-mono' : 'text-cyan-300'
                   }`}>
-                    
-                    {/* Machine SPM Speed & Control Buttons */}
-                    <div className="flex flex-wrap items-center justify-between gap-2.5 pb-2 border-b border-slate-800">
-                      <div className="flex items-center gap-2">
-                        <label className="text-xs font-bold text-slate-300">SPM SPEED (รอบ/นาที):</label>
-                        <input
-                          type="number"
-                          min="10"
-                          max="400"
-                          value={spmInput}
-                          onChange={e => setSpmInput(Math.max(1, parseInt(e.target.value) || 100))}
-                          className="w-20 px-2 py-1 rounded bg-slate-950 border border-slate-700 text-cyan-300 font-bold text-center"
-                        />
-                      </div>
+                    <Hash className="w-3.5 h-3.5" />
+                    NEW READING (กรอกเลขมิเตอร์หน้าเครื่อง)
+                  </label>
+                  <button
+                    type="button"
+                    disabled={isLineStopped}
+                    onClick={() => setShowTouchKeypad(!showTouchKeypad)}
+                    className={`text-[9px] px-2 py-0.5 rounded border font-bold transition-colors ${
+                      isLineStopped
+                        ? 'opacity-40 cursor-not-allowed border-slate-800 text-slate-600'
+                        : isHmi 
+                        ? 'bg-green-950 text-green-300 border-green-600 hover:bg-green-900'
+                        : 'bg-slate-900 text-cyan-300 border-slate-700 hover:bg-slate-800'
+                    }`}
+                  >
+                    {showTouchKeypad ? '✕ HIDE KEYPAD' : '⌨ TOUCH KEYPAD'}
+                  </button>
+                </div>
 
-                      <div className="flex items-center gap-2">
-                        {!isMachineRunning ? (
-                          <button
-                            type="button"
-                            onClick={handleStartMachine}
-                            className="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-black text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
-                          >
-                            <Play className="w-4 h-4 fill-current" />
-                            <span>START MACHINE</span>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={handleStopMachine}
-                            className="px-4 py-2 rounded-lg bg-rose-500 hover:bg-rose-400 text-white font-black text-xs flex items-center gap-1.5 shadow-lg shadow-rose-500/20 active:scale-95 transition-all animate-pulse"
-                          >
-                            <Square className="w-4 h-4 fill-current" />
-                            <span>STOP MACHINE</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Live Timing & Break Deduction Metric Bar */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                      <div className="p-2 rounded bg-slate-950 border border-slate-800">
-                        <span className="text-[10px] text-slate-400 block">ELAPSED TIME</span>
-                        <strong className="text-sm text-cyan-300">
-                          {Math.floor(elapsedSeconds / 60)}m {elapsedSeconds % 60}s
-                        </strong>
-                      </div>
-
-                      <div className="p-2 rounded bg-slate-950 border border-slate-800">
-                        <span className="text-[10px] text-amber-400 block">BREAK DEDUCTION</span>
-                        <strong className="text-sm text-amber-300">
-                          -{mode2BreakMinutes.toFixed(1)} min
-                        </strong>
-                      </div>
-
-                      <div className="p-2 rounded bg-slate-950 border border-slate-800">
-                        <span className="text-[10px] text-emerald-400 block">NET RUN TIME</span>
-                        <strong className="text-sm text-emerald-300">
-                          {mode2NetWorkingMinutes.toFixed(1)} min
-                        </strong>
-                      </div>
-
-                      <div className="p-2 rounded bg-slate-950 border border-slate-800">
-                        <span className="text-[10px] text-purple-400 block">EXPECTED SHOTS</span>
-                        <strong className="text-sm text-purple-300">
-                          {mode2ExpectedShots.toLocaleString()}
-                        </strong>
-                      </div>
-                    </div>
-
-                    {/* Actual Shot Counter Input */}
-                    <div className="space-y-1 pt-1">
-                      <label className="text-xs font-bold text-slate-200 block">
-                        ACTUAL SHOTS FROM MACHINE (กรอกยอดที่ผลิตได้จริง):
-                      </label>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        value={mode2ActualShotsInput}
-                        onChange={e => setMode2ActualShotsInput(e.target.value.replace(/[^0-9]/g, ''))}
-                        placeholder={String(mode2ExpectedShots || 45000)}
-                        className="w-full text-3xl font-black font-mono py-3 px-4 text-center rounded-xl bg-slate-950 border-2 border-cyan-500/80 text-cyan-400 focus:outline-none"
-                      />
-                      <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
-                        <span>Expected: <strong className="text-slate-200">{mode2ExpectedShots.toLocaleString()} shots</strong></span>
-                        {incrementVal > 0 && incrementVal < mode2ExpectedShots && (
-                          <span className="text-rose-400 font-bold flex items-center gap-1">
-                            <AlertTriangle className="w-3.5 h-3.5" />
-                            Shortfall: -{(mode2ExpectedShots - incrementVal).toLocaleString()} shots
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
+                <div className="relative">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    disabled={isLineStopped}
+                    value={newReadingInput}
+                    onChange={e => handleNewReadingChange(e.target.value)}
+                    onFocus={(e) => e.target.select()}
+                    className={`w-full text-2xl sm:text-3xl font-black font-mono py-2.5 px-3 text-center rounded-lg tracking-wider focus:outline-none border-2 transition-all ${
+                      isLineStopped
+                        ? 'bg-slate-900/50 border-slate-800 text-slate-600 cursor-not-allowed shadow-none'
+                        : isHmi
+                        ? 'bg-black border-green-500 focus:border-green-300 text-green-400 selection:bg-green-500 selection:text-black'
+                        : 'bg-slate-900 border-cyan-500/80 focus:border-cyan-300 text-cyan-400 selection:bg-cyan-500 selection:text-slate-950 shadow-inner'
+                    }`}
+                    placeholder="0"
+                    required
+                  />
+                  <div className={`text-center text-[10px] mt-0.5 font-mono ${isHmi ? 'text-green-500/80' : 'text-slate-400'}`}>
+                    Delta: <strong className={isHmi ? 'text-green-300' : 'text-emerald-400'}>+{formatShots(incrementVal)} shots</strong> ({newShotsVal.toLocaleString()} - {prevShotsVal.toLocaleString()})
                   </div>
                 </div>
-              )}
 
-              {/* Optional On-Screen Touch Keypad for Shopfloor Gloves */}
-              {showTouchKeypad && (
-                <div className={`p-3 rounded-lg grid grid-cols-3 gap-2.5 text-xl font-bold font-mono animate-fadeIn mt-2 border ${
+                {/* Quick Add Step Buttons */}
+                <div className="space-y-1 pt-0.5">
+                  <div className={`text-[9px] font-bold uppercase tracking-wider ${isHmi ? 'text-green-500' : 'text-slate-400'}`}>
+                    QUICK ADD (บวกยอดด่วน):
+                  </div>
+                  <div className="grid grid-cols-5 gap-1">
+                    {[5000, 10000, 25000, 50000, 100000].map(addQty => (
+                      <button
+                        key={addQty}
+                        type="button"
+                        disabled={isLineStopped}
+                        onClick={() => handleQuickAddIncrement(addQty)}
+                        className={`py-1.5 px-0.5 rounded text-[10px] font-bold font-mono transition-all border active:scale-95 touch-manipulation flex items-center justify-center ${
+                          isLineStopped
+                            ? 'opacity-40 cursor-not-allowed border-slate-800 text-slate-600 bg-slate-950'
+                            : isHmi
+                            ? 'bg-black hover:bg-green-950 text-green-300 border-green-600 active:bg-green-400 active:text-black'
+                            : 'bg-slate-900 hover:bg-cyan-500 hover:text-slate-950 text-cyan-300 border-slate-700/90 active:bg-cyan-400 active:text-slate-950'
+                        }`}
+                      >
+                        +{addQty >= 1000 ? `${addQty / 1000}k` : addQty}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Touch Keypad */}
+              {showTouchKeypad && !isLineStopped && (
+                <div className={`p-2 rounded-md grid grid-cols-3 gap-1.5 text-base font-bold font-mono animate-fadeIn border ${
                   isHmi ? 'bg-black border-green-500' : 'bg-slate-900 border-slate-700'
                 }`}>
                   {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'CLEAR', '0', 'BACKSPACE'].map(key => (
@@ -1201,97 +1134,112 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                       key={key}
                       type="button"
                       onClick={() => handleKeypadPress(key)}
-                      className={`py-3.5 rounded-lg border font-mono font-black transition-all active:scale-90 active:ring-4 touch-manipulation select-none flex items-center justify-center ${
+                      className={`py-2 rounded-md border font-mono font-black transition-all active:scale-90 touch-manipulation select-none flex items-center justify-center ${
                         key === 'CLEAR'
-                          ? 'bg-rose-950/80 border-rose-500 text-rose-300 hover:bg-rose-900 text-sm active:bg-rose-500 active:text-black active:ring-rose-400'
+                          ? 'bg-rose-950/80 border-rose-500 text-rose-300 hover:bg-rose-900 text-xs active:bg-rose-500 active:text-black'
                           : key === 'BACKSPACE'
                           ? isHmi
-                            ? 'bg-zinc-900 border-green-700 text-green-300 hover:bg-zinc-800 text-sm active:bg-green-500 active:text-black active:ring-green-400'
-                            : 'bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700 text-sm active:bg-cyan-400 active:text-slate-950 active:ring-cyan-300'
+                            ? 'bg-zinc-900 border-green-700 text-green-300 hover:bg-zinc-800 text-xs active:bg-green-500 active:text-black'
+                            : 'bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700 text-xs active:bg-cyan-400 active:text-slate-950'
                           : isHmi
-                            ? 'bg-zinc-950 border-2 border-green-500/80 text-green-400 hover:bg-green-950 text-2xl active:bg-green-400 active:text-black active:ring-green-400 shadow-lg shadow-green-500/20'
-                            : 'bg-slate-950 border-2 border-slate-700 text-slate-100 hover:bg-cyan-950/40 text-2xl active:bg-cyan-400 active:text-slate-950 active:ring-cyan-300 shadow-lg shadow-cyan-500/20'
+                            ? 'bg-zinc-950 border border-green-500/80 text-green-400 hover:bg-green-950 text-base active:bg-green-400 active:text-black'
+                            : 'bg-slate-950 border border-slate-700 text-slate-100 hover:bg-cyan-950/40 text-base active:bg-cyan-400 active:text-slate-950'
                       }`}
                     >
-                      {key === 'BACKSPACE' ? <Delete className="w-6 h-6 stroke-[2.5]" /> : key}
+                      {key === 'BACKSPACE' ? <Delete className="w-4 h-4 stroke-[2.5]" /> : key}
                     </button>
                   ))}
                 </div>
               )}
 
-              {/* Lower Reading Alert / Warning */}
+              {/* Warnings */}
               {isLowerReadingDetected && (
-                <div className="p-3 bg-amber-950/90 border border-amber-500 rounded-lg text-xs text-amber-200 flex items-start gap-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
-                  <div className="space-y-1">
-                    <div className="font-bold">METER READING LOWER THAN PREVIOUS (ตรวจพบเลขมิเตอร์ต่ำกว่าเดิม)</div>
-                    <div>
-                      New Reading ({newShotsVal.toLocaleString()}) cannot be less than Previous Reading ({prevShotsVal.toLocaleString()}).
-                      If gauge was reset or replaced, please use the Reset Meter button.
+                <div className="p-2 bg-amber-950/90 border border-amber-500 rounded-md text-xs text-amber-200 flex items-start gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <div className="font-bold text-[11px]">METER READING LOWER THAN PREVIOUS</div>
+                    <div className="text-[10px]">
+                      New Reading ({newShotsVal.toLocaleString()}) cannot be less than Previous ({prevShotsVal.toLocaleString()}).
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Abnormal Increase Alert */}
               {isAbnormalIncrease && (
-                <div className="p-3 bg-rose-950/90 border border-rose-500 rounded-lg text-xs text-rose-200 flex items-start gap-2">
-                  <AlertOctagon className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
-                  <div>
+                <div className="p-2 bg-rose-950/90 border border-rose-500 rounded-md text-xs text-rose-200 flex items-start gap-1.5">
+                  <AlertOctagon className="w-3.5 h-3.5 text-rose-400 flex-shrink-0 mt-0.5" />
+                  <div className="text-[10px]">
                     <div className="font-bold">HIGH INCREMENT WARNING (+{incrementVal.toLocaleString()} shots)</div>
-                    <div>Increment exceeds standard single-shift limit of {maxShiftLimit.toLocaleString()} shots. Please verify before submitting.</div>
+                    <div>Increment exceeds standard limit of {maxShiftLimit.toLocaleString()} shots.</div>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* 4. Large Primary Submit Button */}
-            <div className="space-y-3 pt-2">
+            {/* Primary Submit Button */}
+            <div className="space-y-2 pt-0.5">
               <button
                 type="button"
                 onClick={handleOpenSubmissionPreview}
-                disabled={!isIncrementPositive || isLowerReadingDetected}
-                className={`w-full py-4 sm:py-5 px-6 rounded-xl text-lg sm:text-xl font-bold transition-all flex items-center justify-center gap-3 uppercase tracking-wider shadow-xl active:scale-95 active:ring-8 touch-manipulation select-none ${
-                  !isIncrementPositive || isLowerReadingDetected
+                disabled={isLineStopped || !isIncrementPositive || isLowerReadingDetected}
+                className={`w-full py-2.5 sm:py-3 px-4 rounded-lg text-sm sm:text-base font-bold transition-all flex items-center justify-center gap-2 uppercase tracking-wider shadow-md active:scale-95 touch-manipulation select-none ${
+                  isLineStopped
+                    ? 'bg-rose-950/40 text-rose-400/80 border border-rose-800/80 cursor-not-allowed'
+                    : !isIncrementPositive || isLowerReadingDetected
                     ? isHmi 
                       ? 'bg-zinc-900 text-zinc-600 border border-zinc-800 cursor-not-allowed'
                       : 'bg-slate-900 text-slate-600 border border-slate-800 cursor-not-allowed'
                     : isHmi
-                      ? 'bg-green-500 hover:bg-green-400 text-black font-black shadow-green-500/30 ring-2 ring-green-300 active:ring-green-300 active:bg-green-300 font-mono'
-                      : 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold shadow-cyan-500/25 ring-2 ring-cyan-400 active:ring-cyan-300 active:bg-cyan-300'
+                      ? 'bg-green-500 hover:bg-green-400 text-black font-black shadow-green-500/30 ring-1 ring-green-300 font-mono'
+                      : 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold shadow-cyan-500/25 ring-1 ring-cyan-400'
                 }`}
               >
-                <CheckCircle2 className="w-6 h-6 sm:w-7 sm:h-7 stroke-[2.5]" />
-                <span>ยืนยันบันทึก (+{formatShots(incrementVal)} SHOTS)</span>
+                {isLineStopped ? (
+                  <>
+                    <AlertOctagon className="w-4 h-4 text-rose-400" />
+                    <span>🔒 ปิดรับการกรอกช็อต (สายการผลิต {currentLine?.machineStatus})</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5]" />
+                    <span>ยืนยันบันทึก (+{formatShots(incrementVal)} SHOTS)</span>
+                  </>
+                )}
               </button>
 
-              {/* Secondary Options (Date, Note, Save Draft) */}
-              <div className={`flex items-center justify-between gap-3 flex-wrap text-xs ${
+              {/* Secondary Options */}
+              <div className={`flex items-center justify-between gap-2 flex-wrap text-[10px] ${
                 isHmi ? 'text-green-500/80' : 'text-slate-400'
               }`}>
-                <div className="flex items-center gap-2">
-                  <Calendar className={`w-3.5 h-3.5 ${isHmi ? 'text-green-400' : 'text-cyan-400'}`} />
+                <div className="flex items-center gap-1">
+                  <Calendar className={`w-3 h-3 ${isHmi ? 'text-green-400' : 'text-cyan-400'}`} />
                   <span>Date:</span>
                   <input
                     type="date"
+                    disabled={isLineStopped}
                     value={productionDate}
                     onChange={e => setProductionDate(e.target.value)}
-                    className={`rounded px-2.5 py-1.5 text-xs font-mono border active:ring-2 ${
-                      isHmi 
-                        ? 'bg-black border-green-800 text-green-300 active:ring-green-400' 
-                        : 'bg-slate-950 border-slate-700 text-slate-200 active:ring-cyan-400'
+                    className={`rounded px-1.5 py-0.5 text-[11px] font-mono border ${
+                      isLineStopped
+                        ? 'opacity-40 cursor-not-allowed border-slate-800 text-slate-600 bg-slate-950'
+                        : isHmi 
+                        ? 'bg-black border-green-800 text-green-300' 
+                        : 'bg-slate-950 border-slate-700 text-slate-200'
                     }`}
                   />
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                   <button
                     type="button"
+                    disabled={isLineStopped}
                     onClick={handleSaveDraft}
-                    className={`px-3 py-1.5 rounded text-xs font-bold border transition-all active:scale-95 active:ring-2 touch-manipulation ${
-                      isHmi
-                        ? 'bg-zinc-950 hover:bg-zinc-900 text-green-400 border-green-800 active:bg-green-500 active:text-black active:ring-green-400'
-                        : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700 active:bg-cyan-400 active:text-slate-950 active:ring-cyan-400'
+                    className={`px-2 py-0.5 rounded text-[11px] font-bold border transition-all active:scale-95 ${
+                      isLineStopped
+                        ? 'opacity-40 cursor-not-allowed border-slate-800 text-slate-600 bg-slate-950'
+                        : isHmi
+                        ? 'bg-zinc-950 hover:bg-zinc-900 text-green-400 border-green-800'
+                        : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700'
                     }`}
                   >
                     SAVE DRAFT
@@ -1299,10 +1247,10 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                   <button
                     type="button"
                     onClick={reloadData}
-                    className={`px-3 py-1.5 rounded text-xs font-bold border transition-all active:scale-95 active:ring-2 touch-manipulation ${
+                    className={`px-2 py-0.5 rounded text-[11px] font-bold border transition-all active:scale-95 ${
                       isHmi
-                        ? 'bg-zinc-950 hover:bg-zinc-900 text-green-400 border-green-800 active:bg-green-500 active:text-black active:ring-green-400'
-                        : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700 active:bg-cyan-400 active:text-slate-950 active:ring-cyan-400'
+                        ? 'bg-zinc-950 hover:bg-zinc-900 text-green-400 border-green-800'
+                        : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700'
                     }`}
                   >
                     RESET
@@ -1311,182 +1259,221 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
               </div>
             </div>
 
-            
-
-          </div>
-
-          {/* Right Column: Line Status Telemetry & Die Overview (Col 4) */}
-          <div className={`lg:col-span-4 rounded-xl p-4 sm:p-5 space-y-4 shadow-xl border ${
-            isHmi 
-              ? 'bg-black border-2 border-green-500/80' 
-              : 'bg-[#0E172A] border-slate-800/90'
-          }`}>
-            <div className={`flex items-center justify-between border-b pb-3 ${
-              isHmi ? 'border-green-900' : 'border-slate-800'
-            }`}>
-              <div>
-                <h3 className={`font-bold text-base uppercase tracking-wider ${
-                  isHmi ? 'text-green-400 font-extrabold font-mono' : 'text-white'
-                }`}>
-                  LINE {selectedLineId} TELEMETRY
-                </h3>
-                <span className={`text-[10px] font-mono ${isHmi ? 'text-green-600' : 'text-slate-400'}`}>
-                  ACTIVE DIE & SHOT WEAR
-                </span>
-              </div>
-              <span className={`text-xs font-bold px-2 py-0.5 rounded border font-mono ${
-                (currentLine?.machineStatus || 'RUNNING') === 'RUNNING' 
-                  ? 'bg-emerald-950 text-emerald-300 border-emerald-600' 
-                  : (currentLine?.machineStatus) === 'IDLE'
-                  ? 'bg-amber-950 text-amber-300 border-amber-600'
-                  : (currentLine?.machineStatus) === 'MAINTENANCE'
-                  ? 'bg-cyan-950 text-cyan-300 border-cyan-600'
-                  : 'bg-rose-950 text-rose-300 border-rose-600'
-              }`}>
-                {currentLine?.machineStatus === 'RUNNING' && '🟢 RUNNING'}
-                {currentLine?.machineStatus === 'IDLE' && '🟡 IDLE'}
-                {currentLine?.machineStatus === 'MAINTENANCE' && '🔧 MAINTENANCE'}
-                {currentLine?.machineStatus === 'STOPPED' && '🔴 STOPPED'}
-                {(!currentLine?.machineStatus) && '🟢 RUNNING'}
-              </span>
-            </div>
-
-            {/* Line Overview Metrics */}
-            <div className="space-y-3 font-mono">
-              <div className={`p-3 rounded-lg border space-y-1 ${
-                isHmi ? 'bg-zinc-950 border-green-900' : 'bg-slate-950 border-slate-800'
-              }`}>
-                <div className={`text-[10px] uppercase ${isHmi ? 'text-green-500' : 'text-slate-400'}`}>
-                  ACTIVE DIE CODE
-                </div>
-                <div className={`text-lg font-bold truncate ${isHmi ? 'text-green-300' : 'text-cyan-300'}`}>
-                  {currentLine?.activeConfig?.dieCode || `DIE-L${selectedLineId}-01`}
-                </div>
-                <div className={`text-[10px] ${isHmi ? 'text-green-600' : 'text-slate-400'}`}>
-                  Model: {currentLine?.activeConfig?.modelName || 'Air Conditioner Evaporator'}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div className={`p-2.5 rounded-lg border ${
-                  isHmi ? 'bg-zinc-950 border-green-900' : 'bg-slate-950 border-slate-800'
-                }`}>
-                  <div className={`text-[10px] ${isHmi ? 'text-green-600' : 'text-slate-400'}`}>CURRENT SHIFT</div>
-                  <div className={`text-base font-bold mt-0.5 ${isHmi ? 'text-green-300' : 'text-slate-100'}`}>
-                    {formatShots(currentLine?.shiftShot || 0)}
-                  </div>
-                </div>
-
-                <div className={`p-2.5 rounded-lg border ${
-                  isHmi ? 'bg-zinc-950 border-green-900' : 'bg-slate-950 border-slate-800'
-                }`}>
-                  <div className={`text-[10px] ${isHmi ? 'text-green-600' : 'text-slate-400'}`}>TODAY TOTAL</div>
-                  <div className={`text-base font-bold mt-0.5 ${isHmi ? 'text-green-300' : 'text-slate-100'}`}>
-                    {formatShots(currentLine?.dailyShot || 0)}
-                  </div>
-                </div>
-              </div>
-
-              {/* Operator Info */}
-              <div className={`p-3 rounded-lg border text-xs space-y-1 ${
-                isHmi ? 'bg-zinc-950 border-green-900' : 'bg-slate-950 border-slate-800'
-              }`}>
-                <div className={`flex items-center gap-1.5 font-bold ${isHmi ? 'text-green-400' : 'text-cyan-300'}`}>
-                  <UserCheck className="w-3.5 h-3.5" />
-                  <span>LOGGED OPERATOR:</span>
-                </div>
-                <div className={`font-mono font-bold ${isHmi ? 'text-green-300' : 'text-slate-200'}`}>
-                  {operatorName} <span className="text-[10px] text-slate-400 font-normal">({currentUser.role})</span>
-                </div>
-              </div>
-
-              {/* Live Impact Preview: Parts Shot Accumulation on Line */}
-              <div className={`p-3 rounded-lg border space-y-2.5 ${
-                isHmi ? 'bg-zinc-950 border-green-900' : 'bg-slate-950 border-slate-800'
-              }`}>
-                <div className="flex items-center justify-between">
-                  <div className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${
-                    isHmi ? 'text-green-400' : 'text-cyan-300'
-                  }`}>
-                    <Layers className="w-4 h-4" />
-                    <span>PARTS WEAR ACCUMULATION</span>
-                  </div>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${
-                    isHmi ? 'bg-green-950 text-green-300 border border-green-700' : 'bg-cyan-950 text-cyan-300 border border-cyan-700'
-                  }`}>
-                    +{formatShots(incrementVal)} shots
-                  </span>
-                </div>
-
-                <p className={`text-[11px] font-thai leading-tight ${isHmi ? 'text-green-600' : 'text-slate-400'}`}>
-                  ยอดช็อต +{formatShots(incrementVal)} จะถูกนำไปสะสมเพิ่มเข้าชิ้นส่วนแม่พิมพ์ทุกรายการประจำสาย {selectedLineId}:
-                </p>
-
-                <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1 custom-scrollbar">
-                  {currentLine?.items?.slice(0, 10).map((item, idx) => {
-                    const curShot = item.usedShot !== undefined ? item.usedShot : (item.currentShot || 0);
-                    const newShot = curShot + incrementVal;
-                    const limit = item.lifeLimit || 18000000;
-                    const usagePct = Math.round((newShot / limit) * 100);
-
-                    let statusBadgeClass = 'bg-emerald-950/80 text-emerald-300 border-emerald-700';
-                    if (usagePct >= 100) statusBadgeClass = 'bg-rose-950 text-rose-300 border-rose-700 font-bold animate-pulse';
-                    else if (usagePct >= 85) statusBadgeClass = 'bg-amber-950 text-amber-300 border-amber-700 font-bold';
-
-                    return (
-                      <div key={item.slotId || idx} className={`p-2 rounded border text-xs font-mono space-y-1 transition-colors ${
-                        isHmi ? 'bg-black border-green-900/80 hover:border-green-600' : 'bg-slate-900/90 border-slate-800 hover:border-slate-700'
-                      }`}>
-                        <div className="flex items-center justify-between">
-                          <span className={`font-bold truncate max-w-[160px] ${isHmi ? 'text-green-300' : 'text-slate-200'}`}>
-                            {item.stagePunchDie || item.partName}
-                          </span>
-                          <span className={`text-[10px] px-1 py-0.5 rounded border ${statusBadgeClass}`}>
-                            {usagePct}%
-                          </span>
-                        </div>
-
-                        <div className="flex items-center justify-between text-[11px] text-slate-400">
-                          <span>{formatShots(curShot)} → <strong className={isHmi ? 'text-green-400' : 'text-emerald-400'}>{formatShots(newShot)}</strong></span>
-                          <span className="text-[10px] text-slate-500">Max: {formatShots(limit)}</span>
-                        </div>
-
-                        {/* Mini progress bar */}
-                        <div className="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden border border-slate-800">
-                          <div
-                            className={`h-full transition-all ${
-                              usagePct >= 100 ? 'bg-rose-500' : usagePct >= 85 ? 'bg-amber-500' : 'bg-emerald-500'
-                            }`}
-                            style={{ width: `${Math.min(100, usagePct)}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
           </div>
 
         </div>
-      )}
+        );
+      })()}
 
-      {/* TAB 2: SHOT LOG HISTORY TABLE */}
+      {/* TAB 3: RESET METER & SHOT LOGS (FULL SCREEN AUDIT TRAIL TABLE) */}
+      {activeTab === 'reset-logs' && (
+        <div className={`rounded-xl p-3 sm:p-4 space-y-3 shadow-xl border ${
+          isHmi ? 'bg-black border-2 border-amber-500' : 'bg-[#0E172A] border-amber-500/80 shadow-amber-950/20'
+        }`}>
+          <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b pb-2.5 ${
+            isHmi ? 'border-amber-900' : 'border-slate-800'
+          }`}>
+            <div>
+              <div className="flex items-center gap-2">
+                <RotateCcw className="w-4 h-4 text-amber-400" />
+                <h3 className={`font-bold text-sm sm:text-base uppercase tracking-wider ${
+                  isHmi ? 'text-amber-400 font-extrabold font-mono' : 'text-white'
+                }`}>
+                  RESET METER & SHOT LOGS
+                </h3>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono ${
+                  isHmi 
+                    ? 'bg-amber-950 text-amber-300 border border-amber-800' 
+                    : 'bg-amber-950/80 text-amber-300 border border-amber-600/60'
+                }`}>
+                  {resetLogs.length} LOGS
+                </span>
+              </div>
+              <p className={`text-[11px] ${isHmi ? 'text-amber-600' : 'text-slate-400'}`}>
+                ประวัติการรีเซ็ตมิเตอร์หน้าเครื่องและยอดช็อตทั้งหมดในระบบ พร้อมบันทึกผู้ทำรายการและรหัสอนุมัติ
+              </p>
+            </div>
+
+            {/* Filter Bar */}
+            <div className="flex items-center gap-1.5 flex-wrap text-xs">
+              <DateRangeFilter
+                startDate={resetLogStartDate}
+                endDate={resetLogEndDate}
+                onChangeRange={(start, end) => {
+                  setResetLogStartDate(start);
+                  setResetLogEndDate(end);
+                }}
+              />
+
+              <select
+                value={resetLogLineFilter}
+                onChange={e => setResetLogLineFilter(e.target.value)}
+                className={`rounded px-2 py-1 text-xs font-bold border transition-colors ${
+                  isHmi 
+                    ? 'bg-black border-amber-800 text-amber-300 focus:border-amber-400' 
+                    : 'bg-slate-950 border-slate-700 text-slate-200 focus:border-amber-400'
+                }`}
+              >
+                <option value="ALL">ALL LINES (ทุกสาย)</option>
+                {linesList.map(line => (
+                  <option key={line} value={line}>LINE {line}</option>
+                ))}
+              </select>
+
+              <div className="relative">
+                <Search className={`w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 ${
+                  isHmi ? 'text-amber-600' : 'text-slate-500'
+                }`} />
+                <input
+                  type="text"
+                  placeholder="ค้นหา..."
+                  value={resetLogSearch}
+                  onChange={e => setResetLogSearch(e.target.value)}
+                  className={`rounded pl-7 pr-2.5 py-1 text-xs border w-36 sm:w-44 transition-colors ${
+                    isHmi 
+                      ? 'bg-black border-amber-800 text-amber-300 placeholder-amber-700/60 focus:border-amber-400' 
+                      : 'bg-slate-950 border-slate-700 text-slate-200 placeholder-slate-500 focus:border-amber-400'
+                  }`}
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => exportResetLogsExcel(resetLogs, resetLogLineFilter)}
+                className="px-2.5 py-1 rounded text-xs font-bold transition-all flex items-center gap-1 bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm active:scale-95"
+                title="ส่งออกรายงาน Excel"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>EXCEL</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleOpenResetModal(selectedLineId)}
+                className="px-2.5 py-1 rounded text-xs font-bold transition-all flex items-center gap-1 bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-sm active:scale-95"
+                title="เปิดแบบฟอร์มรีเซ็ตมิเตอร์"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>+ RESET</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between text-[11px] text-amber-300/90 font-mono bg-amber-950/30 p-2 rounded-md border border-amber-900/60">
+            <div className="flex items-center gap-1.5">
+              <Info className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+              <span>
+                บันทึกประวัติการ RESET METER และ MASTER COUNTER ทั้งหมดในระบบ เพื่อตรวจสอบ Audit Trail ย้อนหลัง
+              </span>
+            </div>
+          </div>
+
+          <div className={`overflow-x-auto custom-scrollbar border rounded-lg ${
+            isHmi ? 'border-amber-900/80' : 'border-slate-800'
+          }`}>
+            <table className="w-full text-left text-xs font-mono">
+              <thead className={`uppercase border-b text-[11px] font-black tracking-wide ${
+                isHmi ? 'bg-zinc-950 text-amber-400 border-amber-800' : 'bg-slate-950 text-slate-300 border-slate-800'
+              }`}>
+                <tr>
+                  <th className="py-2 px-2 text-center w-10 font-mono">NO.</th>
+                  <th className="py-2 px-2.5">RECORD ID</th>
+                  <th className="py-2 px-2.5">LINE</th>
+                  <th className="py-2 px-2.5">DATE / SHIFT</th>
+                  <th className="py-2 px-2.5">RESET REASON</th>
+                  <th className="py-2 px-2.5 text-right">PREVIOUS</th>
+                  <th className="py-2 px-2.5 text-right">NEW BASE</th>
+                  <th className="py-2 px-2.5">RESETTED BY</th>
+                  <th className="py-2 px-2.5">APPROVED BY</th>
+                </tr>
+              </thead>
+              <tbody className={`divide-y text-xs font-medium ${
+                isHmi ? 'divide-amber-950/60 text-amber-300' : 'divide-slate-800/60 text-slate-200'
+              }`}>
+                {resetLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="py-6 text-center text-slate-500 font-thai">
+                      <div className="flex flex-col items-center justify-center gap-1.5">
+                        <RotateCcw className="w-6 h-6 text-slate-600 opacity-50" />
+                        <span className="text-xs">ไม่พบประวัติการรีเซ็ตมิเตอร์ตามเงื่อนไขที่ค้นหา</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  resetLogs.map((log, idx) => (
+                    <tr key={log.id} className={`transition-colors ${
+                      isHmi ? 'hover:bg-amber-950/30' : 'hover:bg-slate-900/60'
+                    }`}>
+                      <td className={`py-1.5 px-2 text-center font-mono font-bold ${isHmi ? 'text-amber-500' : 'text-amber-400/80'}`}>{idx + 1}</td>
+                      <td className="py-1.5 px-2.5">
+                        <div className={`font-bold ${isHmi ? 'text-amber-400' : 'text-amber-300'}`}>{log.id}</div>
+                        {log.resetApprovalId && (
+                          <div className="text-[10px] text-emerald-400 font-mono flex items-center gap-1 mt-0.5">
+                            <CheckCircle2 className="w-2.5 h-2.5" />
+                            <span>Appr: {log.resetApprovalId}</span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-1.5 px-2.5">
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-900 text-amber-300 border border-amber-600/40">
+                          LINE {log.lineId}
+                        </span>
+                      </td>
+                      <td className="py-1.5 px-2.5 text-[11px]">
+                        <div>{log.productionDate}</div>
+                        <div className="text-slate-400 font-normal text-[10px]">
+                          {log.shift || 'Shift 1'} • {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </td>
+                      <td className="py-1.5 px-2.5">
+                        <div className="font-medium text-slate-200">
+                          {log.resetReason || log.entryReason || 'Panel Counter Reset'}
+                        </div>
+                        {log.notes && (
+                          <div className="text-[10px] text-slate-400 truncate max-w-xs">{log.notes}</div>
+                        )}
+                      </td>
+                      <td className="py-1.5 px-2.5 text-right text-rose-400/90 font-mono">
+                        {formatShots(log.previousTotal)}
+                      </td>
+                      <td className={`py-1.5 px-2.5 text-right font-bold text-xs ${
+                        isHmi ? 'text-green-400' : 'text-emerald-400'
+                      }`}>
+                        {formatShots(log.newTotal)}
+                      </td>
+                      <td className="py-1.5 px-2.5 text-slate-300 truncate max-w-[120px]">
+                        {log.operatorName || 'System'}
+                      </td>
+                      <td className="py-1.5 px-2.5 text-slate-300 truncate max-w-[120px]">
+                        {log.resetApprovedBy ? (
+                          <span className="text-emerald-300 font-bold">{log.resetApprovedBy}</span>
+                        ) : (
+                          <span className="text-slate-500 italic">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
       {activeTab === 'history' && (
-        <div className={`rounded-xl p-4 sm:p-5 space-y-4 shadow-xl border ${
+        <div className={`rounded-xl p-3 sm:p-4 space-y-3 shadow-xl border ${
           isHmi ? 'bg-black border-2 border-green-500' : 'bg-[#0E172A] border-slate-800/90'
         }`}>
-          <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b pb-3 ${
+          <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b pb-2.5 ${
             isHmi ? 'border-green-900' : 'border-slate-800'
           }`}>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className={`font-bold text-base uppercase tracking-wider ${
+                <h3 className={`font-bold text-sm sm:text-base uppercase tracking-wider ${
                   isHmi ? 'text-green-400 font-extrabold font-mono' : 'text-white'
                 }`}>
                   HISTORICAL SHOT LOGS
                 </h3>
-                <span className={`px-2 py-0.5 rounded text-[11px] font-bold font-mono ${
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono ${
                   isHmi 
                     ? 'bg-green-950 text-green-300 border border-green-800' 
                     : 'bg-cyan-950 text-cyan-300 border border-cyan-800'
@@ -1494,13 +1481,13 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                   10 RECENT LOGS
                 </span>
               </div>
-              <p className={`text-xs ${isHmi ? 'text-green-600' : 'text-slate-400'}`}>
+              <p className={`text-[11px] ${isHmi ? 'text-green-600' : 'text-slate-400'}`}>
                 ประวัติการบันทึกช็อตรายกะ 10 รายการล่าสุดสำหรับอ้างอิงหน้างาน
               </p>
             </div>
 
             {/* Filter Bar */}
-            <div className="flex items-center gap-2 flex-wrap text-xs">
+            <div className="flex items-center gap-1.5 flex-wrap text-xs">
               <DateRangeFilter
                 startDate={historyStartDate}
                 endDate={historyEndDate}
@@ -1515,7 +1502,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
               <select
                 value={historyLineFilter}
                 onChange={e => setHistoryLineFilter(e.target.value)}
-                className={`rounded px-2.5 py-1 font-mono border ${
+                className={`rounded px-2 py-1 text-xs font-mono border ${
                   isHmi 
                     ? 'bg-zinc-950 border-green-700 text-green-300' 
                     : 'bg-slate-950 border-slate-700 text-slate-200'
@@ -1536,7 +1523,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                 value={historySearch}
                 onChange={e => setHistorySearch(e.target.value)}
                 placeholder="ค้นหาประวัติ..."
-                className={`rounded px-2.5 py-1 font-mono border ${
+                className={`rounded px-2 py-1 text-xs font-mono border ${
                   isHmi
                     ? 'bg-zinc-950 border-green-700 text-green-300 placeholder:text-green-800'
                     : 'bg-slate-950 border-slate-700 text-slate-200 placeholder:text-slate-500'
@@ -1546,15 +1533,15 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
           </div>
 
           {/* Single Source of Truth Notice Banner */}
-          <div className={`p-3 border rounded-lg flex items-center justify-between gap-3 text-xs font-thai ${
+          <div className={`p-2 border rounded-md flex items-center justify-between gap-2 text-[11px] font-thai ${
             isHmi 
               ? 'bg-zinc-950 border-green-900 text-green-300' 
               : 'bg-slate-950 border-slate-800 text-slate-300'
           }`}>
-            <div className="flex items-center gap-2">
-              <span className={`flex h-2 w-2 rounded-full ${isHmi ? 'bg-green-400' : 'bg-cyan-400'} animate-pulse`}></span>
+            <div className="flex items-center gap-1.5">
+              <span className={`flex h-1.5 w-1.5 rounded-full ${isHmi ? 'bg-green-400' : 'bg-cyan-400'} animate-pulse`}></span>
               <span>
-                แสดงประวัติล่าสุด <strong>10 รายการ</strong> เพื่อความสะดวกรวดเร็วหน้างาน • สำหรับประวัติย้อนหลังทั้งหมดและส่งออกรายงาน Excel (.xlsx) กรุณาไปที่เมนู <strong>Reports & Analytics</strong>
+                แสดงประวัติล่าสุด <strong>10 รายการ</strong> เพื่อความสะดวกรวดเร็วหน้างาน • ประวัติย้อนหลังทั้งหมดและการส่งออกรายงานดูได้ที่เมนู <strong>Reports & Analytics</strong>
               </span>
             </div>
           </div>
@@ -1562,35 +1549,35 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
           <div className={`overflow-x-auto custom-scrollbar border rounded-lg ${
             isHmi ? 'border-green-900' : 'border-slate-800'
           }`}>
-            <table className="w-full text-left text-sm sm:text-base font-mono">
-              <thead className={`uppercase border-b text-sm font-black tracking-wide ${
+            <table className="w-full text-left text-xs font-mono">
+              <thead className={`uppercase border-b text-[11px] font-black tracking-wide ${
                 isHmi ? 'bg-zinc-950 text-green-400 border-green-800' : 'bg-slate-950 text-slate-300 border-slate-800'
               }`}>
                 <tr>
-                  <th className="py-3 px-2 text-center w-12 font-mono">NO.</th>
-                  <th className="py-3 px-3.5">RECORD ID</th>
-                  <th className="py-3 px-3.5">LINE</th>
-                  <th className="py-3 px-3.5">DATE / SHIFT</th>
-                  <th className="py-3 px-3.5">METHOD</th>
-                  <th className="py-3 px-3.5 text-right">PREVIOUS</th>
-                  <th className="py-3 px-3.5 text-right">INCREMENT</th>
-                  <th className="py-3 px-3.5 text-right">NEW TOTAL</th>
-                  <th className="py-3 px-3.5">OPERATOR</th>
+                  <th className="py-2 px-2 text-center w-10 font-mono">NO.</th>
+                  <th className="py-2 px-2.5">RECORD ID</th>
+                  <th className="py-2 px-2.5">LINE</th>
+                  <th className="py-2 px-2.5">DATE / SHIFT</th>
+                  <th className="py-2 px-2.5">METHOD</th>
+                  <th className="py-2 px-2.5 text-right">PREVIOUS</th>
+                  <th className="py-2 px-2.5 text-right">INCREMENT</th>
+                  <th className="py-2 px-2.5 text-right">NEW TOTAL</th>
+                  <th className="py-2 px-2.5">OPERATOR</th>
                 </tr>
               </thead>
-              <tbody className={`divide-y text-sm font-bold ${
+              <tbody className={`divide-y text-xs font-medium ${
                 isHmi ? 'divide-green-950 text-green-300' : 'divide-slate-800/60 text-slate-200'
               }`}>
                 {filteredShotLogs.slice(0, 10).map((log, idx) => (
                   <tr key={log.id} className={`transition-colors ${
                     isHmi ? 'hover:bg-green-950/40' : 'hover:bg-slate-900/60'
                   }`}>
-                    <td className={`py-3 px-2 text-center font-mono font-bold ${isHmi ? 'text-green-500' : 'text-cyan-400/80'}`}>{idx + 1}</td>
-                    <td className={`py-3 px-3.5 font-bold ${isHmi ? 'text-green-400' : 'text-cyan-400'}`}>{log.id}</td>
-                    <td className="py-3 px-3.5">LINE {log.lineId}</td>
-                    <td className="py-3 px-3.5">{log.productionDate} ({log.shift})</td>
-                    <td className="py-3 px-3.5">
-                      <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                    <td className={`py-1.5 px-2 text-center font-mono font-bold ${isHmi ? 'text-green-500' : 'text-cyan-400/80'}`}>{idx + 1}</td>
+                    <td className={`py-1.5 px-2.5 font-bold ${isHmi ? 'text-green-400' : 'text-cyan-400'}`}>{log.id}</td>
+                    <td className="py-1.5 px-2.5">LINE {log.lineId}</td>
+                    <td className="py-1.5 px-2.5 text-[11px]">{log.productionDate} ({log.shift})</td>
+                    <td className="py-1.5 px-2.5">
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                         log.inputMethod === 'AUTOMATIC_PLC'
                           ? 'bg-blue-950 text-blue-300 border border-blue-700'
                           : isHmi
@@ -1600,10 +1587,10 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                         {log.inputMethod || 'MANUAL'}
                       </span>
                     </td>
-                    <td className="py-3 px-3.5 text-right text-slate-400 font-mono">{formatShots(log.previousTotal)}</td>
-                    <td className={`py-3 px-3.5 text-right font-black ${isHmi ? 'text-green-400' : 'text-emerald-400'}`}>+{formatShots(log.shotsAdded)}</td>
-                    <td className={`py-3 px-3.5 text-right font-black text-base ${isHmi ? 'text-green-300' : 'text-slate-100'}`}>{formatShots(log.newTotal)}</td>
-                    <td className="py-3 px-3.5 text-slate-300 truncate max-w-[140px]">{log.operatorName || 'System'}</td>
+                    <td className="py-1.5 px-2.5 text-right text-slate-400 font-mono">{formatShots(log.previousTotal)}</td>
+                    <td className={`py-1.5 px-2.5 text-right font-bold ${isHmi ? 'text-green-400' : 'text-emerald-400'}`}>+{formatShots(log.shotsAdded)}</td>
+                    <td className={`py-1.5 px-2.5 text-right font-bold text-xs ${isHmi ? 'text-green-300' : 'text-slate-100'}`}>{formatShots(log.newTotal)}</td>
+                    <td className="py-1.5 px-2.5 text-slate-300 truncate max-w-[130px]">{log.operatorName || 'System'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1686,191 +1673,377 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
       {/* COUNTER & SHOT RESET MODAL */}
       {counterResetModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className={`border rounded-xl max-w-lg w-full p-4 sm:p-5 space-y-4 shadow-2xl font-mono ${
+          <div className={`border rounded-xl max-w-2xl w-full p-4 sm:p-6 space-y-4 shadow-2xl ${
             isHmi 
-              ? 'bg-black border-amber-500 text-amber-300' 
-              : 'bg-[#0E172A] border-amber-500/80 text-amber-200'
+              ? 'bg-black border-amber-500 text-amber-300 font-mono' 
+              : 'bg-[#0E172A] border-amber-500/80 text-amber-100 font-sans'
           }`}>
-            <div className="flex items-center justify-between border-b border-amber-900/60 pb-3">
-              <h3 className="font-bold text-amber-400 text-sm sm:text-base flex items-center gap-2">
-                <RotateCcw className="w-5 h-5 text-amber-400 animate-spin-slow" />
-                <span>SHOT & METER RESET (ระบบรีเซ็ตช็อตและมิเตอร์)</span>
-              </h3>
-              <button onClick={() => setCounterResetModalOpen(false)} className="text-slate-400 hover:text-white p-1">
-                <X className="w-5 h-5" />
-              </button>
+            {/* Modal Header */}
+            <div className="flex flex-wrap items-center justify-between border-b border-amber-900/60 pb-3 gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-amber-500/10 rounded-lg border border-amber-500/30">
+                  <RotateCcw className="w-5 h-5 text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-amber-400 text-base flex items-center gap-2">
+                    <span>SHOT & METER RESET (ระบบรีเซ็ตช็อตและมิเตอร์)</span>
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    รีเซ็ตยอดช็อตรายสายการผลิต (จำกัดทำทีละ 1 สายการผลิตเพื่อความถูกต้อง)
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Navigation Tabs */}
+                <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setResetModalTab('FORM')}
+                    className={`px-3 py-1 rounded-md font-bold transition-all flex items-center gap-1.5 ${
+                      resetModalTab === 'FORM'
+                        ? 'bg-amber-500 text-slate-950 shadow-sm'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>แบบฟอร์มรีเซ็ต</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setResetModalTab('LOGS')}
+                    className={`px-3 py-1 rounded-md font-bold transition-all flex items-center gap-1.5 ${
+                      resetModalTab === 'LOGS'
+                        ? 'bg-amber-500 text-slate-950 shadow-sm'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <History className="w-3.5 h-3.5" />
+                    <span>ประวัติ ({resetLogs.length})</span>
+                  </button>
+                </div>
+
+                <button 
+                  onClick={() => setCounterResetModalOpen(false)} 
+                  className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800/60"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
-            <form onSubmit={handleExecuteCounterReset} className="space-y-3.5 text-xs">
-              {/* 1. Target Scope Selector */}
-              <div>
-                <label className="block text-amber-400 font-bold mb-1.5 uppercase tracking-wider">
-                  1. TARGET PRODUCTION LINE (เลือกสายการผลิตที่ต้องการรีเซ็ต) *
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setResetTargetScope('ALL')}
-                    className={`p-2.5 rounded-lg border text-left flex items-center gap-2 transition-all ${
-                      resetTargetScope === 'ALL'
-                        ? 'bg-amber-500 text-black font-extrabold border-amber-300 shadow-md ring-2 ring-amber-300'
-                        : 'bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700'
-                    }`}
-                  >
-                    <span className="text-base">🌐</span>
-                    <div>
-                      <div className="font-bold text-xs">ALL LINES (ทุกไลน์)</div>
-                      <div className="text-[10px] opacity-80">8 สาย (E1, E2, E3, E4, E5, E6)</div>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setResetTargetScope(selectedLineId)}
-                    className={`p-2.5 rounded-lg border text-left flex items-center gap-2 transition-all ${
-                      resetTargetScope !== 'ALL'
-                        ? 'bg-amber-500 text-black font-extrabold border-amber-300 shadow-md ring-2 ring-amber-300'
-                        : 'bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700'
-                    }`}
-                  >
-                    <span className="text-base">🎯</span>
-                    <div>
-                      <div className="font-bold text-xs">CURRENT LINE ({selectedLineId})</div>
-                      <div className="text-[10px] opacity-80">เฉพาะสาย {selectedLineId}</div>
-                    </div>
-                  </button>
-                </div>
-              </div>
-
-              {/* 2. Reset Scope Checkboxes */}
-              <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-lg space-y-2.5">
-                <label className="block text-amber-400 font-bold uppercase tracking-wider">
-                  2. RESET ACTIONS & SYNCHRONIZATION (รายการที่จะรีเซ็ตและเชื่อมต่อระบบ)
-                </label>
-                
-                <label className="flex items-start gap-2.5 cursor-pointer text-slate-200 hover:text-white">
-                  <input
-                    type="checkbox"
-                    checked={resetPartWearOption}
-                    onChange={e => setResetPartWearOption(e.target.checked)}
-                    className="mt-0.5 w-4 h-4 rounded border-slate-700 text-amber-500 focus:ring-amber-400 bg-slate-900"
-                  />
-                  <div>
-                    <strong className="text-amber-300">Reset Tooling Parts Wear to 0 (รีเซ็ตยอดสะสมชิ้นส่วนอะไหล่ทั้งหมดเป็น 0)</strong>
-                    <p className="text-[10.5px] text-slate-400">
-                      ชิ้นส่วนแม่พิมพ์ทุกชิ้น (Punches, Dies, Blades) จะรีเซ็ตยอดใช้งานเป็น 0 ช็อต (0% NORMAL) และอัปเดตบน TV Monitor ทันที
-                    </p>
-                  </div>
-                </label>
-
-                <label className="flex items-start gap-2.5 cursor-pointer text-slate-200 hover:text-white">
-                  <input
-                    type="checkbox"
-                    checked={resetShiftCountersOption}
-                    onChange={e => setResetShiftCountersOption(e.target.checked)}
-                    className="mt-0.5 w-4 h-4 rounded border-slate-700 text-amber-500 focus:ring-amber-400 bg-slate-900"
-                  />
-                  <div>
-                    <strong className="text-amber-300">Reset Shift, Daily & Monthly Tallies (รีเซ็ตยอดช็อตประจำกะ / วัน / เดือน)</strong>
-                    <p className="text-[10.5px] text-slate-400">
-                      รีเซ็ตตัวนับการผลิตของรอบกะ, วัน และเดือนให้เริ่มต้นนับ 0 ช็อตใหม่
-                    </p>
-                  </div>
-                </label>
-              </div>
-
-              {/* 3. New Meter Base Input */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-amber-400 font-bold uppercase tracking-wider">
-                    3. NEW BASE METER READING (เลขมิเตอร์ตั้งต้นใหม่) *
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setResetNewMeterInput('0')}
-                    className="text-[10px] px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-800 hover:bg-amber-900 font-bold"
-                  >
-                    SET TO 0 SHOTS
-                  </button>
-                </div>
-                <input
-                  type="number"
-                  min="0"
-                  value={resetNewMeterInput}
-                  onChange={e => setResetNewMeterInput(e.target.value)}
-                  placeholder="0"
-                  className="w-full bg-slate-950 border border-amber-500/80 rounded-lg p-2.5 text-amber-300 font-mono text-xl font-bold tracking-wider"
-                  required
-                />
-              </div>
-
-              {/* 4. Reason & Approver */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {/* TAB 1: RESET FORM */}
+            {resetModalTab === 'FORM' && (
+              <form onSubmit={handleExecuteCounterReset} className="space-y-4 text-xs">
+                {/* 1. Single Line Selector */}
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">APPROVAL ID (รหัสอนุมัติ) *</label>
-                  <input
-                    type="text"
-                    value={resetApprovalIdInput}
-                    onChange={e => setResetApprovalIdInput(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">APPROVED BY (ผู้อนุมัติ) *</label>
-                  <input
-                    type="text"
-                    value={resetApprovedByInput}
-                    onChange={e => setResetApprovedByInput(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono"
-                    required
-                  />
-                </div>
-              </div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-amber-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                      <Layers className="w-4 h-4 text-amber-400" />
+                      <span>1. เลือกสายการผลิต (TARGET PRODUCTION LINE - ทีละไลน์เท่านั้น) *</span>
+                    </label>
+                    <span className="text-[10px] text-amber-300/80 bg-amber-950/60 border border-amber-800/80 px-2 py-0.5 rounded-full font-bold">
+                      เลือกรีเซ็ต: สาย {resetTargetScope}
+                    </span>
+                  </div>
 
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">RESET REASON / ACTION (เหตุผลการรีเซ็ต) *</label>
-                <input
-                  type="text"
-                  value={resetReasonInput}
-                  onChange={e => setResetReasonInput(e.target.value)}
-                  placeholder="ระบุเหตุผลการรีเซ็ต..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200"
-                  required
-                />
-              </div>
-
-              {/* Preview Impact Summary Box */}
-              <div className="p-3 bg-cyan-950/30 border border-cyan-800/60 rounded-lg text-cyan-200 text-[11px] space-y-1">
-                <div className="font-bold flex items-center gap-1.5 text-cyan-300">
-                  <span>ℹ️</span>
-                  <span>SYSTEM SYNCHRONIZATION SUMMARY:</span>
+                  <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5">
+                    {linesList.map(lId => {
+                      const isSelected = resetTargetScope === lId;
+                      const lineData = storageService.getLineMonitoring(lId);
+                      const currentShots = lineData?.machineShotTotal || 0;
+                      return (
+                        <button
+                          key={lId}
+                          type="button"
+                          onClick={() => {
+                            setResetTargetScope(lId);
+                            setResetterNameInput(''); // Force operator signature on target line switch
+                          }}
+                          className={`p-2 rounded-lg border text-center transition-all flex flex-col items-center justify-center ${
+                            isSelected
+                              ? 'bg-amber-500 text-slate-950 font-black border-amber-300 shadow-md ring-2 ring-amber-400/80 scale-[1.02]'
+                              : 'bg-slate-950/90 text-slate-300 border-slate-800 hover:border-slate-700 hover:bg-slate-900'
+                          }`}
+                        >
+                          <span className="text-xs font-bold">{lId}</span>
+                          <span className={`text-[9px] mt-0.5 font-mono ${isSelected ? 'text-slate-950 font-bold' : 'text-slate-500'}`}>
+                            {currentShots > 1000000 ? `${(currentShots/1000000).toFixed(1)}M` : `${(currentShots/1000).toFixed(0)}k`}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-                <p>
-                  • ข้อมูลจะถูกบันทึกและเชื่อมต่ออัปเดตแบบ Real-time ไปยัง <strong>TV Monitoring Wall</strong>, <strong>Shot Entry Terminal</strong>, <strong>Tooling Master Hub</strong>, <strong>Stock & Reports</strong> ทันที
-                </p>
-                <p>
-                  • เป้าหมาย: <strong className="text-amber-300">{resetTargetScope === 'ALL' ? 'ทุกสายการผลิต 8 สาย (E1-E6)' : `เฉพาะสาย ${resetTargetScope}`}</strong>
-                </p>
-              </div>
 
-              <div className="flex gap-2 pt-2 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setCounterResetModalOpen(false)}
-                  className="flex-1 py-2.5 bg-slate-900 text-slate-400 rounded-lg text-xs font-bold border border-slate-700 hover:text-white"
-                >
-                  CANCEL
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-xs font-extrabold uppercase shadow-lg shadow-amber-500/20 flex items-center justify-center gap-1.5 active:scale-95"
-                >
-                  <RotateCcw className="w-4 h-4 text-black" />
-                  <span>CONFIRM & EXECUTE RESET</span>
-                </button>
+                {/* 2. New Meter Input & Current Meter Display */}
+                <div className="p-3.5 bg-slate-950/80 border border-amber-500/40 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-amber-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                      <Hash className="w-4 h-4 text-amber-400" />
+                      <span>2. เลขมิเตอร์ตั้งต้นใหม่ (NEW BASE METER READING) *</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setResetNewMeterInput('0')}
+                      className="text-[11px] px-2.5 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 font-bold flex items-center gap-1 transition-all"
+                    >
+                      <RotateCcw className="w-3 h-3 text-amber-400" />
+                      <span>ตั้งค่าเป็น 0 ช็อต (SET TO 0)</span>
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1">
+                      <input
+                        type="number"
+                        min="0"
+                        value={resetNewMeterInput}
+                        onChange={e => setResetNewMeterInput(e.target.value)}
+                        onFocus={(e) => e.target.select()}
+                        placeholder="0"
+                        className="w-full bg-black border-2 border-amber-500/80 rounded-lg p-2.5 text-amber-300 font-mono text-2xl font-bold tracking-wider focus:outline-none focus:ring-2 focus:ring-amber-400 shadow-inner"
+                        required
+                      />
+                    </div>
+                    <div className="p-2.5 bg-slate-900/90 border border-slate-800 rounded-lg text-right min-w-[140px]">
+                      <div className="text-[10px] text-slate-400">ยอดสะสมปัจจุบัน (สาย {resetTargetScope})</div>
+                      <div className="text-sm font-mono font-bold text-slate-200">
+                        {(storageService.getLineMonitoring(resetTargetScope)?.machineShotTotal || 0).toLocaleString()} <span className="text-[10px] font-normal text-slate-400">ช็อต</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Resetter Name & Reason */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-amber-400 font-bold mb-1 flex items-center gap-1.5">
+                      <UserCheck className="w-3.5 h-3.5 text-amber-400" />
+                      <span>ลงชื่อผู้รีเซ็ต (RESETTED BY / OPERATOR) * [บังคับลงชื่อ]</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={resetterNameInput}
+                      onChange={e => setResetterNameInput(e.target.value)}
+                      placeholder="กรุณากรอกชื่อ-นามสกุล ผู้ทำรายการ..."
+                      className="w-full bg-slate-950 border-2 border-amber-500/60 rounded-lg p-2.5 text-slate-100 font-medium focus:border-amber-400 focus:ring-1 focus:ring-amber-400 focus:outline-none placeholder-slate-500"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1 flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5 text-amber-400" />
+                      <span>เหตุผลการรีเซ็ต (RESET REASON) *</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={resetReasonInput}
+                      onChange={e => setResetReasonInput(e.target.value)}
+                      placeholder="ระบุเหตุผลการรีเซ็ต..."
+                      className="w-full bg-slate-950 border border-slate-700/80 rounded-lg p-2.5 text-slate-100 font-medium focus:border-amber-500 focus:outline-none"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* Quick Reason Chips */}
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
+                  <span className="text-slate-500 font-bold">เหตุผลด่วน:</span>
+                  {[
+                    'เปลี่ยนมิเตอร์ใหม่ (New Counter Installed)',
+                    'ปรับเซ็ตแม่พิมพ์ประจำกะ (Shift Set Adjustment)',
+                    'สอบเทียบมิเตอร์ประจำปี (Annual Meter Calibration)',
+                    'ซ่อมบำรุงเปลี่ยนชิ้นส่วน (Maintenance Reset)'
+                  ].map(preset => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setResetReasonInput(preset)}
+                      className="px-2 py-0.5 bg-slate-900 border border-slate-800 hover:border-amber-500/50 hover:text-amber-300 rounded text-[10px] transition-all"
+                    >
+                      + {preset.split(' ')[0]}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-2 pt-2 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setCounterResetModalOpen(false)}
+                    className="flex-1 py-2.5 bg-slate-900 text-slate-400 rounded-lg text-xs font-bold border border-slate-700 hover:text-white hover:bg-slate-800 transition-all"
+                  >
+                    ยกเลิก (CANCEL)
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-xs font-extrabold uppercase shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 active:scale-95 transition-all"
+                  >
+                    <RotateCcw className="w-4 h-4 text-slate-950" />
+                    <span>ยืนยันการรีเซ็ต (CONFIRM RESET)</span>
+                  </button>
+                </div>
+
+                {/* Recent Reset Log Preview directly under the form */}
+                {resetLogs.length > 0 && (
+                  <div className="pt-3 border-t border-slate-800/80 space-y-2">
+                    <div className="flex items-center justify-between text-slate-400">
+                      <span className="font-bold text-[11px] flex items-center gap-1.5 text-amber-400">
+                        <History className="w-3.5 h-3.5" />
+                        <span>ประวัติการรีเซ็ตล่าสุด (RECENT RESETS FOR LINE {resetTargetScope}):</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setResetModalTab('LOGS')}
+                        className="text-[10px] text-amber-400 hover:underline flex items-center gap-0.5"
+                      >
+                        ดูทั้งหมด ({resetLogs.length}) <ChevronRight className="w-3 h-3" />
+                      </button>
+                    </div>
+
+                    <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                      {resetLogs.slice(0, 3).map(log => (
+                        <div key={log.id} className="p-2 bg-slate-950 rounded-lg border border-slate-800/80 text-[11px] flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-300 font-bold rounded text-[10px]">
+                              {log.lineId}
+                            </span>
+                            <div>
+                              <div className="text-slate-200 font-medium">
+                                {log.resetReason || log.entryReason || 'Reset Counter'}
+                              </div>
+                              <div className="text-[10px] text-slate-500 flex items-center gap-2">
+                                <span>ผู้ทำรายการ: <strong className="text-slate-400">{log.operatorName}</strong></span>
+                                <span>•</span>
+                                <span>{new Date(log.timestamp).toLocaleString('th-TH')}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="text-right font-mono shrink-0">
+                            <div className="text-amber-300 font-bold">
+                              {log.previousTotal.toLocaleString()} ➔ {log.newTotal.toLocaleString()}
+                            </div>
+                            <div className="text-[9px] text-slate-500">Ref: {log.resetApprovalId || log.id.slice(-6)}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </form>
+            )}
+
+            {/* TAB 2: RESET HISTORY LOG TABLE */}
+            {resetModalTab === 'LOGS' && (
+              <div className="space-y-3">
+                {/* Search & Filter Bar */}
+                <div className="flex flex-wrap items-center gap-2 justify-between">
+                  <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                    <div className="relative flex-1">
+                      <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-500" />
+                      <input
+                        type="text"
+                        value={resetLogSearch}
+                        onChange={e => setResetLogSearch(e.target.value)}
+                        placeholder="ค้นหาตามผู้ทำรายการ, เหตุผล, รหัส..."
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+
+                    <select
+                      value={resetLogLineFilter}
+                      onChange={e => setResetLogLineFilter(e.target.value)}
+                      className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                    >
+                      <option value="ALL">ทุกสาย (All Lines)</option>
+                      {linesList.map(l => (
+                        <option key={l} value={l}>สาย {l}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <span className="text-[11px] text-slate-400 font-mono">
+                      พบทั้งหมด <strong className="text-amber-400">{resetLogs.length}</strong> รายการ
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => exportResetLogsExcel(resetLogs, resetLogLineFilter)}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer"
+                      title="ดาวน์โหลดประวัติการรีเซ็ตเป็นไฟล์ Excel"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Export Excel</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Log History Table */}
+                <div className="border border-slate-800 rounded-xl overflow-hidden max-h-[380px] overflow-y-auto bg-slate-950">
+                  {resetLogs.length === 0 ? (
+                    <div className="p-8 text-center text-slate-500 text-xs">
+                      <History className="w-8 h-8 mx-auto mb-2 text-slate-600 opacity-50" />
+                      <div>ไม่พบประวัติการรีเซ็ตช็อตในระบบ</div>
+                    </div>
+                  ) : (
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead className="sticky top-0 bg-slate-900 border-b border-slate-800 text-[10.5px] uppercase tracking-wider text-slate-400 font-bold">
+                        <tr>
+                          <th className="py-2.5 px-3">วัน-เวลา (Auto Time)</th>
+                          <th className="py-2.5 px-3">สายการผลิต</th>
+                          <th className="py-2.5 px-3">ผู้ทำรายการ</th>
+                          <th className="py-2.5 px-3">เลขเดิม ➔ ใหม่</th>
+                          <th className="py-2.5 px-3">เหตุผลการรีเซ็ต</th>
+                          <th className="py-2.5 px-3 text-right">รหัสอนุมัติ</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
+                        {resetLogs.map(log => (
+                          <tr key={log.id} className="hover:bg-slate-900/60 transition-colors">
+                            <td className="py-2 px-3 text-slate-300 whitespace-nowrap">
+                              <div className="flex items-center gap-1.5">
+                                <Clock className="w-3 h-3 text-cyan-400" />
+                                <span>{new Date(log.timestamp).toLocaleString('th-TH')}</span>
+                              </div>
+                            </td>
+                            <td className="py-2 px-3">
+                              <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 font-bold rounded text-[10px]">
+                                {log.lineId}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 font-sans font-medium text-slate-200">
+                              {log.operatorName || 'System'}
+                            </td>
+                            <td className="py-2 px-3 font-bold text-amber-300 whitespace-nowrap">
+                              {log.previousTotal.toLocaleString()} <span className="text-slate-500">➔</span> {log.newTotal.toLocaleString()}
+                            </td>
+                            <td className="py-2 px-3 font-sans text-slate-300 max-w-[180px] truncate" title={log.resetReason || log.entryReason}>
+                              {log.resetReason || log.entryReason || '-'}
+                            </td>
+                            <td className="py-2 px-3 text-right text-slate-400 text-[10px]">
+                              {log.resetApprovalId || log.id.slice(-8)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setCounterResetModalOpen(false)}
+                    className="px-4 py-2 bg-slate-900 text-slate-300 hover:text-white rounded-lg text-xs font-bold border border-slate-700"
+                  >
+                    ปิดหน้าต่าง (CLOSE)
+                  </button>
+                </div>
               </div>
-            </form>
+            )}
           </div>
         </div>
       )}

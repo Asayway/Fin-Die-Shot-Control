@@ -746,8 +746,44 @@ export interface AuditLogEntry {
 
 export type AppTheme = 'dark' | 'light' | 'hmi' | 'industrial-dark';
 
+export type PLCConnectionMode = 'SIMULATION' | 'WEBSOCKET_MQTT' | 'REST_POLLING' | 'MODBUS_TCP';
+
+export type PLCProtocol = 
+  | 'MODBUS_TCP' 
+  | 'SIEMENS_S7' 
+  | 'OPC_UA' 
+  | 'OMRON_ETHERNET' 
+  | 'FIN_PLC_NATIVE' 
+  | 'WEBSOCKET_MQTT' 
+  | 'REST_API';
+
+export type PLCConnectionStatus = 'CONNECTED' | 'CONNECTING' | 'RECONNECTING' | 'DISCONNECTED' | 'ERROR';
+
+export interface PLCLineRegisterMap {
+  lineId: string;
+  lineName?: string;
+  address: string;
+  active: boolean;
+  currentVal: number;
+  lastPulse: string;
+}
+
+export interface PLCConfig {
+  connectionMode: PLCConnectionMode;
+  protocol: PLCProtocol;
+  ip: string;
+  port: number;
+  slaveId: number;
+  pollingIntervalMs: number;
+  wsUrl: string;
+  restApiUrl: string;
+  uiThrottleMs: number;
+  isAutoPolling: boolean;
+  lineRegisters: Record<string, PLCLineRegisterMap>;
+}
+
 export interface SystemSettings {
-  language: 'EN' | 'TH' | 'DUAL';
+  language: 'EN' | 'TH' | 'KO' | 'DUAL';
   warningThresholdPercent: number; // 70
   prepareThresholdPercent: number; // 85
   criticalThresholdPercent: number; // 95

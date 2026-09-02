@@ -37,6 +37,8 @@ import {
   calculateSummaryStats, 
   generateDynamicAlertTicker 
 } from '../../services/calculationService';
+import { getI18n, LanguageCode } from '../../i18n';
+import { TvTableRow } from './TvTableRow';
 
 interface TvDashboardViewProps {
   initialLineId?: ProductionLineId;
@@ -51,6 +53,28 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
 }) => {
   const [selectedLineId, setSelectedLineId] = useState<ProductionLineId>(initialLineId);
   const [lineData, setLineData] = useState<LineLiveMonitoringData | null>(null);
+
+  // Active Display Language
+  const [currentLang, setCurrentLang] = useState<LanguageCode>(() => {
+    return (storageService.getSettings().language as LanguageCode) || 'EN';
+  });
+
+  useEffect(() => {
+    const checkLang = () => {
+      const activeLang = storageService.getSettings().language || 'EN';
+      if (activeLang !== currentLang) {
+        setCurrentLang(activeLang as LanguageCode);
+      }
+    };
+    const interval = setInterval(checkLang, 400);
+    window.addEventListener('storage', checkLang);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('storage', checkLang);
+    };
+  }, [currentLang]);
+
+  const t = getI18n(currentLang);
   
   // Sort Mode State (Default: INDUSTRIAL_PRIORITY)
   const [tvSortMode, setTvSortMode] = useState<TvSortMode>(() => {
@@ -258,18 +282,18 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
   return (
     <div className={`w-full bg-[#070F1E] text-slate-100 flex flex-col justify-between font-sans select-none border border-slate-800/80 shadow-2xl overflow-hidden transition-all ${
       isFullscreenMode
-        ? 'fixed inset-0 z-50 h-screen w-screen max-h-screen max-w-screen p-1 sm:p-2 md:p-2.5 rounded-none border-none'
+        ? 'fixed inset-0 z-50 h-screen w-screen max-h-screen max-w-screen pt-9 sm:pt-10 px-2 sm:px-3 pb-2 rounded-none border-none bg-[#070F1E]'
         : 'h-[calc(100vh-84px)] min-h-[560px] p-2 sm:p-3 md:p-3.5 rounded-xl'
     }`}>
       
       {/* Top TV Controls Bar (Line Switcher, Auto Cycle, High Contrast, Fullscreen) - flex-none */}
-      <div className={`flex-none flex flex-wrap items-center justify-between gap-2 pb-2 mb-1.5 border-b ${
+      <div className={`flex-none flex flex-wrap items-center justify-between gap-2 pb-2 mb-1.5 border-b z-30 relative ${
         highContrast ? 'border-yellow-400 border-b-2' : 'border-slate-800/80'
       }`}>
         <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
           <span className={`text-xs sm:text-sm font-mono font-black uppercase tracking-wider mr-1 ${
             highContrast ? 'text-yellow-300 text-base' : 'text-cyan-400'
-          }`}>LINE:</span>
+          }`}>{t.controls.line}:</span>
           {linesList.map(line => {
             const info = LINE_INFO_MAP[line];
             const isSelected = selectedLineId === line;
@@ -306,42 +330,6 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {/* TV DISPLAY SORT ORDER SELECTOR */}
-          <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700/90 rounded-lg px-2.5 py-1 text-xs font-mono">
-            <span className="text-slate-400 font-bold hidden sm:inline">SORT:</span>
-            <select
-              value={tvSortMode}
-              onChange={(e) => {
-                const mode = e.target.value as TvSortMode;
-                setTvSortMode(mode);
-                localStorage.setItem('findie_tv_sort_mode', mode);
-              }}
-              className="bg-slate-950 text-cyan-300 font-bold px-2 py-1 rounded border border-slate-700 focus:outline-none focus:border-cyan-400 cursor-pointer"
-              title="ตั้งค่ารูปแบบการเรียงลำดับรายการในหน้า TV Dashboard"
-            >
-              <option value="INDUSTRIAL_PRIORITY">🔥 ลำดับความสำคัญวิกฤต (Priority)</option>
-              <option value="USAGE_DESC">📊 % ใช้งานสูงสุด (Usage % High-Low)</option>
-              <option value="USAGE_ASC">📈 % ใช้งานน้อยสุด (Usage % Low-High)</option>
-              <option value="REMAINING_ASC">⏳ ช็อตคงเหลือน้อยสุด (Remaining Low)</option>
-              <option value="STAGE_ORDER">🛠️ ลำดับตาม Stage (Stage Order)</option>
-              <option value="CUSTOM_SEQUENCE">🔢 ลำดับที่กำหนดเอง (Custom Sequence)</option>
-            </select>
-          </div>
-
-          {/* HIGH CONTRAST TOGGLE BUTTON */}
-          <button
-            onClick={() => setHighContrast(!highContrast)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-mono font-black border-2 transition-all ${
-              highContrast
-                ? 'bg-yellow-400 text-black border-white shadow-lg ring-2 ring-yellow-300 font-black'
-                : 'bg-slate-900 text-yellow-400 border-yellow-500/60 hover:bg-slate-800'
-            }`}
-            title="Toggle High Contrast Display Mode for older TV monitors"
-          >
-            <Eye className={`w-4 h-4 ${highContrast ? 'text-black' : 'text-yellow-400'}`} />
-            <span>HIGH CONTRAST</span>
-            <span className="font-black px-1.5 py-0.5 rounded bg-black/30 text-white text-[11px]">{highContrast ? 'ON' : 'OFF'}</span>
-          </button>
 
           {/* AUTO-CYCLE TIMER SELECTOR BUTTON (OFF, 5s, 10s, 15s, 30s) */}
           <button
@@ -354,23 +342,10 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
             title="Click to cycle Auto-Switch timer: OFF -> 5s -> 10s -> 15s -> 30s -> OFF"
           >
             <RotateCw className={`w-4 h-4 ${autoCycleSeconds > 0 ? 'animate-spin text-slate-950' : ''}`} />
-            <span className="hidden sm:inline">AUTO-CYCLE</span>
+            <span className="hidden sm:inline">{t.controls.autoCycle}</span>
             <span className="font-extrabold px-1.5 py-0.5 bg-black/40 text-white rounded text-xs">
-              {autoCycleSeconds > 0 ? `${autoCycleSeconds}s` : 'OFF'}
+              {autoCycleSeconds > 0 ? `${autoCycleSeconds}s` : t.controls.off}
             </span>
-          </button>
-
-          <button
-            onClick={() => setIsSimulatingPulse(!isSimulatingPulse)}
-            className={`flex items-center gap-1 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg text-xs sm:text-sm font-mono font-bold border transition-colors ${
-              isSimulatingPulse
-                ? 'bg-emerald-950 text-emerald-300 border-emerald-500 shadow-md'
-                : 'bg-slate-900 text-slate-400 border-slate-700 hover:text-slate-200'
-            }`}
-            title="Toggle simulated live PLC shot pulses"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="hidden sm:inline">PLC</span> <span>{isSimulatingPulse ? 'LIVE' : 'PAUSED'}</span>
           </button>
 
           {onToggleFullscreen && (
@@ -425,25 +400,25 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
       </div>
 
       {/* KPI METRIC CARDS ROW - flex-none */}
-      <div className="flex-none grid grid-cols-3 sm:grid-cols-6 gap-1 sm:gap-1.5 mb-1">
+      <div className="flex-none grid grid-cols-2 sm:grid-cols-5 gap-1 sm:gap-1.5 mb-1">
         {/* Machine Status */}
         <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg py-1 px-1.5 text-center flex flex-col justify-center shadow-sm">
           <div className="text-[9px] sm:text-[10px] font-sans font-extrabold tracking-wide text-slate-400 uppercase">
-            STATUS
+            {t.table.status}
           </div>
           <div className="flex items-center justify-center gap-1 font-black text-xs sm:text-sm md:text-base lg:text-[1.15vw] font-mono">
-            {lineData.machineStatus === 'RUNNING' && <span className="text-emerald-400 flex items-center gap-1">🟢 RUNNING</span>}
-            {lineData.machineStatus === 'IDLE' && <span className="text-amber-300 flex items-center gap-1">🟡 IDLE</span>}
-            {lineData.machineStatus === 'MAINTENANCE' && <span className="text-cyan-300 flex items-center gap-1">🔧 MAINTENANCE</span>}
-            {lineData.machineStatus === 'STOPPED' && <span className="text-rose-400 flex items-center gap-1">🔴 STOPPED</span>}
-            {(!lineData.machineStatus) && <span className="text-emerald-400 flex items-center gap-1">🟢 RUNNING</span>}
+            {lineData.machineStatus === 'RUNNING' && <span className="text-emerald-400 flex items-center gap-1">🟢 {t.controls.running}</span>}
+            {lineData.machineStatus === 'IDLE' && <span className="text-amber-300 flex items-center gap-1">🟡 {t.controls.idle}</span>}
+            {lineData.machineStatus === 'MAINTENANCE' && <span className="text-cyan-300 flex items-center gap-1">🔧 {t.controls.maintenance}</span>}
+            {lineData.machineStatus === 'STOPPED' && <span className="text-rose-400 flex items-center gap-1">🔴 {t.controls.stopped}</span>}
+            {(!lineData.machineStatus) && <span className="text-emerald-400 flex items-center gap-1">🟢 {t.controls.running}</span>}
           </div>
         </div>
 
         {/* Machine Shot Total */}
         <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg py-1 px-1.5 text-center shadow-sm">
           <div className="text-[9px] sm:text-[10px] font-sans font-extrabold tracking-wide text-slate-400 uppercase">
-            TOTAL SHOT
+            {t.controls.totalShot}
           </div>
           <div className="text-emerald-400 font-black text-xs sm:text-sm md:text-base lg:text-[1.2vw] font-mono tracking-tight tabular-nums">
             {formatShots(lineData.machineShotTotal)} <span className="text-[9px] font-normal text-emerald-500/70">Shot</span>
@@ -453,7 +428,7 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
         {/* Shift Shot */}
         <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg py-1 px-1.5 text-center shadow-sm">
           <div className="text-[9px] sm:text-[10px] font-sans font-extrabold tracking-wide text-slate-400 uppercase">
-            SHIFT SHOT
+            {t.controls.shiftShot}
           </div>
           <div className="text-slate-100 font-black text-xs sm:text-sm md:text-base lg:text-[1.2vw] font-mono tabular-nums">
             {formatShots(lineData.shiftShot)} <span className="text-[9px] font-normal text-slate-400">Shot</span>
@@ -463,7 +438,7 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
         {/* Daily Shot */}
         <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg py-1 px-1.5 text-center shadow-sm">
           <div className="text-[9px] sm:text-[10px] font-sans font-extrabold tracking-wide text-slate-400 uppercase">
-            DAILY SHOT
+            {t.controls.dailyShot}
           </div>
           <div className="text-slate-100 font-black text-xs sm:text-sm md:text-base lg:text-[1.2vw] font-mono tabular-nums">
             {formatShots(lineData.dailyShot)} <span className="text-[9px] font-normal text-slate-400">Shot</span>
@@ -473,21 +448,10 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
         {/* Monthly Shot */}
         <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg py-1 px-1.5 text-center shadow-sm">
           <div className="text-[9px] sm:text-[10px] font-sans font-extrabold tracking-wide text-slate-400 uppercase">
-            MONTHLY SHOT
+            {t.controls.monthlyShot}
           </div>
           <div className="text-slate-100 font-black text-xs sm:text-sm md:text-base lg:text-[1.2vw] font-mono tabular-nums">
             {formatShots(lineData.monthlyShot)} <span className="text-[9px] font-normal text-slate-400">Shot</span>
-          </div>
-        </div>
-
-        {/* Shot Signal */}
-        <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg py-1 px-1.5 text-center flex flex-col justify-center shadow-sm">
-          <div className="text-[9px] sm:text-[10px] font-sans font-extrabold tracking-wide text-slate-400 uppercase">
-            SIGNAL
-          </div>
-          <div className="flex items-center justify-center gap-1 text-emerald-400 font-black text-xs sm:text-sm md:text-base lg:text-[1.2vw] font-mono">
-            <span>{lineData.shotSignal}</span>
-            <Wifi className="w-3.5 h-3.5 text-emerald-400" />
           </div>
         </div>
       </div>
@@ -495,203 +459,75 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
       {/* TABLE SECTION TITLE - flex-none */}
       <div className="flex-none bg-[#0C1A33] border border-slate-800 text-center py-0.5 rounded-t-lg text-xs sm:text-sm font-black tracking-wider text-cyan-200 uppercase font-sans flex items-center justify-between px-3">
         <span>FIN DIE PART LIFE MONITORING - LINE {selectedLineId}</span>
-        <span className="text-[10px] sm:text-xs text-slate-400 font-mono">กดที่ปุ่ม STATUS เพื่อดูรายละเอียดสถานะและแจ้งเตือนของแต่ละชิ้นส่วน</span>
+        <span className="text-[10px] sm:text-xs text-slate-400 font-mono">{t.controls.clickStatusHint}</span>
       </div>
 
       {/* TV MAIN MONITORING CONTAINER (FLEX-1 AUTO-STRETCH TO FILL 100% SCREEN HEIGHT) */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-[#070F1E] border-x border-b border-slate-800/90 mb-1 rounded-b-lg shadow-inner table-container">
-        <div className="w-full flex-1 flex flex-col min-h-0">
-          {/* Table Header Row (flex-none) */}
-          <div className="flex-none bg-[#0B172E] border-b border-slate-800 text-cyan-300 font-black uppercase flex items-center px-1.5 py-1.5 select-none relative h-9 sm:h-10 md:h-11 text-[11px] sm:text-xs md:text-sm lg:text-[1.1vw] tracking-wider font-mono">
-            <div className="h-full flex items-center justify-center flex-shrink-0 border-r border-slate-800/70 relative whitespace-nowrap" style={{ width: `${colWidths.no}%` }}>
-              <span>NO.</span>
-              <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'no')} />
+        {/* Horizontal Scroll Wrapper to ensure crisp formatting without squishing or header overlap */}
+        <div className="w-full flex-1 flex flex-col min-h-0 overflow-x-auto custom-scrollbar">
+          <div className="min-w-[1020px] w-full flex-1 flex flex-col min-h-0">
+            {/* Table Header Row (flex-none) */}
+            <div className="flex-none bg-[#0B172E] border-b border-slate-800 text-cyan-300 font-black uppercase flex items-center px-1.5 py-1.5 select-none relative min-h-[40px] text-[11px] sm:text-xs md:text-sm tracking-wider font-mono">
+              <div className="h-full flex items-center justify-center flex-shrink-0 border-r border-slate-800/70 relative text-center leading-tight min-w-[40px] p-0.5" style={{ width: `${colWidths.no}%` }}>
+                <span className="break-words">{t.table.no}</span>
+                <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'no')} />
+              </div>
+              <div className="h-full flex items-center justify-start px-2 font-sans border-r border-slate-800/70 flex-shrink-0 relative leading-tight min-w-[140px] p-0.5" style={{ width: `${colWidths.stage}%` }}>
+                <span className="break-words">{t.table.partName}</span>
+                <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'stage')} />
+              </div>
+              <div className="h-full flex items-center justify-end px-1.5 border-r border-slate-800/70 flex-shrink-0 relative text-right leading-tight min-w-[85px] p-0.5" style={{ width: `${colWidths.lifeLimit}%` }}>
+                <span className="break-words">{t.table.limit}</span>
+                <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'lifeLimit')} />
+              </div>
+              <div className="h-full flex items-center justify-end px-1.5 border-r border-slate-800/70 flex-shrink-0 relative text-right leading-tight min-w-[95px] p-0.5" style={{ width: `${colWidths.currentShot}%` }}>
+                <span className="break-words">{t.table.current}</span>
+                <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'currentShot')} />
+              </div>
+              <div className="h-full flex items-center justify-center px-1 border-r border-slate-800/70 flex-shrink-0 relative text-center leading-tight min-w-[70px] p-0.5" style={{ width: `${colWidths.usage}%` }}>
+                <span className="break-words">{t.table.usage}</span>
+                <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'usage')} />
+              </div>
+              <div className="h-full flex items-center justify-end px-1.5 border-r border-slate-800/70 flex-shrink-0 relative text-right leading-tight min-w-[95px] p-0.5" style={{ width: `${colWidths.remaining}%` }}>
+                <span className="break-words">{t.table.remain}</span>
+                <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'remaining')} />
+              </div>
+              <div className="h-full flex items-center justify-center px-1.5 border-r border-slate-800/70 flex-shrink-0 relative text-center leading-tight min-w-[95px] p-0.5" style={{ width: `${colWidths.progress}%` }}>
+                <span className="break-words">{t.table.progress}</span>
+                <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'progress')} />
+              </div>
+              <div className="h-full flex items-center justify-end px-1.5 border-r border-slate-800/70 flex-shrink-0 relative text-right leading-tight min-w-[95px] p-0.5" style={{ width: `${colWidths.lastChange}%` }}>
+                <span className="break-words">{t.table.lastChange}</span>
+                <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'lastChange')} />
+              </div>
+              <div className="h-full flex items-center justify-center px-1 border-r border-slate-800/70 flex-shrink-0 relative text-center leading-tight min-w-[65px] p-0.5" style={{ width: `${colWidths.installQty}%` }}>
+                <span className="break-words">{t.table.installed}</span>
+                <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'installQty')} />
+              </div>
+              <div className="h-full flex items-center justify-center px-1 border-r border-slate-800/70 flex-shrink-0 relative text-center leading-tight min-w-[65px] p-0.5" style={{ width: `${colWidths.spareQty}%` }}>
+                <span className="break-words">{t.table.spare}</span>
+                <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'spareQty')} />
+              </div>
+              <div className="h-full flex items-center justify-center px-1 flex-shrink-0 relative text-center leading-tight min-w-[85px] p-0.5" style={{ width: `${colWidths.status}%` }}>
+                <span className="break-words">{t.table.status}</span>
+                <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'status')} />
+              </div>
             </div>
-            <div className="h-full flex items-center justify-start px-2 sm:px-3 font-sans border-r border-slate-800/70 flex-shrink-0 relative whitespace-nowrap" style={{ width: `${colWidths.stage}%` }}>
-              <span>FIN DIE SPARE PARTS</span>
-              <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'stage')} />
+
+            {/* Table Rows Body (Flex-1 Evenly Distributed Fill Vertical Height) */}
+            <div className="flex-1 flex flex-col justify-between min-h-0 divide-y divide-slate-800/80 overflow-y-auto custom-scrollbar">
+              {items.map((item, idx) => (
+                <TvTableRow
+                  key={item.slotId || item.partCode || idx}
+                  item={item}
+                  idx={idx}
+                  colWidths={colWidths}
+                  onSelectModalItem={setSelectedModalItem}
+                  t={t}
+                />
+              ))}
             </div>
-            <div className="h-full flex items-center justify-end px-1.5 sm:px-2 border-r border-slate-800/70 flex-shrink-0 relative whitespace-nowrap" style={{ width: `${colWidths.lifeLimit}%` }}>
-              <span>LIFE LIMIT (SHOT)</span>
-              <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'lifeLimit')} />
-            </div>
-            <div className="h-full flex items-center justify-end px-1.5 sm:px-2 border-r border-slate-800/70 flex-shrink-0 relative whitespace-nowrap" style={{ width: `${colWidths.currentShot}%` }}>
-              <span>CURRENT SHOT (SHOT)</span>
-              <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'currentShot')} />
-            </div>
-            <div className="h-full flex items-center justify-center px-1 border-r border-slate-800/70 flex-shrink-0 relative whitespace-nowrap" style={{ width: `${colWidths.usage}%` }}>
-              <span>USAGE %</span>
-              <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'usage')} />
-            </div>
-            <div className="h-full flex items-center justify-end px-1.5 sm:px-2 border-r border-slate-800/70 flex-shrink-0 relative whitespace-nowrap" style={{ width: `${colWidths.remaining}%` }}>
-              <span>REMAINING (SHOT)</span>
-              <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'remaining')} />
-            </div>
-            <div className="h-full flex items-center justify-center px-1 sm:px-2 border-r border-slate-800/70 flex-shrink-0 relative whitespace-nowrap" style={{ width: `${colWidths.progress}%` }}>
-              <span>PROGRESS</span>
-              <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'progress')} />
-            </div>
-            <div className="h-full flex items-center justify-end px-1.5 sm:px-2 border-r border-slate-800/70 flex-shrink-0 relative whitespace-nowrap" style={{ width: `${colWidths.lastChange}%` }}>
-              <span>LAST CHANGE (SHOT)</span>
-              <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'lastChange')} />
-            </div>
-            <div className="h-full flex items-center justify-center px-1 border-r border-slate-800/70 flex-shrink-0 relative whitespace-nowrap" style={{ width: `${colWidths.installQty}%` }}>
-              <span>INST QTY</span>
-              <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'installQty')} />
-            </div>
-            <div className="h-full flex items-center justify-center px-1 border-r border-slate-800/70 flex-shrink-0 relative whitespace-nowrap" style={{ width: `${colWidths.spareQty}%` }}>
-              <span>SPARE QTY</span>
-              <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'spareQty')} />
-            </div>
-            <div className="h-full flex items-center justify-center px-1 flex-shrink-0 relative whitespace-nowrap" style={{ width: `${colWidths.status}%` }}>
-              <span>STATUS</span>
-              <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'status')} />
-            </div>
-          </div>
-
-          {/* Table Rows Body (Flex-1 Evenly Distributed Fill Vertical Height) */}
-          <div className="flex-1 flex flex-col justify-between min-h-0 divide-y divide-slate-800/80 overflow-y-auto custom-scrollbar">
-            {items.map((item, idx) => {
-              const usedShotVal = item.usedShot !== undefined ? item.usedShot : item.currentShot;
-              const shotAtLastChangeVal = item.shotAtLastChange !== undefined ? item.shotAtLastChange : item.lastChangeShot;
-              const availableSpareVal = item.availableSpare !== undefined ? item.availableSpare : item.backupQty;
-              const status: LifeStatus = item.lifeStatus || item.alertStatus || 'NORMAL';
-
-              let usageColor = 'text-emerald-400 font-extrabold';
-              let barColor = 'bg-emerald-500';
-              let barBorder = 'border-emerald-500';
-              let rowHighlight = '';
-
-              if (status === 'OVER_LIFE') {
-                usageColor = 'text-red-400 font-extrabold';
-                barColor = 'bg-red-600';
-                barBorder = 'border-red-500';
-                rowHighlight = 'bg-red-950/30';
-              } else if (status === 'CRITICAL') {
-                usageColor = 'text-rose-400 font-extrabold';
-                barColor = 'bg-rose-500';
-                barBorder = 'border-rose-500';
-                rowHighlight = 'bg-rose-950/25';
-              } else if (status === 'PREPARE') {
-                usageColor = 'text-amber-400 font-extrabold';
-                barColor = 'bg-amber-500';
-                barBorder = 'border-amber-500';
-              } else if (status === 'WARNING') {
-                usageColor = 'text-yellow-300 font-extrabold';
-                barColor = 'bg-yellow-400';
-                barBorder = 'border-yellow-500';
-              }
-
-              // High-visibility block color badges for 5-10m shop floor visibility (Solid GREEN vs RED vs AMBER vs YELLOW)
-              let statusBadgeClass = 'bg-emerald-600 text-white font-extrabold border-emerald-400 shadow-md shadow-emerald-950/60 hover:bg-emerald-500';
-              let statusLabel = 'NORMAL';
-
-              if (status === 'OVER_LIFE') {
-                statusBadgeClass = 'bg-red-600 text-white border-red-300 font-black animate-pulse hover:bg-red-500 shadow-lg shadow-red-900/80';
-                statusLabel = 'OVER LIFE';
-              } else if (status === 'CRITICAL') {
-                statusBadgeClass = 'bg-rose-600 text-white border-rose-300 font-black hover:bg-rose-500 shadow-md shadow-rose-950/60';
-                statusLabel = 'CRITICAL';
-              } else if (status === 'PREPARE') {
-                statusBadgeClass = 'bg-amber-500 text-slate-950 border-amber-300 font-black hover:bg-amber-400 shadow-md shadow-amber-950/60';
-                statusLabel = 'PREPARE';
-              } else if (status === 'WARNING') {
-                statusBadgeClass = 'bg-yellow-400 text-slate-950 border-yellow-200 font-black hover:bg-yellow-300 shadow-md shadow-yellow-950/60';
-                statusLabel = 'WARNING';
-              }
-
-              const rowDensityClass = 'flex-1 py-1 px-1 sm:px-1.5 min-h-[36px] sm:min-h-[40px] md:min-h-[44px]';
-              const isStdMissing = item.isStandardMissing || item.lifeLimit <= 0;
-
-              return (
-                <div 
-                  key={item.slotId || idx} 
-                  className={`flex items-center font-mono transition-colors hover:bg-cyan-950/40 ${rowHighlight} ${rowDensityClass}`}
-                >
-                  {/* No. */}
-                  <div className="h-full flex items-center justify-center text-slate-100 font-black text-sm sm:text-base md:text-lg lg:text-[1.2vw] flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap" style={{ width: `${colWidths.no}%` }}>
-                    {idx + 1}
-                  </div>
-
-                  {/* Fin Die Spare Parts */}
-                  <div className="h-full flex items-center justify-start px-2 sm:px-3 font-sans font-black text-white border-r border-slate-800/70 tracking-wide flex-shrink-0 text-sm sm:text-base md:text-lg lg:text-[1.25vw] whitespace-nowrap truncate" style={{ width: `${colWidths.stage}%` }}>
-                    <span className="truncate">{item.stagePunchDie || item.partName}</span>
-                  </div>
-
-                  {/* Life Limit */}
-                  <div className="h-full flex items-center justify-end px-1.5 sm:px-2.5 text-slate-200 font-extrabold flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap text-sm sm:text-base md:text-lg lg:text-[1.2vw] tabular-nums" style={{ width: `${colWidths.lifeLimit}%` }}>
-                    {isStdMissing ? <span className="px-2 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-800 text-xs font-mono font-bold">MISSING</span> : formatShots(item.lifeLimit)}
-                  </div>
-
-                  {/* Used Shot */}
-                  <div className="h-full flex items-center justify-end px-1.5 sm:px-2.5 text-cyan-200 font-extrabold flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap text-sm sm:text-base md:text-lg lg:text-[1.25vw] tracking-tight tabular-nums" style={{ width: `${colWidths.currentShot}%` }}>
-                    {formatShots(usedShotVal)}
-                  </div>
-
-                  {/* Usage % */}
-                  <div className={`h-full flex items-center justify-center px-1 font-extrabold flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap text-sm sm:text-base md:text-lg lg:text-[1.25vw] tabular-nums ${usageColor}`} style={{ width: `${colWidths.usage}%` }}>
-                    {isStdMissing ? (
-                      <span className="px-2 py-0.5 rounded bg-slate-800/90 text-slate-300 border border-slate-700/80 text-xs sm:text-sm font-mono font-extrabold">-</span>
-                    ) : (
-                      `${item.usagePercent}%`
-                    )}
-                  </div>
-
-                  {/* Remaining Shot */}
-                  <div className={`h-full flex items-center justify-end px-1.5 sm:px-2.5 font-extrabold flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap text-sm sm:text-base md:text-lg lg:text-[1.25vw] tracking-tight tabular-nums ${
-                    item.remainingShot < 0 ? 'text-red-400' : 'text-slate-100'
-                  }`} style={{ width: `${colWidths.remaining}%` }}>
-                    {isStdMissing ? (
-                      <span className="px-2 py-0.5 rounded bg-slate-800/90 text-slate-300 border border-slate-700/80 text-xs sm:text-sm font-mono font-extrabold">-</span>
-                    ) : (
-                      formatShots(item.remainingShot)
-                    )}
-                  </div>
-
-                  {/* Progress Bar */}
-                  <div className="h-full flex items-center justify-center px-1.5 sm:px-2 flex-shrink-0 border-r border-slate-800/70" style={{ width: `${colWidths.progress}%` }}>
-                    <div className={`relative w-full bg-slate-900/90 h-6 sm:h-7 md:h-8 rounded border ${barBorder} overflow-hidden flex items-center shadow-inner`}>
-                      {!isStdMissing ? (
-                        <div
-                          className={`h-full ${barColor} transition-all duration-300`}
-                          style={{ width: `${Math.min(100, Math.max(0, item.usagePercent))}%` }}
-                        />
-                      ) : null}
-                      <span className="absolute inset-0 flex items-center justify-center text-xs sm:text-sm md:text-base font-mono font-extrabold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
-                        {isStdMissing ? '-' : `${item.usagePercent}%`}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Shot at Last Change */}
-                  <div className="h-full flex items-center justify-end px-1.5 sm:px-2.5 text-slate-200 font-extrabold flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap text-sm sm:text-base md:text-lg lg:text-[1.2vw] tabular-nums" style={{ width: `${colWidths.lastChange}%` }}>
-                    {formatShots(shotAtLastChangeVal)}
-                  </div>
-
-                  {/* Install Qty */}
-                  <div className="h-full flex items-center justify-center px-1 text-slate-100 font-extrabold flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap text-sm sm:text-base md:text-lg lg:text-[1.2vw] tabular-nums" style={{ width: `${colWidths.installQty}%` }}>
-                    {item.installQty}
-                  </div>
-
-                  {/* Available Spare */}
-                  <div className="h-full flex items-center justify-center px-1 text-slate-100 font-extrabold flex-shrink-0 border-r border-slate-800/70 whitespace-nowrap text-sm sm:text-base md:text-lg lg:text-[1.2vw] tabular-nums" style={{ width: `${colWidths.spareQty}%` }}>
-                    {availableSpareVal}
-                  </div>
-
-                  {/* Life Status Column (Solid color blocks with bold white/black text) */}
-                  <div className="h-full flex items-center justify-center px-1 flex-shrink-0" style={{ width: `${colWidths.status}%` }}>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedModalItem(item)}
-                      className={`w-full py-1 sm:py-1.5 px-1 rounded text-xs sm:text-sm md:text-base lg:text-[1.1vw] font-black font-mono border whitespace-nowrap transition-all shadow-md ${statusBadgeClass}`}
-                      title="กดเพื่อดูรายละเอียดสถานะและการจัดการของชิ้นส่วนนี้"
-                    >
-                      {statusLabel}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
           </div>
         </div>
       </div>
