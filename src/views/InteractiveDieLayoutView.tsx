@@ -165,7 +165,196 @@ const COMMON_REASONS = [
   'ผิวเคลือบสึก/เกิดรอย (Coating Worn)'
 ];
 
-const LOCAL_STORAGE_PINS_KEY = 'FIN_DIE_INTERACTIVE_PINS_V2_';
+const LEGACY_STORAGE_PINS_KEY = 'FIN_DIE_INTERACTIVE_PINS_V2_';
+const COMPACT_PIN_OVERRIDES_KEY = 'FIN_DIE_PIN_OVERRIDES_V3_';
+
+// Purge any legacy bloated full-die pin arrays from localStorage to free up megabytes of quota
+const cleanUpAllLegacyPinBlobs = () => {
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('FIN_DIE_INTERACTIVE_PINS_') || key.startsWith('FIN_DIE_PINS_'))) {
+        localStorage.removeItem(key);
+      }
+    }
+  } catch (err) {
+    console.warn('Legacy pin storage cleanup notice:', err);
+  }
+};
+
+// Generate deterministic base pins for a line in memory (0 KB localStorage footprint)
+const generateBasePins = (lineId: ProductionLineId, machineShot: number): DiePinItem[] => {
+  const generatedPins: DiePinItem[] = [];
+  const tubeSize = (lineId === 'E2' || lineId === 'E4' || lineId === 'E5') ? 'Ø5' : 'Ø7';
+
+  STAGE_CONFIGS.forEach(stage => {
+    const totalPins = stage.cols * stage.rows;
+    for (let i = 1; i <= totalPins; i++) {
+      const col = ((i - 1) % stage.cols) + 1;
+      const row = Math.floor((i - 1) / stage.cols) + 1;
+      const pinCode = `P-${String(i).padStart(2, '0')}`;
+      const pinId = `${lineId}-${stage.id}-${pinCode}`;
+
+      // Seed realistic shot & condition
+      const rand = (Math.sin(i * 99 + stage.cols) + 1) / 2;
+      let status: PinStatus = 'normal';
+      let isLocked = false;
+      let lockType: PositionLockStatus | undefined = undefined;
+
+      // Current pin running shot (0 to max)
+      let pinShots = Math.floor(rand * stage.maxShots * 0.7);
+      const lastReplacementShot = Math.max(0, machineShot - pinShots);
+      let regrindCount = Math.floor(rand * 3);
+
+      // Seed some warning / locked / broken for realistic visualization
+      if (i === 4 && stage.id === 's1') {
+        status = 'broken';
+        isLocked = true;
+        lockType = 'LOCKED_MAINTENANCE';
+      } else if (i === 12 && stage.id === 's1') {
+        status = 'locked';
+        isLocked = true;
+        lockType = 'LOCKED_TRIAL';
+      } else if (i === 18 && stage.id === 's2') {
+        status = 'bypass';
+        isLocked = true;
+        lockType = 'LOCKED_BYPASS';
+      } else if (i % 23 === 0) {
+        status = 'warning';
+        pinShots = Math.floor(stage.maxShots * 0.92);
+      } else if (regrindCount >= stage.maxRegrind) {
+        status = 'warning';
+      }
+
+      generatedPins.push({
+        id: pinId,
+        pinCode,
+        stageId: stage.id,
+        stageName: stage.name,
+        partCode: stage.partCode,
+        partName: stage.partName,
+        material: stage.material,
+        tubeSize,
+        drawingNo: stage.drawingNo,
+        row,
+        col,
+        status,
+        isLocked,
+        lockType,
+        currentShots: pinShots,
+        maxShots: stage.maxShots,
+        lastReplacementShot,
+        lastReplacementDate: '2026-08-15 08:30',
+        regrindCount,
+        maxRegrind: stage.maxRegrind,
+        totalGrindDepthMm: Number((regrindCount * 0.25).toFixed(2)),
+        shimThicknessMm: Number((regrindCount * 0.20).toFixed(2)),
+        lastAction: status === 'broken' ? 'Reported Broken' : (regrindCount > 0 ? 'Reground #2' : 'New Install'),
+        lastTechnician: 'Somchai M. (Lead Tech)',
+        historyLogs: [
+          {
+            id: `LOG-INIT-${pinId}`,
+            dateTime: '2026-08-15 08:30',
+            lineId,
+            stageId: stage.id,
+            stageName: stage.name,
+            pinCode,
+            partName: stage.partName,
+            actionType: 'REPLACE_NEW',
+            actionLabelTh: 'เปลี่ยนอะไหล่ใหม่ (Set Install)',
+            machineShot: lastReplacementShot,
+            pinShot: 0,
+            technician: 'Somchai M. (Lead Tech)',
+            remarks: 'Initial scheduled assembly and alignment'
+          }
+        ]
+      });
+    }
+  });
+
+  return generatedPins;
+};
+
+// Load compact overrides for modified pins only
+const loadPinOverrides = (lineId: ProductionLineId): Record<string, Partial<DiePinItem>> => {
+  try {
+    const savedCompact = localStorage.getItem(`${COMPACT_PIN_OVERRIDES_KEY}${lineId}`);
+    if (savedCompact) {
+      return JSON.parse(savedCompact);
+    }
+
+    // Migrate from legacy key if it exists, then delete legacy key
+    const legacyRaw = localStorage.getItem(`${LEGACY_STORAGE_PINS_KEY}${lineId}`);
+    if (legacyRaw) {
+      const overrides: Record<string, Partial<DiePinItem>> = {};
+      try {
+        const legacyItems = JSON.parse(legacyRaw);
+        if (Array.isArray(legacyItems)) {
+          legacyItems.forEach((item: any) => {
+            if (item && item.id && (
+              (item.historyLogs && item.historyLogs.length > 1) ||
+              (item.lastAction && !item.lastAction.includes('Initial') && !item.lastAction.includes('Set Install') && !item.lastAction.includes('Reground #2')) ||
+              item.regrindCount > 3 ||
+              item.isLocked
+            )) {
+              overrides[item.id] = {
+                status: item.status,
+                isLocked: item.isLocked,
+                lockType: item.lockType,
+                currentShots: item.currentShots,
+                lastReplacementShot: item.lastReplacementShot,
+                lastReplacementDate: item.lastReplacementDate,
+                regrindCount: item.regrindCount,
+                maxRegrind: item.maxRegrind,
+                totalGrindDepthMm: item.totalGrindDepthMm,
+                shimThicknessMm: item.shimThicknessMm,
+                lastAction: item.lastAction,
+                lastTechnician: item.lastTechnician,
+                historyLogs: item.historyLogs
+              };
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('Error parsing legacy pin data:', e);
+      }
+
+      // Remove the bulky legacy key
+      try {
+        localStorage.removeItem(`${LEGACY_STORAGE_PINS_KEY}${lineId}`);
+      } catch (e) {
+        // ignore
+      }
+
+      if (Object.keys(overrides).length > 0) {
+        try {
+          localStorage.setItem(`${COMPACT_PIN_OVERRIDES_KEY}${lineId}`, JSON.stringify(overrides));
+        } catch (e) {
+          console.warn('Failed to save migrated pin overrides:', e);
+        }
+      }
+      return overrides;
+    }
+  } catch (err) {
+    console.warn('Error loading pin overrides:', err);
+  }
+  return {};
+};
+
+// Safely persist compact overrides
+const savePinOverrides = (lineId: ProductionLineId, overrides: Record<string, Partial<DiePinItem>>) => {
+  try {
+    localStorage.setItem(`${COMPACT_PIN_OVERRIDES_KEY}${lineId}`, JSON.stringify(overrides));
+  } catch (err) {
+    console.warn('Quota exceeded while saving pin overrides, purging legacy keys:', err);
+    cleanUpAllLegacyPinBlobs();
+    try {
+      localStorage.setItem(`${COMPACT_PIN_OVERRIDES_KEY}${lineId}`, JSON.stringify(overrides));
+    } catch (retryErr) {
+      console.error('Could not save pin overrides even after cleanup:', retryErr);
+    }
+  }
+};
 
 interface InteractiveDieLayoutViewProps {
   initialLineId?: ProductionLineId;
@@ -210,131 +399,42 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
 
   const currentUser: User = storageService.getCurrentUser();
 
-  // Load pins for current line
+  // Load pins for current line: generated in memory + merged with compact user overrides
   const loadLinePins = () => {
-    const rawSaved = localStorage.getItem(`${LOCAL_STORAGE_PINS_KEY}${selectedLineId}`);
+    // Purge any legacy bloated blobs
+    cleanUpAllLegacyPinBlobs();
+
     const lineMonitoring = storageService.getLineMonitoring(selectedLineId);
     const machineShot = lineMonitoring?.machineShotTotal || 128450190;
     const locks = storageService.getPositionLocks(selectedLineId);
 
-    if (rawSaved) {
-      try {
-        const parsed: DiePinItem[] = JSON.parse(rawSaved);
-        // Sync lock status with storageService locks
-        const synced = parsed.map(pin => {
-          const matchedLock = locks && Array.isArray(locks) ? locks.find(l => 
-            l && l.positionId === pin.pinCode && 
-            l.stageCode && typeof l.stageCode === 'string' &&
-            l.stageCode.toLowerCase().includes(pin.stageId.toLowerCase())
-          ) : undefined;
-          if (matchedLock && matchedLock.isLocked) {
-            return {
-              ...pin,
-              isLocked: true,
-              lockType: matchedLock.lockType,
-              status: matchedLock.lockType === 'LOCKED_BYPASS' ? ('bypass' as PinStatus) : ('locked' as PinStatus)
-            };
-          }
-          return pin;
-        });
-        setPins(synced);
-        return;
-      } catch (e) {
-        console.error('Error loading saved pins, generating fresh seed:', e);
+    const basePins = generateBasePins(selectedLineId, machineShot);
+    const overrides = loadPinOverrides(selectedLineId);
+
+    // Merge base deterministic pins with user-overridden modifications
+    const merged = basePins.map(pin => {
+      const override = overrides[pin.id];
+      let current = override ? { ...pin, ...override } : pin;
+
+      // Sync lock status with storageService locks
+      const matchedLock = locks && Array.isArray(locks) ? locks.find(l => 
+        l && l.positionId === current.pinCode && 
+        l.stageCode && typeof l.stageCode === 'string' &&
+        l.stageCode.toLowerCase().includes(current.stageId.toLowerCase())
+      ) : undefined;
+      if (matchedLock && matchedLock.isLocked) {
+        current = {
+          ...current,
+          isLocked: true,
+          lockType: matchedLock.lockType,
+          status: matchedLock.lockType === 'LOCKED_BYPASS' ? ('bypass' as PinStatus) : ('locked' as PinStatus)
+        };
       }
-    }
-
-    // Generate initial pins for line
-    const generatedPins: DiePinItem[] = [];
-    const tubeSize = (selectedLineId === 'E2' || selectedLineId === 'E4' || selectedLineId === 'E5') ? 'Ø5' : 'Ø7';
-
-    STAGE_CONFIGS.forEach(stage => {
-      const totalPins = stage.cols * stage.rows;
-      for (let i = 1; i <= totalPins; i++) {
-        const col = ((i - 1) % stage.cols) + 1;
-        const row = Math.floor((i - 1) / stage.cols) + 1;
-        const pinCode = `P-${String(i).padStart(2, '0')}`;
-        const pinId = `${selectedLineId}-${stage.id}-${pinCode}`;
-
-        // Seed realistic shot & condition
-        const rand = (Math.sin(i * 99 + stage.cols) + 1) / 2;
-        let status: PinStatus = 'normal';
-        let isLocked = false;
-        let lockType: PositionLockStatus | undefined = undefined;
-
-        // Current pin running shot (0 to max)
-        let pinShots = Math.floor(rand * stage.maxShots * 0.7);
-        const lastReplacementShot = Math.max(0, machineShot - pinShots);
-        let regrindCount = Math.floor(rand * 3);
-
-        // Seed some warning / locked / broken for realistic visualization
-        if (i === 4 && stage.id === 's1') {
-          status = 'broken';
-          isLocked = true;
-          lockType = 'LOCKED_MAINTENANCE';
-        } else if (i === 12 && stage.id === 's1') {
-          status = 'locked';
-          isLocked = true;
-          lockType = 'LOCKED_TRIAL';
-        } else if (i === 18 && stage.id === 's2') {
-          status = 'bypass';
-          isLocked = true;
-          lockType = 'LOCKED_BYPASS';
-        } else if (i % 23 === 0) {
-          status = 'warning';
-          pinShots = Math.floor(stage.maxShots * 0.92);
-        } else if (regrindCount >= stage.maxRegrind) {
-          status = 'warning';
-        }
-
-        generatedPins.push({
-          id: pinId,
-          pinCode,
-          stageId: stage.id,
-          stageName: stage.name,
-          partCode: stage.partCode,
-          partName: stage.partName,
-          material: stage.material,
-          tubeSize,
-          drawingNo: stage.drawingNo,
-          row,
-          col,
-          status,
-          isLocked,
-          lockType,
-          currentShots: pinShots,
-          maxShots: stage.maxShots,
-          lastReplacementShot,
-          lastReplacementDate: '2026-08-15 08:30',
-          regrindCount,
-          maxRegrind: stage.maxRegrind,
-          totalGrindDepthMm: Number((regrindCount * 0.25).toFixed(2)),
-          shimThicknessMm: Number((regrindCount * 0.20).toFixed(2)),
-          lastAction: status === 'broken' ? 'Reported Broken' : (regrindCount > 0 ? 'Reground #2' : 'New Install'),
-          lastTechnician: 'Somchai M. (Lead Tech)',
-          historyLogs: [
-            {
-              id: `LOG-INIT-${pinId}`,
-              dateTime: '2026-08-15 08:30',
-              lineId: selectedLineId,
-              stageId: stage.id,
-              stageName: stage.name,
-              pinCode,
-              partName: stage.partName,
-              actionType: 'REPLACE_NEW',
-              actionLabelTh: 'เปลี่ยนอะไหล่ใหม่ (Set Install)',
-              machineShot: lastReplacementShot,
-              pinShot: 0,
-              technician: 'Somchai M. (Lead Tech)',
-              remarks: 'Initial scheduled assembly and alignment'
-            }
-          ]
-        });
-      }
+      return current;
     });
 
-    setPins(generatedPins);
-    localStorage.setItem(`${LOCAL_STORAGE_PINS_KEY}${selectedLineId}`, JSON.stringify(generatedPins));
+    setPins(merged);
+    // Note: Do NOT store the full array back to localStorage! Base pins are generated in-memory.
   };
 
   useEffect(() => {
@@ -348,10 +448,46 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
     setTechnicianName('');
   }, [selectedPin, selectedLineId]);
 
-  // Save pins helper
+  // Save pins helper: updates React state and saves only the delta overrides
   const persistPins = (updated: DiePinItem[]) => {
     setPins(updated);
-    localStorage.setItem(`${LOCAL_STORAGE_PINS_KEY}${selectedLineId}`, JSON.stringify(updated));
+
+    const lineMonitoring = storageService.getLineMonitoring(selectedLineId);
+    const machineShot = lineMonitoring?.machineShotTotal || 128450190;
+    const basePins = generateBasePins(selectedLineId, machineShot);
+    const baseMap = new Map(basePins.map(p => [p.id, p]));
+
+    const overrides: Record<string, Partial<DiePinItem>> = {};
+    updated.forEach(pin => {
+      const base = baseMap.get(pin.id);
+      if (!base) return;
+
+      const hasExtraLogs = (pin.historyLogs && pin.historyLogs.length > 1);
+      const hasStatusChange = pin.status !== base.status;
+      const hasShotChange = pin.currentShots !== base.currentShots;
+      const hasLockChange = pin.isLocked !== base.isLocked || pin.lockType !== base.lockType;
+      const hasRegrindChange = pin.regrindCount !== base.regrindCount;
+
+      if (hasExtraLogs || hasStatusChange || hasShotChange || hasLockChange || hasRegrindChange) {
+        overrides[pin.id] = {
+          status: pin.status,
+          isLocked: pin.isLocked,
+          lockType: pin.lockType,
+          currentShots: pin.currentShots,
+          lastReplacementShot: pin.lastReplacementShot,
+          lastReplacementDate: pin.lastReplacementDate,
+          regrindCount: pin.regrindCount,
+          maxRegrind: pin.maxRegrind,
+          totalGrindDepthMm: pin.totalGrindDepthMm,
+          shimThicknessMm: pin.shimThicknessMm,
+          lastAction: pin.lastAction,
+          lastTechnician: pin.lastTechnician,
+          historyLogs: (pin.historyLogs || []).slice(0, 10)
+        };
+      }
+    });
+
+    savePinOverrides(selectedLineId, overrides);
   };
 
   // KPIs

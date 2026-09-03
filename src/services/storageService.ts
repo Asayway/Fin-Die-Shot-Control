@@ -105,9 +105,66 @@ class StorageService {
   }
 
   private ensureInitialized() {
+    this.cleanUpStorageQuota();
     const initialized = localStorage.getItem(STORAGE_KEYS.SEED_INITIALIZED);
     if (!initialized) {
       this.resetToSeedData();
+    }
+  }
+
+  public cleanUpStorageQuota() {
+    try {
+      // 1. Purge oversized legacy interactive pin arrays
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith('FIN_DIE_INTERACTIVE_PINS_') || key.startsWith('FIN_DIE_PINS_'))) {
+          localStorage.removeItem(key);
+        }
+      }
+
+      // 2. Bound history arrays to avoid quota overflow
+      const rawAudit = localStorage.getItem(STORAGE_KEYS.AUDIT_LOGS);
+      if (rawAudit) {
+        try {
+          const logs = JSON.parse(rawAudit);
+          if (Array.isArray(logs) && logs.length > 200) {
+            localStorage.setItem(STORAGE_KEYS.AUDIT_LOGS, JSON.stringify(logs.slice(0, 100)));
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      const rawShot = localStorage.getItem(STORAGE_KEYS.SHOT_LOGS);
+      if (rawShot) {
+        try {
+          const logs = JSON.parse(rawShot);
+          if (Array.isArray(logs) && logs.length > 200) {
+            localStorage.setItem(STORAGE_KEYS.SHOT_LOGS, JSON.stringify(logs.slice(0, 100)));
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+    } catch (e) {
+      console.warn('Storage quota cleanup exception:', e);
+    }
+  }
+
+  public safeSetItem(key: string, value: string): boolean {
+    try {
+      localStorage.setItem(key, value);
+      return true;
+    } catch (err) {
+      console.warn(`[storageService] Quota warning while setting "${key}", attempting cleanup:`, err);
+      this.cleanUpStorageQuota();
+      try {
+        localStorage.setItem(key, value);
+        return true;
+      } catch (retryErr) {
+        console.error(`[storageService] Failed to set "${key}" even after quota cleanup:`, retryErr);
+        return false;
+      }
     }
   }
 
@@ -358,7 +415,13 @@ class StorageService {
 
   public getLineMonitoring(lineId: ProductionLineId): LineLiveMonitoringData | null {
     const all = this.getLinesMonitoring();
-    return all[lineId] || null;
+    if (!all[lineId]) {
+      const defaultData = this.generateLineMonitoring(lineId, INITIAL_LINE_CONFIGS[0], 100000);
+      all[lineId] = defaultData;
+      localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(all));
+      return defaultData;
+    }
+    return all[lineId];
   }
 
   public getSpareStocks(): SpareStockItem[] {

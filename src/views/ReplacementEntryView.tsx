@@ -481,7 +481,7 @@ export const ReplacementEntryView: React.FC<ReplacementEntryViewProps> = ({ init
   };
 
   return (
-    <div className="space-y-2">
+    <div className="replacement-entry-container space-y-2">
       {/* Integrated Top Header Card & Line + Tabs Navigation (Sticky Locked at Top) */}
       <div id="replacement-header" className="sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-lg p-2.5 sm:p-3 space-y-2 shadow-xl">
         {/* Row 1: Title & Line Selector Pills */}
