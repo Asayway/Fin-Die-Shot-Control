@@ -81,8 +81,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
           id: 'replacement-entry',
           label: t.sidebar.partReplacement,
           icon: Wrench,
-          badge: 'Hub',
+          badge: '2D Die',
           badgeColor: 'bg-cyan-950 text-cyan-300 border-cyan-500'
+        },
+        {
+          id: 'regrinding-management',
+          label: t.sidebar.regrindingHub,
+          icon: RotateCcw,
+          badge: 'Grind',
+          badgeColor: 'bg-emerald-950 text-emerald-300 border-emerald-500'
         },
       ]
     },
@@ -196,6 +203,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         ? isActive
                           ? 'bg-green-500 text-black border border-green-400 font-extrabold shadow-sm'
                           : 'bg-zinc-950/80 text-green-400 border border-zinc-900 hover:border-green-500/50 hover:bg-green-950/60'
+                        : isLight
+                        ? isActive
+                          ? 'bg-sky-50 text-sky-800 border-l-2 border-sky-600 font-semibold shadow-sm'
+                          : 'text-slate-700 hover:bg-slate-200/70 hover:text-slate-900 border border-transparent'
                         : isActive
                           ? 'bg-cyan-500/15 text-cyan-200 border-l-2 border-cyan-400 font-semibold shadow-sm'
                           : 'text-slate-300 hover:bg-slate-800/70 hover:text-white border border-transparent'
@@ -206,6 +217,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       className={`w-3.5 h-3.5 flex-shrink-0 transition-colors ${
                         isHmi
                           ? isActive ? 'text-black font-bold' : 'text-green-400 group-hover:text-green-300'
+                          : isLight
+                          ? isActive ? 'text-sky-600' : 'text-slate-500 group-hover:text-slate-900'
                           : isActive ? 'text-cyan-400' : 'text-slate-400 group-hover:text-cyan-300'
                       }`}
                     />
@@ -215,6 +228,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           <div className={`text-[11.5px] tracking-tight truncate leading-tight ${
                             isHmi
                               ? isActive ? 'text-black font-extrabold' : 'text-green-300 group-hover:text-green-200'
+                              : isLight
+                              ? isActive ? 'text-sky-900 font-semibold' : 'text-slate-700 group-hover:text-slate-900'
                               : isActive ? 'text-white font-medium' : 'text-slate-200 group-hover:text-white'
                           }`}>
                             {item.label}
@@ -227,6 +242,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 ? isActive
                                 ? 'bg-black text-green-400 border-black'
                                 : item.badgeColor || 'bg-green-950 text-green-400 border-green-600'
+                                : isLight
+                                ? isActive
+                                ? 'bg-sky-100 text-sky-800 border-sky-300'
+                                : 'bg-slate-200 text-slate-700 border-slate-300'
                                 : isActive
                                 ? 'bg-cyan-950 text-cyan-300 border-cyan-600'
                                 : item.badgeColor || 'bg-slate-800/90 text-slate-400 border-slate-700/80'

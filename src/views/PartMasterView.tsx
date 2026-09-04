@@ -1,1107 +1,682 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Database, 
-  Search, 
-  Save, 
-  CheckCircle2, 
-  AlertTriangle,
-  Plus,
-  Trash2,
-  X,
+import React, { useState, useMemo } from 'react';
+import {
+  Database,
+  Search,
+  CheckCircle2,
   Sliders,
   Layers,
-  Settings,
-  Check,
-  RotateCcw,
-  ArrowUp,
-  ArrowDown,
   Sparkles,
   Factory,
-  Info
+  Info,
+  Download,
+  FileSpreadsheet,
+  Printer,
+  ChevronRight,
+  ChevronDown,
+  Wrench,
+  ShieldCheck,
+  RotateCw,
+  Gauge,
+  Tag,
+  Hash,
+  Eye,
+  Filter,
+  Check
 } from 'lucide-react';
-import { PartMaster, TubeSizeCompat, ProductionLineId, LINE_INFO_MAP } from '../types';
-import { storageService } from '../services/storageService';
-import { formatThb } from '../services/calculationService';
-import { ResizableReorderableTable } from '../components/common/ResizableReorderableTable';
-
-interface LineInstalledPartItem {
-  partCode: string;
-  installQty: number;
-  displaySeq: number;
-  isActive: boolean;
-}
-
-const PRODUCTION_LINES: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5', 'E6'];
-
-// Preset 12-20 part templates for each line to ensure complete die setup per user requirement
-const STANDARD_LINE_PARTS_PRESETS: Record<string, Array<{ partCode: string; installQty: number }>> = {
-  'E1': [
-    { partCode: 'P-BUCK-001', installQty: 180 },
-    { partCode: 'P-IRON-001', installQty: 708 },
-    { partCode: 'D-IRON-001', installQty: 708 },
-    { partCode: 'P-LOUV-001', installQty: 708 },
-    { partCode: 'D-LOUV-001', installQty: 708 },
-    { partCode: 'P-REFL-001', installQty: 708 },
-    { partCode: 'D-REFL-001', installQty: 708 },
-    { partCode: 'P-SLIT-A07-OLD', installQty: 354 },
-    { partCode: 'P-SLIT-B07-OLD', installQty: 354 },
-    { partCode: 'D-SLIT-UP-07-OLD', installQty: 354 },
-    { partCode: 'D-SLIT-DN-07-OLD', installQty: 354 },
-    { partCode: 'B-ROW-SLIT-07', installQty: 118 },
-    { partCode: 'P-CUT-OFF-WL', installQty: 4 },
-    { partCode: 'D-CUT-OFF-WL', installQty: 4 },
-    { partCode: 'P-SIDE-001', installQty: 2 },
-    { partCode: 'D-SIDE-001', installQty: 2 }
-  ],
-  'E2': [
-    { partCode: 'P-BUCK-001', installQty: 120 },
-    { partCode: 'P-SLIT-05', installQty: 400 },
-    { partCode: 'D-SLIT-A05-4R', installQty: 200 },
-    { partCode: 'D-SLIT-B05-4R', installQty: 200 },
-    { partCode: 'P-IRON-001', installQty: 600 },
-    { partCode: 'D-IRON-001', installQty: 600 },
-    { partCode: 'P-LOUV-001', installQty: 600 },
-    { partCode: 'D-LOUV-001', installQty: 600 },
-    { partCode: 'P-REFL-001', installQty: 600 },
-    { partCode: 'D-REFL-001', installQty: 600 },
-    { partCode: 'B-ROW-SLIT-05A', installQty: 100 },
-    { partCode: 'B-ROW-SLIT-05B', installQty: 100 },
-    { partCode: 'P-CUT-OFF-WL', installQty: 4 },
-    { partCode: 'D-CUT-OFF-WL', installQty: 4 },
-    { partCode: 'P-SIDE-001', installQty: 2 }
-  ],
-  'E3-1': [
-    { partCode: 'P-BUCK-001', installQty: 160 },
-    { partCode: 'P-SLIT-NEW-07', installQty: 450 },
-    { partCode: 'D-SLIT-NEW-07', installQty: 450 },
-    { partCode: 'P-IRON-001', installQty: 708 },
-    { partCode: 'D-IRON-001', installQty: 708 },
-    { partCode: 'P-LOUV-001', installQty: 708 },
-    { partCode: 'D-LOUV-001', installQty: 708 },
-    { partCode: 'P-REFL-001', installQty: 708 },
-    { partCode: 'D-REFL-001', installQty: 708 },
-    { partCode: 'B-ROW-SLIT-07', installQty: 118 },
-    { partCode: 'B-ROW-SLIT-WL-4P', installQty: 118 },
-    { partCode: 'P-CUT-OFF-WL', installQty: 4 },
-    { partCode: 'D-CUT-OFF-WL', installQty: 4 },
-    { partCode: 'P-SIDE-001', installQty: 2 },
-    { partCode: 'D-SIDE-001', installQty: 2 }
-  ],
-  'E3-2': [
-    { partCode: 'P-BUCK-001', installQty: 160 },
-    { partCode: 'P-LOUV-WL-UP', installQty: 350 },
-    { partCode: 'P-LOUV-WL-DN', installQty: 350 },
-    { partCode: 'P-IRON-001', installQty: 708 },
-    { partCode: 'D-IRON-001', installQty: 708 },
-    { partCode: 'P-REFL-001', installQty: 708 },
-    { partCode: 'D-REFL-001', installQty: 708 },
-    { partCode: 'B-ROW-SLIT-WL-4P', installQty: 118 },
-    { partCode: 'P-CUT-OFF-WL', installQty: 4 },
-    { partCode: 'D-CUT-OFF-WL', installQty: 4 },
-    { partCode: 'P-SIDE-001', installQty: 2 },
-    { partCode: 'D-SIDE-001', installQty: 2 },
-    { partCode: 'P-SLIT-NEW-07', installQty: 350 },
-    { partCode: 'D-SLIT-NEW-07', installQty: 350 }
-  ],
-  'E3-3': [
-    { partCode: 'P-BUCK-001', installQty: 160 },
-    { partCode: 'P-SLIT-NEW-07', installQty: 350 },
-    { partCode: 'D-SLIT-NEW-07', installQty: 350 },
-    { partCode: 'P-IRON-001', installQty: 708 },
-    { partCode: 'D-IRON-001', installQty: 708 },
-    { partCode: 'P-LOUV-WL-UP', installQty: 350 },
-    { partCode: 'P-LOUV-WL-DN', installQty: 350 },
-    { partCode: 'P-REFL-001', installQty: 708 },
-    { partCode: 'D-REFL-001', installQty: 708 },
-    { partCode: 'B-ROW-SLIT-WL-4P', installQty: 118 },
-    { partCode: 'P-CUT-OFF-WL', installQty: 4 },
-    { partCode: 'D-CUT-OFF-WL', installQty: 4 },
-    { partCode: 'P-SIDE-001', installQty: 2 },
-    { partCode: 'D-SIDE-001', installQty: 2 }
-  ],
-  'E4': [
-    { partCode: 'P-BUCK-001', installQty: 140 },
-    { partCode: 'P-SLIT-05', installQty: 380 },
-    { partCode: 'D-SLIT-A05-3R', installQty: 190 },
-    { partCode: 'D-SLIT-B05-3R', installQty: 190 },
-    { partCode: 'P-IRON-001', installQty: 570 },
-    { partCode: 'D-IRON-001', installQty: 570 },
-    { partCode: 'P-LOUV-001', installQty: 570 },
-    { partCode: 'D-LOUV-001', installQty: 570 },
-    { partCode: 'P-REFL-001', installQty: 570 },
-    { partCode: 'D-REFL-001', installQty: 570 },
-    { partCode: 'B-ROW-SLIT-05A', installQty: 95 },
-    { partCode: 'B-ROW-SLIT-05B', installQty: 95 },
-    { partCode: 'P-CUT-OFF-WL', installQty: 4 },
-    { partCode: 'D-CUT-OFF-WL', installQty: 4 },
-    { partCode: 'P-SIDE-001', installQty: 2 }
-  ],
-  'E5': [
-    { partCode: 'P-BUCK-001', installQty: 140 },
-    { partCode: 'P-SLIT-05', installQty: 380 },
-    { partCode: 'D-SLIT-A05-3R', installQty: 190 },
-    { partCode: 'D-SLIT-B05-3R', installQty: 190 },
-    { partCode: 'P-IRON-001', installQty: 570 },
-    { partCode: 'D-IRON-001', installQty: 570 },
-    { partCode: 'P-LOUV-001', installQty: 570 },
-    { partCode: 'D-LOUV-001', installQty: 570 },
-    { partCode: 'P-REFL-001', installQty: 570 },
-    { partCode: 'D-REFL-001', installQty: 570 },
-    { partCode: 'B-ROW-SLIT-05A', installQty: 95 },
-    { partCode: 'B-ROW-SLIT-05B', installQty: 95 },
-    { partCode: 'P-CUT-OFF-WL', installQty: 4 },
-    { partCode: 'D-CUT-OFF-WL', installQty: 4 },
-    { partCode: 'P-SIDE-001', installQty: 2 }
-  ],
-  'E6': [
-    { partCode: 'P-BUCK-001', installQty: 120 },
-    { partCode: 'P-IRON-001', installQty: 708 },
-    { partCode: 'D-IRON-001', installQty: 708 },
-    { partCode: 'P-LOUV-001', installQty: 708 },
-    { partCode: 'D-LOUV-001', installQty: 708 },
-    { partCode: 'P-REFL-001', installQty: 708 },
-    { partCode: 'D-REFL-001', installQty: 708 },
-    { partCode: 'P-SLIT-A07-OLD', installQty: 354 },
-    { partCode: 'P-SLIT-B07-OLD', installQty: 354 },
-    { partCode: 'D-SLIT-UP-07-OLD', installQty: 354 },
-    { partCode: 'D-SLIT-DN-07-OLD', installQty: 354 },
-    { partCode: 'B-ROW-SLIT-07', installQty: 118 },
-    { partCode: 'P-CUT-OFF-WL', installQty: 4 },
-    { partCode: 'D-CUT-OFF-WL', installQty: 4 },
-    { partCode: 'P-SIDE-001', installQty: 2 },
-    { partCode: 'D-SIDE-001', installQty: 2 }
-  ]
-};
+import { MoldDieMasterItem, ProductionLineId } from '../types';
+import { MOLD_DIE_MASTER_ITEMS_2025 } from '../data/moldDieMasterData';
 
 export const PartMasterView: React.FC = () => {
-  const [activeMainTab, setActiveMainTab] = useState<'CATALOG' | 'LINE_MAPPING'>('CATALOG');
-  const [parts, setParts] = useState<PartMaster[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<'PUNCH' | 'DIE' | 'BLADE' | 'PIN' | 'CORNER_CUT' | 'CENTER_PUNCH' | 'OTHER' | 'ALL'>('ALL');
-  
-  const [isEditing, setIsEditing] = useState(false);
-  const [editValues, setEditValues] = useState<Record<string, Partial<PartMaster>>>({});
-  
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newPart, setNewPart] = useState<PartMaster>({
-    partCode: '',
-    partName: '',
-    partNameTh: '',
-    stageName: '',
-    category: 'PUNCH',
-    drawingNumber: '',
-    unitCostThb: 0,
-    tubeSizeCompat: 'BOTH'
-  });
+  const [selectedStage, setSelectedStage] = useState<string>('ALL');
+  const [selectedLineFilter, setSelectedLineFilter] = useState<string>('ALL');
+  const [selectedPartForDetail, setSelectedPartForDetail] = useState<MoldDieMasterItem | null>(null);
+  const [showRegrindOnly, setShowRegrindOnly] = useState(false);
 
-  // Line Installed Parts & Qty State
-  const [selectedLineId, setSelectedLineId] = useState<ProductionLineId>('E6');
-  const [linePartsList, setLinePartsList] = useState<LineInstalledPartItem[]>([]);
-  const [selectedAddPartCode, setSelectedAddPartCode] = useState<string>('');
-  const [customInstallQty, setCustomInstallQty] = useState<number>(100);
-  
-  const [feedback, setFeedback] = useState<{type: 'success'|'error', message: string} | null>(null);
+  // Extract all unique stages
+  const allStages = useMemo(() => {
+    const stageSet = new Set<string>();
+    MOLD_DIE_MASTER_ITEMS_2025.forEach(item => stageSet.add(item.stage));
+    return Array.from(stageSet);
+  }, []);
 
-  const loadCatalogData = () => {
-    setParts(storageService.getPartMasters());
-  };
-
-  const loadLinePartsData = (lineId: ProductionLineId) => {
-    const lineMonitoring = storageService.getLineMonitoring(lineId);
-    const lineConfigs = storageService.getLineConfigs();
-    const activeCfg = lineConfigs.find(c => c.lineId === lineId && c.isActive) || lineConfigs.find(c => c.lineId === lineId);
-    
-    let items: LineInstalledPartItem[] = [];
-
-    if (lineMonitoring && lineMonitoring.items && lineMonitoring.items.length > 0) {
-      items = lineMonitoring.items.map((it, idx) => ({
-        partCode: it.partCode,
-        installQty: it.installQty || 1,
-        displaySeq: idx + 1,
-        isActive: it.isActive !== false
-      }));
-    } else if (activeCfg && activeCfg.installedPartQuantities && Object.keys(activeCfg.installedPartQuantities).length > 0) {
-      items = Object.entries(activeCfg.installedPartQuantities).map(([code, qty], idx) => ({
-        partCode: code,
-        installQty: qty,
-        displaySeq: idx + 1,
-        isActive: true
-      }));
-    } else {
-      // Load preset 12-20 parts
-      const preset = STANDARD_LINE_PARTS_PRESETS[lineId] || STANDARD_LINE_PARTS_PRESETS['E6'];
-      items = preset.map((p, idx) => ({
-        partCode: p.partCode,
-        installQty: p.installQty,
-        displaySeq: idx + 1,
-        isActive: true
-      }));
-    }
-
-    setLinePartsList(items);
-  };
-
-  useEffect(() => {
-    loadCatalogData();
-    loadLinePartsData(selectedLineId);
-    const unsub = storageService.subscribe(() => {
-      loadCatalogData();
-      loadLinePartsData(selectedLineId);
-    });
-    return () => unsub();
-  }, [selectedLineId]);
-
-  const handleSelectLine = (lineId: ProductionLineId) => {
-    setSelectedLineId(lineId);
-    loadLinePartsData(lineId);
-  };
-
-  const handleApplyPresetTemplate = () => {
-    const preset = STANDARD_LINE_PARTS_PRESETS[selectedLineId] || STANDARD_LINE_PARTS_PRESETS['E6'];
-    const items: LineInstalledPartItem[] = preset.map((p, idx) => ({
-      partCode: p.partCode,
-      installQty: p.installQty,
-      displaySeq: idx + 1,
-      isActive: true
-    }));
-    setLinePartsList(items);
-    setFeedback({ type: 'success', message: `โหลดเทมเพลตมาตรฐาน ${items.length} รายการ สำหรับไลน์ ${selectedLineId} เรียบร้อยแล้ว (กดบันทึกเพื่อซิงค์ข้อมูลลง TV Dashboard)` });
-    setTimeout(() => setFeedback(null), 4000);
-  };
-
-  const handleAddPartToLine = () => {
-    if (!selectedAddPartCode) return;
-    if (linePartsList.some(p => p.partCode === selectedAddPartCode)) {
-      setFeedback({ type: 'error', message: `รหัสชิ้นส่วน ${selectedAddPartCode} มีอยู่ในรายการของไลน์นี้แล้ว` });
-      setTimeout(() => setFeedback(null), 3000);
-      return;
-    }
-
-    const newItem: LineInstalledPartItem = {
-      partCode: selectedAddPartCode,
-      installQty: customInstallQty > 0 ? customInstallQty : 100,
-      displaySeq: linePartsList.length + 1,
-      isActive: true
-    };
-
-    setLinePartsList(prev => [...prev, newItem]);
-    setSelectedAddPartCode('');
-    setFeedback({ type: 'success', message: `เพิ่ม ${selectedAddPartCode} (จำนวน ${newItem.installQty}) เข้าไลน์ ${selectedLineId} แล้ว` });
-    setTimeout(() => setFeedback(null), 3000);
-  };
-
-  const handleRemovePartFromLine = (partCode: string) => {
-    setLinePartsList(prev => prev.filter(p => p.partCode !== partCode));
-  };
-
-  const handleLineQtyChange = (partCode: string, qty: number) => {
-    setLinePartsList(prev => prev.map(p => p.partCode === partCode ? { ...p, installQty: Math.max(1, qty) } : p));
-  };
-
-  const handleLineActiveToggle = (partCode: string) => {
-    setLinePartsList(prev => prev.map(p => p.partCode === partCode ? { ...p, isActive: !p.isActive } : p));
-  };
-
-  const handleMoveLineSeq = (index: number, direction: 'UP' | 'DOWN') => {
-    if ((direction === 'UP' && index === 0) || (direction === 'DOWN' && index === linePartsList.length - 1)) return;
-    const newList = [...linePartsList];
-    const targetIdx = direction === 'UP' ? index - 1 : index + 1;
-    const temp = newList[index];
-    newList[index] = newList[targetIdx];
-    newList[targetIdx] = temp;
-
-    // re-index displaySeq
-    newList.forEach((item, idx) => {
-      item.displaySeq = idx + 1;
-    });
-
-    setLinePartsList(newList);
-  };
-
-  const handleSaveLineInstalledParts = () => {
-    const activeItems = linePartsList.filter(p => p.isActive && p.installQty > 0);
-    const result = storageService.saveLineInstalledParts(selectedLineId, activeItems);
-
-    if (result.success) {
-      setFeedback({ type: 'success', message: result.message });
-      loadLinePartsData(selectedLineId);
-    } else {
-      setFeedback({ type: 'error', message: 'เกิดข้อผิดพลาดในการบันทึกข้อมูล' });
-    }
-    setTimeout(() => setFeedback(null), 4000);
-  };
-
-  const filteredParts = parts.filter(p => {
-    const matchesSearch = 
-      p.partCode.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      p.partName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (p.partNameTh && p.partNameTh.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (p.drawingNumber && p.drawingNumber.toLowerCase().includes(searchTerm.toLowerCase()));
-      
-    const matchesCat = selectedCategory === 'ALL' || p.category === selectedCategory;
-    
-    return matchesSearch && matchesCat;
-  });
-
-  const handleEditClick = () => {
-    const initialEdits: Record<string, Partial<PartMaster>> = {};
-    parts.forEach(p => {
-      initialEdits[p.partCode] = { ...p };
-    });
-    setEditValues(initialEdits);
-    setIsEditing(true);
-  };
-
-  const handleCancelClick = () => {
-    setEditValues({});
-    setIsEditing(false);
-  };
-
-  const handleSaveMatrix = () => {
-    const updatedParts = parts.map(p => {
-      if (editValues[p.partCode]) {
-        return { ...p, ...editValues[p.partCode] } as PartMaster;
-      }
-      return p;
-    });
-    
-    updatedParts.forEach(p => storageService.savePartMaster(p));
-    
-    setFeedback({ type: 'success', message: 'Matrix changes saved successfully' });
-    setTimeout(() => setFeedback(null), 3000);
-    setIsEditing(false);
-    loadCatalogData();
-  };
-
-  const handleValueChange = (partCode: string, field: keyof PartMaster, value: any) => {
-    setEditValues(prev => ({
-      ...prev,
-      [partCode]: {
-        ...prev[partCode],
-        [field]: value
-      }
-    }));
-  };
-
-  const handleDelete = (partCode: string) => {
-    if (window.confirm(`Are you sure you want to delete ${partCode}?`)) {
-      storageService.deletePartMaster(partCode);
-      setFeedback({ type: 'success', message: `Deleted ${partCode}` });
-      setTimeout(() => setFeedback(null), 3000);
-    }
-  };
-
-  const handleAddPart = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newPart.partCode || !newPart.partName) {
-      setFeedback({ type: 'error', message: 'Part Code and Name are required' });
-      return;
-    }
-    
-    if (parts.some(p => p.partCode === newPart.partCode)) {
-      setFeedback({ type: 'error', message: `Part Code ${newPart.partCode} already exists` });
-      return;
-    }
-    
-    storageService.savePartMaster(newPart);
-    setShowAddModal(false);
-    setNewPart({
-      partCode: '',
-      partName: '',
-      partNameTh: '',
-      stageName: '',
-      category: 'PUNCH',
-      drawingNumber: '',
-      unitCostThb: 0,
-      tubeSizeCompat: 'BOTH'
-    });
-    setFeedback({ type: 'success', message: 'New part added successfully' });
-    setTimeout(() => setFeedback(null), 3000);
-  };
-
-  const handleAutoAlignTubeSizes = () => {
-    let updatedCount = 0;
-    parts.forEach(p => {
-      let expectedTube: 'Ø5' | 'Ø7' | 'Ø9.52' | 'BOTH' = 'BOTH';
-      const code = p.partCode.toUpperCase();
-      if (code.includes('-05') || code.includes('05')) {
-        expectedTube = 'Ø5';
-      } else if (code.includes('-07') || code.includes('07') || code.includes('WL') || code.includes('CORR')) {
-        expectedTube = 'Ø7';
-      } else if (p.category === 'PUNCH' || p.category === 'DIE') {
-        if (code.includes('SLIT')) {
-          expectedTube = code.includes('05') ? 'Ø5' : 'Ø7';
-        }
+  // Filtered master items
+  const filteredItems = useMemo(() => {
+    return MOLD_DIE_MASTER_ITEMS_2025.filter(item => {
+      // Stage filter
+      if (selectedStage !== 'ALL' && item.stage !== selectedStage) {
+        return false;
       }
 
-      if (p.tubeSizeCompat !== expectedTube && expectedTube !== 'BOTH') {
-        p.tubeSizeCompat = expectedTube;
-        storageService.savePartMaster(p);
-        updatedCount++;
+      // Line filter
+      if (selectedLineFilter !== 'ALL') {
+        const qtyMap: Record<string, number | undefined> = {
+          'E1': item.installQty.e1,
+          'E2': item.installQty.e2,
+          'E3-1': item.installQty.e3_1,
+          'E3-2': item.installQty.e3_2,
+          'E3-3': item.installQty.e3_3,
+          'E4': item.installQty.e4,
+          'E5': item.installQty.e5,
+          'E6': item.installQty.e6,
+        };
+        const lineQty = qtyMap[selectedLineFilter];
+        if (!lineQty || lineQty <= 0) return false;
       }
+
+      // Regrind only filter
+      if (showRegrindOnly && (item.regrindStandard.perGrindMm === '-' || item.regrindStandard.perGrindMm.includes('Dispose'))) {
+        return false;
+      }
+
+      // Text search
+      if (searchTerm.trim()) {
+        const term = searchTerm.toLowerCase();
+        const matchName = item.partName.toLowerCase().includes(term);
+        const matchStage = item.stage.toLowerCase().includes(term);
+        const matchDwg = item.drawingNo?.toLowerCase().includes(term) || false;
+        const matchNo = item.no.toString() === term;
+        return matchName || matchStage || matchDwg || matchNo;
+      }
+
+      return true;
     });
+  }, [selectedStage, selectedLineFilter, showRegrindOnly, searchTerm]);
 
-    setFeedback({ type: 'success', message: `ตั้งค่าขนาดท่อตรงตามสเปกไลน์อัตโนมัติสำเร็จ (${updatedCount} รายการได้รับการปรับปรุง)` });
-    setTimeout(() => setFeedback(null), 4000);
-    loadCatalogData();
+  // Stage color mapper
+  const getStageColor = (stage: string) => {
+    switch (stage) {
+      case 'PIERCE & BURRING':
+        return 'bg-amber-950/40 text-amber-300 border-amber-800/60';
+      case 'IRONING':
+        return 'bg-blue-950/40 text-blue-300 border-blue-800/60';
+      case 'LOUVER':
+      case 'WIDE LOWER':
+        return 'bg-emerald-950/40 text-emerald-300 border-emerald-800/60';
+      case 'REFLARE':
+        return 'bg-cyan-950/40 text-cyan-300 border-cyan-800/60';
+      case 'SLIT':
+      case 'ROW SLIT':
+        return 'bg-purple-950/40 text-purple-300 border-purple-800/60';
+      case 'CUT OFF':
+      case 'SIDE CUT':
+        return 'bg-rose-950/40 text-rose-300 border-rose-800/60';
+      case 'S5 CENTER NOTCH':
+      case 'CORNER CUT':
+        return 'bg-indigo-950/40 text-indigo-300 border-indigo-800/60';
+      case 'HITCH FEED':
+      case 'BACK STOP':
+        return 'bg-teal-950/40 text-teal-300 border-teal-800/60';
+      case 'FORMING':
+        return 'bg-orange-950/40 text-orange-300 border-orange-800/60';
+      default:
+        return 'bg-slate-800/50 text-slate-300 border-slate-700';
+    }
   };
 
-  const stats = {
-    total: parts.length,
-    punch: parts.filter(p => p.category === 'PUNCH').length,
-    die: parts.filter(p => p.category === 'DIE').length,
-    blade: parts.filter(p => p.category === 'BLADE').length,
-    pin: parts.filter(p => p.category === 'PIN').length,
-    corner: parts.filter(p => p.category === 'CORNER_CUT').length,
-    center: parts.filter(p => p.category === 'CENTER_PUNCH').length,
-    other: parts.filter(p => p.category === 'OTHER').length,
-  };
+  // Export to CSV Function
+  const handleExportCSV = () => {
+    const headers = [
+      'No',
+      'Stage',
+      'Part Name',
+      'Drawing No',
+      'E1 Qty',
+      'E2 Qty',
+      'E3(1) Qty',
+      'E3(2) Qty',
+      'E3(3) Qty',
+      'E4 Qty',
+      'E5 Qty',
+      'E6 Qty',
+      'Total Qty',
+      'E1 Shot Life (M)',
+      'E2 Shot Life (M)',
+      'E3(1) Shot Life (M)',
+      'E3(2) Shot Life (M)',
+      'E3(3) Shot Life (M)',
+      'E4 Shot Life (M)',
+      'E5 Shot Life (M)',
+      'E6 Shot Life (M)',
+      'Spec Parts',
+      'Lower Spec Limit',
+      '1 time / re-grind (mm)',
+      'Total re-grind (mm)',
+      'Number of re-grinding',
+      'Note'
+    ];
 
-  const spareStocks = storageService.getSpareStocks();
+    const rows = filteredItems.map(item => [
+      item.no,
+      `"${item.stage}"`,
+      `"${item.partName}"`,
+      `"${item.drawingNo || ''}"`,
+      item.installQty.e1 || '-',
+      item.installQty.e2 || '-',
+      item.installQty.e3_1 || '-',
+      item.installQty.e3_2 || '-',
+      item.installQty.e3_3 || '-',
+      item.installQty.e4 || '-',
+      item.installQty.e5 || '-',
+      item.installQty.e6 || '-',
+      item.installQty.totalQty,
+      item.shotLifeCycle.e1_pcm || '-',
+      item.shotLifeCycle.e2_gold || '-',
+      item.shotLifeCycle.e3_1_pcm || '-',
+      item.shotLifeCycle.e3_2_gold || '-',
+      item.shotLifeCycle.e3_3_gold || '-',
+      item.shotLifeCycle.e4_bare || '-',
+      item.shotLifeCycle.e5_bare || '-',
+      item.shotLifeCycle.e6_pcm || '-',
+      item.shotLifeCycle.partsSpec || '-',
+      item.shotLifeCycle.lowerSpecScrapLimit || '-',
+      `"${item.regrindStandard.perGrindMm}"`,
+      `"${item.regrindStandard.totalGrindMm}"`,
+      `"${item.regrindStandard.regrindCycles}"`,
+      `"${item.regrindStandard.note}"`
+    ]);
+
+    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `Mold_Die_Parts_Master_TH_31.01.2025_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
-    <div className="space-y-6">
-      {/* Sticky Header & Navigation Tabs */}
-      <div className="sticky top-[130px] sm:top-[115px] z-20 space-y-4 pb-2 bg-slate-900/95 backdrop-blur-sm -mx-2 px-2">
-        {/* Header Title Bar */}
-        <div className="bg-[#0F172A] border border-slate-700 rounded-lg p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-md">
+    <div className="space-y-6 animate-fadeIn pb-12 font-sans">
+      {/* ======================================================== */}
+      {/* 1. HEADER & KPI METRICS SUMMARY */}
+      {/* ======================================================== */}
+      <div className="bg-[#0B132B] border border-slate-800/90 rounded-2xl p-5 sm:p-6 shadow-xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 relative z-10">
           <div>
-            <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2 font-sans">
-              <Database className="w-5 h-5 text-cyan-400" />
-              <span>Fin Die Parts Master & Line Setup (เครื่องมือตั้งค่าชิ้นส่วนแม่พิมพ์)</span>
-            </h2>
-            <p className="text-sm text-slate-400 mt-1 font-thai">
-              จัดการฐานข้อมูลชิ้นส่วนหลัก และกำหนดรายการชิ้นส่วนติดตั้งพร้อมจำนวนสำหรับแต่ละสายผลิต (12-20 รายการต่อไลน์สำหรับ TV Dashboard)
-            </p>
-          </div>
-          
-          {/* Main Module Tabs Switcher */}
-          <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-700">
-            <button
-              onClick={() => setActiveMainTab('CATALOG')}
-              className={`px-4 py-2 rounded-md text-xs sm:text-sm font-bold transition-all flex items-center gap-2 ${
-                activeMainTab === 'CATALOG'
-                  ? 'bg-cyan-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Database className="w-4 h-4" />
-              <span>1. คลังชิ้นส่วนหลัก (Part Catalog)</span>
-            </button>
-
-            <button
-              onClick={() => setActiveMainTab('LINE_MAPPING')}
-              className={`px-4 py-2 rounded-md text-xs sm:text-sm font-bold transition-all flex items-center gap-2 ${
-                activeMainTab === 'LINE_MAPPING'
-                  ? 'bg-amber-500 text-slate-950 shadow-md font-extrabold'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Factory className="w-4 h-4" />
-              <span>2. ตั้งค่าชิ้นส่วนและจำนวนตามไลน์ E1-E6 (12-20 รายการ)</span>
-            </button>
-          </div>
-        </div>
-
-        {feedback && (
-          <div className={`p-3 rounded flex items-center gap-2 text-sm font-bold ${
-            feedback.type === 'success' ? 'bg-emerald-950/80 border border-emerald-800 text-emerald-400' : 
-            'bg-rose-950/80 border border-rose-800 text-rose-400'
-          }`}>
-            {feedback.type === 'success' ? <CheckCircle2 className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
-            <span>{feedback.message}</span>
-          </div>
-        )}
-      </div>
-
-      {/* TAB 1: MASTER PART CATALOG */}
-      {activeMainTab === 'CATALOG' && (
-        <div className="space-y-4 animate-fadeIn">
-          {/* Controls Bar for Catalog */}
-          <div className="bg-slate-900 border border-slate-700 rounded-lg p-3 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="flex items-center gap-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 w-full sm:w-auto">
-              <Search className="w-4 h-4 text-slate-400" />
-              <input 
-                type="text" 
-                placeholder="ค้นหาชิ้นส่วน / รหัส / ชื่อ..." 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="bg-transparent border-none text-white text-xs sm:text-sm focus:outline-none w-full sm:w-64 font-mono"
-              />
-            </div>
-            
-            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-              {isEditing ? (
-                <div className="flex items-center gap-2">
-                  <button onClick={handleCancelClick} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded text-xs font-bold transition-colors">
-                    ยกเลิก (Cancel)
-                  </button>
-                  <button onClick={handleSaveMatrix} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold transition-colors">
-                    บันทึกทั้งหมด (Save Matrix)
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <button 
-                    onClick={handleEditClick} 
-                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-bold transition-colors"
-                  >
-                    แก้ไขตาราง (Edit Matrix)
-                  </button>
-                  <button 
-                    onClick={() => setShowAddModal(true)} 
-                    className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded text-xs shadow-lg shadow-cyan-900/50 flex items-center gap-1.5 transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>เพิ่มชิ้นส่วนใหม่</span>
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Category Quick Tabs */}
-          <div className="flex flex-wrap gap-2">
-            {[
-              { id: 'ALL', label: `ทั้งหมด (${stats.total})` },
-              { id: 'PUNCH', label: `PUNCH (${stats.punch})` },
-              { id: 'DIE', label: `DIE (${stats.die})` },
-              { id: 'BLADE', label: `BLADE (${stats.blade})` },
-              { id: 'PIN', label: `PIN (${stats.pin})` },
-              { id: 'CORNER_CUT', label: `CORNER CUT (${stats.corner})` },
-              { id: 'CENTER_PUNCH', label: `CENTER PUNCH (${stats.center})` },
-              { id: 'OTHER', label: `OTHER (${stats.other})` }
-            ].map(cat => (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id as any)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-colors border ${
-                  selectedCategory === cat.id
-                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50'
-                    : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-slate-200'
-                }`}
-              >
-                {cat.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Catalog Data Table */}
-          <ResizableReorderableTable<PartMaster>
-            data={filteredParts}
-            keyExtractor={(item) => item.partCode}
-            columns={[
-              {
-                id: 'partCode',
-                label: 'PART CODE',
-                width: 130,
-                render: (p) => <span className="font-mono font-black text-cyan-300">{p.partCode}</span>
-              },
-              {
-                id: 'partName',
-                label: 'PART NAME',
-                width: 220,
-                render: (p) => isEditing ? (
-                  <input
-                    type="text"
-                    value={editValues[p.partCode]?.partName ?? p.partName}
-                    onChange={(e) => handleValueChange(p.partCode, 'partName', e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-100 font-sans font-bold focus:border-cyan-500 focus:outline-none"
-                    placeholder="Part Name"
-                  />
-                ) : (
-                  <div className="font-sans font-bold text-slate-100 text-xs sm:text-sm">{p.partName}</div>
-                )
-              },
-              {
-                id: 'category',
-                label: 'CATEGORY',
-                width: 120,
-                render: (p) => isEditing ? (
-                  <select
-                    value={editValues[p.partCode]?.category ?? p.category}
-                    onChange={(e) => handleValueChange(p.partCode, 'category', e.target.value as any)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 font-mono"
-                  >
-                    <option value="PUNCH">PUNCH</option>
-                    <option value="DIE">DIE</option>
-                    <option value="BLADE">BLADE</option>
-                    <option value="PIN">PIN</option>
-                    <option value="CORNER_CUT">CORNER_CUT</option>
-                    <option value="CENTER_PUNCH">CENTER_PUNCH</option>
-                    <option value="OTHER">OTHER</option>
-                  </select>
-                ) : (
-                  <span className={`text-[11px] font-mono px-2 py-0.5 rounded font-bold border ${
-                    p.category === 'PUNCH' ? 'bg-cyan-950 text-cyan-300 border-cyan-800' :
-                    p.category === 'DIE' ? 'bg-indigo-950 text-indigo-300 border-indigo-800' :
-                    p.category === 'BLADE' ? 'bg-emerald-950 text-emerald-300 border-emerald-800' :
-                    'bg-slate-800 text-slate-300 border-slate-700'
-                  }`}>
-                    {p.category}
-                  </span>
-                )
-              },
-              {
-                id: 'stageName',
-                label: 'STAGE NAME',
-                width: 150,
-                render: (p) => isEditing ? (
-                  <input
-                    type="text"
-                    value={editValues[p.partCode]?.stageName ?? p.stageName ?? ''}
-                    onChange={(e) => handleValueChange(p.partCode, 'stageName', e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 font-mono"
-                    placeholder="Stage Name"
-                  />
-                ) : (
-                  <span className="text-slate-300 text-xs font-mono">{p.stageName || '-'}</span>
-                )
-              },
-              {
-                id: 'drawingNumber',
-                label: 'DRAWING NO.',
-                width: 120,
-                render: (p) => isEditing ? (
-                  <input
-                    type="text"
-                    value={editValues[p.partCode]?.drawingNumber ?? p.drawingNumber ?? ''}
-                    onChange={(e) => handleValueChange(p.partCode, 'drawingNumber', e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-amber-300 font-mono"
-                    placeholder="Drawing No."
-                  />
-                ) : (
-                  <span className="font-mono text-xs text-amber-300 font-semibold">{p.drawingNumber || '-'}</span>
-                )
-              },
-              {
-                id: 'tubeSizeCompat',
-                label: 'TUBE SIZE',
-                width: 100,
-                render: (p) => isEditing ? (
-                  <select
-                    value={editValues[p.partCode]?.tubeSizeCompat ?? p.tubeSizeCompat}
-                    onChange={(e) => handleValueChange(p.partCode, 'tubeSizeCompat', e.target.value as any)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-cyan-300 font-mono font-bold"
-                  >
-                    <option value="Ø5">Ø5</option>
-                    <option value="Ø7">Ø7</option>
-                    <option value="Ø9.52">Ø9.52</option>
-                    <option value="BOTH">BOTH</option>
-                  </select>
-                ) : (
-                  <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-800 text-cyan-300">
-                    {p.tubeSizeCompat}
-                  </span>
-                )
-              },
-              {
-                id: 'unitCostThb',
-                label: 'UNIT COST (THB)',
-                width: 120,
-                render: (p) => isEditing ? (
-                  <input
-                    type="number"
-                    value={editValues[p.partCode]?.unitCostThb ?? p.unitCostThb ?? 0}
-                    onChange={(e) => handleValueChange(p.partCode, 'unitCostThb', parseFloat(e.target.value) || 0)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-emerald-400 font-mono font-bold"
-                  />
-                ) : (
-                  <span className="font-mono text-xs text-emerald-400 font-semibold">{formatThb(p.unitCostThb)}</span>
-                )
-              },
-              {
-                id: 'actions',
-                label: 'ACTION',
-                width: 80,
-                render: (p) => (
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(p.partCode)}
-                    disabled={isEditing}
-                    className="p-1.5 rounded bg-slate-800 hover:bg-red-950 text-slate-400 hover:text-red-400 border border-slate-700 hover:border-red-800 transition-colors disabled:opacity-50"
-                    title="Delete Part"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                )
-              }
-            ]}
-          />
-        </div>
-      )}
-
-      {/* TAB 2: LINE INSTALLED PARTS & QTY SETUP (12-20 ITEMS PER LINE) */}
-      {activeMainTab === 'LINE_MAPPING' && (
-        <div className="space-y-4 animate-fadeIn">
-          {/* Production Line Button Bar */}
-          <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
-              <div>
-                <h3 className="text-base font-bold text-white flex items-center gap-2 font-sans">
-                  <Factory className="w-5 h-5 text-amber-400" />
-                  <span>เลือกสายการผลิตเพื่อตั้งค่ารายการและจำนวนชิ้นส่วนติดตั้ง (Line Part Setup)</span>
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  กำหนดชิ้นส่วนสำหรับสายผลิต <span className="text-amber-300 font-bold font-mono">LINE {selectedLineId}</span> เพื่อให้แสดงผลใน TV Dashboard ครบถ้วน 12 - 20 รายการต่อไลน์
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleApplyPresetTemplate}
-                  className="px-3.5 py-2 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-extrabold text-xs rounded-lg shadow-lg flex items-center gap-1.5 transition-all"
-                  title="โหลดชุดชิ้นส่วนมาตรฐาน 12-20 รายการสำหรับไลน์นี้"
-                >
-                  <Sparkles className="w-4 h-4 text-slate-950" />
-                  <span>✨ โหลดชุดมาตรฐาน 12-20 รายการ (Load Preset)</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Line Selection Tabs */}
-            <div className="flex flex-wrap gap-2">
-              {PRODUCTION_LINES.map(lineId => {
-                const info = LINE_INFO_MAP[lineId];
-                const isSelected = selectedLineId === lineId;
-                const displayLine = lineId.startsWith('E3-') ? 'E3' : lineId;
-
-                return (
-                  <button
-                    key={lineId}
-                    onClick={() => handleSelectLine(lineId)}
-                    className={`px-3.5 py-2 rounded-lg text-xs font-mono font-bold transition-all flex items-center gap-2 border ${
-                      isSelected
-                        ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-lg scale-105 ring-2 ring-amber-400/50'
-                        : 'bg-slate-950 hover:bg-slate-800 text-slate-300 border-slate-800'
-                    }`}
-                  >
-                    <span>{displayLine}</span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
-                      isSelected ? 'bg-slate-900 text-amber-300' : 'bg-slate-800 text-slate-400'
-                    }`}>
-                      {info?.shortTag || lineId} ({info?.tubeSize || 'Ø7'})
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Quick Add Part to Current Line Bar */}
-          <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-3">
-            <div className="flex items-center gap-3 w-full md:w-auto flex-1">
-              <span className="text-xs font-bold text-slate-300 font-mono whitespace-nowrap">เพิ่มชิ้นส่วนเข้าไลน์ {selectedLineId}:</span>
-              <select
-                value={selectedAddPartCode}
-                onChange={e => setSelectedAddPartCode(e.target.value)}
-                className="bg-slate-950 text-cyan-300 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono font-bold focus:outline-none focus:border-cyan-500 flex-1 max-w-md"
-              >
-                <option value="">-- เลือกชิ้นส่วนจาก Master Catalog --</option>
-                {parts.map(p => (
-                  <option key={p.partCode} value={p.partCode}>
-                    [{p.partCode}] {p.partName} ({p.partNameTh || p.category})
-                  </option>
-                ))}
-              </select>
-
-              <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-700 rounded-lg px-2 py-1">
-                <span className="text-[11px] text-slate-400 font-mono">จำนวน:</span>
-                <input
-                  type="number"
-                  value={customInstallQty}
-                  onChange={e => setCustomInstallQty(parseInt(e.target.value, 10) || 1)}
-                  className="w-20 bg-transparent text-amber-300 font-bold text-xs font-mono focus:outline-none"
-                  min="1"
-                />
-                <span className="text-[11px] text-slate-400 font-mono">EA</span>
-              </div>
-            </div>
-
-            <button
-              onClick={handleAddPartToLine}
-              disabled={!selectedAddPartCode}
-              className="w-full md:w-auto px-4 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-bold text-xs rounded-lg shadow-md flex items-center justify-center gap-1.5 transition-all"
-            >
-              <Plus className="w-4 h-4" />
-              <span>เพิ่มเข้าไลน์ {selectedLineId}</span>
-            </button>
-          </div>
-
-          {/* Line Installed Parts Matrix Table */}
-          <div className="bg-slate-900 border border-slate-700 rounded-xl overflow-hidden shadow-xl">
-            <div className="bg-slate-950 px-4 py-3 border-b border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Sliders className="w-4 h-4 text-cyan-400" />
-                <span className="text-xs font-mono font-bold text-slate-200">
-                  รายการชิ้นส่วนที่ติดตั้งในไลน์ <span className="text-amber-300">{selectedLineId}</span> ({linePartsList.length} รายการที่กำหนด)
-                </span>
-              </div>
-              
-              <span className={`text-xs font-mono px-2.5 py-1 rounded font-bold ${
-                linePartsList.length >= 12 && linePartsList.length <= 20
-                  ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
-                  : 'bg-amber-950 text-amber-300 border border-amber-800'
-              }`}>
-                {linePartsList.length >= 12 && linePartsList.length <= 20 
-                  ? `✓ แสดงครบถ้วนตามเป้าหมาย (12-20 รายการ)` 
-                  : `กำลังตั้งค่า (${linePartsList.length} รายการ)`}
+            <div className="flex items-center gap-2.5 mb-1.5">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyan-950/80 text-cyan-400 border border-cyan-700/60 uppercase tracking-wider">
+                Engineering Standard Dictionary
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono text-slate-400 bg-slate-900 border border-slate-800">
+                Revise: 31.01.2025
               </span>
             </div>
+            <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight flex items-center gap-2.5">
+              <Database className="w-6 h-6 text-cyan-400" />
+              <span>Parts Master Hub: Mold & Die Heat Exchanger (TH)</span>
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-400 mt-1">
+              พจนานุกรมกลางและฐานข้อมูลอะไหล่แม่พิมพ์มาตรฐาน 4 ส่วนหลัก (Classification, Line Install Qty, Shot Life Cycle, Maintenance Standards)
+            </p>
+          </div>
 
-            <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-340px)] min-h-[300px] border border-slate-800 rounded-lg custom-scrollbar">
-              <table className="w-full text-left border-collapse text-xs font-mono">
-                <thead className="sticky top-0 z-20 bg-slate-950 shadow-md">
-                  <tr className="bg-slate-950 text-slate-400 border-b border-slate-800 font-bold uppercase">
-                    <th className="sticky top-0 bg-slate-950 py-2.5 px-3 text-center w-12 z-20">ลำดับ</th>
-                    <th className="sticky top-0 bg-slate-950 py-2.5 px-3 text-center w-16 z-20">เปิดใช้</th>
-                    <th className="sticky top-0 bg-slate-950 py-2.5 px-3 z-20">รหัสชิ้นส่วน (PART CODE)</th>
-                    <th className="sticky top-0 bg-slate-950 py-2.5 px-3 z-20">ชื่อชิ้นส่วน (PART NAME)</th>
-                    <th className="sticky top-0 bg-slate-950 py-2.5 px-3 z-20">หมวดหมู่ & STAGE</th>
-                    <th className="sticky top-0 bg-slate-950 py-2.5 px-3 text-center z-20">จำนวนติดตั้ง (INSTALLED QTY)</th>
-                    <th className="sticky top-0 bg-slate-950 py-2.5 px-3 text-center z-20">คลังอะไหล่ (SPARE STOCK)</th>
-                    <th className="sticky top-0 bg-slate-950 py-2.5 px-3 text-center w-24 z-20">ลำดับ / จัดการ</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/80">
-                  {linePartsList.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="text-center py-8 text-slate-500 font-mono">
-                        ยังไม่มีชิ้นส่วนที่กำหนดในไลน์นี้ กดปุ่ม "✨ โหลดชุดมาตรฐาน 12-20 รายการ" ด้านบนเพื่อเริ่มต้น
-                      </td>
-                    </tr>
-                  ) : (
-                    linePartsList.map((item, idx) => {
-                      const master = parts.find(p => p.partCode === item.partCode);
-                      const stock = spareStocks.find(s => s.partCode === item.partCode);
-                      const availableStock = stock ? stock.currentStockQty : 0;
-
-                      return (
-                        <tr key={item.partCode} className={`hover:bg-slate-800/50 transition-colors ${!item.isActive ? 'opacity-40 bg-slate-950/40' : ''}`}>
-                          <td className="py-2.5 px-3 text-center font-bold text-slate-400">
-                            {idx + 1}
-                          </td>
-
-                          <td className="py-2.5 px-3 text-center">
-                            <input
-                              type="checkbox"
-                              checked={item.isActive}
-                              onChange={() => handleLineActiveToggle(item.partCode)}
-                              className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
-                              title="เปิด/ปิดการแสดงผลในไลน์"
-                            />
-                          </td>
-
-                          <td className="py-2.5 px-3 font-bold text-cyan-300">
-                            {item.partCode}
-                          </td>
-
-                          <td className="py-2.5 px-3 font-sans">
-                            <div className="font-bold text-slate-100">{master?.partName || item.partCode}</div>
-                            {master?.partNameTh && <div className="text-[11px] text-slate-400 font-thai">{master.partNameTh}</div>}
-                          </td>
-
-                          <td className="py-2.5 px-3">
-                            <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 text-slate-300 border border-slate-700">
-                              {master?.stageName || master?.category || 'Fin Die Part'}
-                            </span>
-                          </td>
-
-                          <td className="py-2.5 px-3 text-center">
-                            <div className="inline-flex items-center gap-1.5 bg-slate-950 border border-amber-500/50 rounded px-2.5 py-1">
-                              <input
-                                type="number"
-                                value={item.installQty}
-                                onChange={(e) => handleLineQtyChange(item.partCode, parseInt(e.target.value, 10) || 1)}
-                                className="w-20 bg-transparent text-amber-300 font-bold text-xs text-center focus:outline-none"
-                                min="1"
-                              />
-                              <span className="text-[10px] text-slate-400 font-mono">ชิ้น</span>
-                            </div>
-                          </td>
-
-                          <td className="py-2.5 px-3 text-center">
-                            <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                              availableStock >= item.installQty
-                                ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
-                                : availableStock > 0
-                                ? 'bg-amber-950 text-amber-400 border border-amber-800'
-                                : 'bg-rose-950 text-rose-400 border border-rose-800'
-                            }`}>
-                              {availableStock} EA (พร้อมใช้)
-                            </span>
-                          </td>
-
-                          <td className="py-2.5 px-3 text-center">
-                            <div className="flex items-center justify-center gap-1">
-                              <button
-                                onClick={() => handleMoveLineSeq(idx, 'UP')}
-                                disabled={idx === 0}
-                                className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-30"
-                                title="เลื่อนขึ้น"
-                              >
-                                <ArrowUp className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleMoveLineSeq(idx, 'DOWN')}
-                                disabled={idx === linePartsList.length - 1}
-                                className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-30"
-                                title="เลื่อนลง"
-                              >
-                                <ArrowDown className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleRemovePartFromLine(item.partCode)}
-                                className="p-1 rounded bg-slate-800 hover:bg-red-950 text-rose-400 hover:text-red-300 ml-1"
-                                title="ลบออก"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Bottom Save Action Bar */}
-            <div className="bg-slate-950 px-4 py-3 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="text-xs text-slate-400 font-mono">
-                รวมทั้งหมด <span className="text-amber-300 font-bold">{linePartsList.filter(p => p.isActive).length}</span> รายการชิ้นส่วนพร้อมใช้งานสำหรับไลน์ <span className="text-cyan-300 font-bold">{selectedLineId}</span>
-              </div>
-
-              <button
-                onClick={handleSaveLineInstalledParts}
-                className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-black text-xs rounded-lg shadow-lg flex items-center justify-center gap-2 transition-all font-sans"
-              >
-                <Save className="w-4 h-4" />
-                <span>บันทึกและอัปเดตไปยัง TV Dashboard (Save & Apply to TV)</span>
-              </button>
-            </div>
+          {/* Action Buttons */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              onClick={handleExportCSV}
+              className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 hover:border-slate-600 text-xs font-mono font-bold flex items-center gap-2 shadow-sm transition-all"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+              <span>Export Master (CSV)</span>
+            </button>
+            <button
+              onClick={() => window.print()}
+              className="px-3.5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-mono font-bold flex items-center gap-2 shadow-md shadow-cyan-950 transition-all"
+            >
+              <Printer className="w-4 h-4" />
+              <span>พิมพ์ใบสเปก (Print)</span>
+            </button>
           </div>
         </div>
-      )}
 
-      {/* Add Catalog Part Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Database className="w-4 h-4 text-cyan-400" />
-                <span>Add New Tooling Part Master</span>
-              </h3>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white">
-                <X className="w-5 h-5" />
+        {/* 4 Summary Cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5 mt-6 pt-5 border-t border-slate-800/80">
+          <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-3">
+            <div className="text-[11px] text-slate-400 font-mono">1. TOTAL MASTER ITEMS</div>
+            <div className="text-lg font-bold text-white font-mono mt-0.5">
+              157 <span className="text-xs text-cyan-400 font-normal">Parts</span>
+            </div>
+            <div className="text-[10px] text-slate-500 mt-0.5">ครอบคลุม No. 1 ถึง 157</div>
+          </div>
+
+          <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-3">
+            <div className="text-[11px] text-slate-400 font-mono">2. DIE STAGES</div>
+            <div className="text-lg font-bold text-emerald-400 font-mono mt-0.5">
+              17 <span className="text-xs text-slate-400 font-normal">Stages</span>
+            </div>
+            <div className="text-[10px] text-slate-500 mt-0.5">PB, Iron, Slit, CutOff, etc.</div>
+          </div>
+
+          <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-3">
+            <div className="text-[11px] text-slate-400 font-mono">3. PRODUCTION LINES</div>
+            <div className="text-lg font-bold text-amber-400 font-mono mt-0.5">
+              E1 - E6 <span className="text-xs text-slate-400 font-normal">(8 Line Configs)</span>
+            </div>
+            <div className="text-[10px] text-slate-500 mt-0.5">PCM, Gold, Bare Fin Types</div>
+          </div>
+
+          <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-3">
+            <div className="text-[11px] text-slate-400 font-mono">4. MAINTENANCE POLICIES</div>
+            <div className="text-lg font-bold text-purple-400 font-mono mt-0.5">
+              Re-grind & Disposable
+            </div>
+            <div className="text-[10px] text-slate-500 mt-0.5">Standard depth & max cycles</div>
+          </div>
+        </div>
+      </div>
+
+      {/* ======================================================== */}
+      {/* 2. SEARCH, STAGE TABS & ADVANCED FILTERS */}
+      {/* ======================================================== */}
+      <div className="bg-[#0D1527] border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-4 shadow-lg">
+        {/* Search Bar & Primary Controls */}
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="ค้นหาชื่อพาร์ท (เช่น PIERCE PUNCH, ROW SLIT), ลำดับ No, หรือสเตจ..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-200 placeholder:text-slate-500 font-mono focus:outline-none focus:border-cyan-500"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 text-xs"
+              >
+                ล้าง
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Filter by Line */}
+            <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-300">
+              <Factory className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="font-mono text-[11px]">Line:</span>
+              <select
+                value={selectedLineFilter}
+                onChange={e => setSelectedLineFilter(e.target.value)}
+                className="bg-transparent border-none text-cyan-300 font-mono text-xs focus:outline-none cursor-pointer"
+              >
+                <option value="ALL" className="bg-slate-900 text-white">ทุกไลน์ (All Lines)</option>
+                <option value="E1" className="bg-slate-900 text-white">Line E1 (Ø7 Slit)</option>
+                <option value="E2" className="bg-slate-900 text-white">Line E2 (Ø5 Slit)</option>
+                <option value="E3-1" className="bg-slate-900 text-white">Line E3 (Slit 3P)</option>
+                <option value="E3-2" className="bg-slate-900 text-white">Line E3 (WL+ 4P)</option>
+                <option value="E3-3" className="bg-slate-900 text-white">Line E3 (Corr 4P)</option>
+                <option value="E4" className="bg-slate-900 text-white">Line E4 (Ø5 Slit)</option>
+                <option value="E5" className="bg-slate-900 text-white">Line E5 (Ø5 Slit)</option>
+                <option value="E6" className="bg-slate-900 text-white">Line E6 (Ø7 Louver)</option>
+              </select>
+            </div>
+
+            {/* Toggle Re-grind only */}
+            <button
+              onClick={() => setShowRegrindOnly(!showRegrindOnly)}
+              className={`px-3 py-1.5 rounded-xl border text-xs font-mono flex items-center gap-1.5 transition-all ${
+                showRegrindOnly
+                  ? 'bg-purple-950/80 border-purple-500 text-purple-300'
+                  : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Wrench className="w-3.5 h-3.5 text-purple-400" />
+              <span>เฉพาะพาร์ทที่ลับคมได้ (Re-grindable)</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Stage Filter Chips */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 scrollbar-thin scrollbar-thumb-slate-800">
+          <button
+            onClick={() => setSelectedStage('ALL')}
+            className={`px-3 py-1 rounded-lg text-xs font-mono font-bold whitespace-nowrap transition-all ${
+              selectedStage === 'ALL'
+                ? 'bg-cyan-500 text-black shadow-sm shadow-cyan-500/50'
+                : 'bg-slate-950 hover:bg-slate-900 text-slate-400 border border-slate-800'
+            }`}
+          >
+            All Stages (ทั้งหมด {MOLD_DIE_MASTER_ITEMS_2025.length})
+          </button>
+
+          {allStages.map(stage => {
+            const count = MOLD_DIE_MASTER_ITEMS_2025.filter(i => i.stage === stage).length;
+            const isSelected = selectedStage === stage;
+            return (
+              <button
+                key={stage}
+                onClick={() => setSelectedStage(stage)}
+                className={`px-3 py-1 rounded-lg text-xs font-mono whitespace-nowrap transition-all border ${
+                  isSelected
+                    ? 'bg-cyan-950/80 border-cyan-400 text-cyan-200 font-bold'
+                    : 'bg-slate-950 hover:bg-slate-900 border-slate-800 text-slate-400'
+                }`}
+              >
+                {stage} ({count})
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ======================================================== */}
+      {/* 3. MASTER DATA TABLE - 4 STRUCTURED SECTIONS */}
+      {/* ======================================================== */}
+      <div className="bg-[#0B132B] border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
+        <div className="p-4 bg-slate-900/80 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Layers className="w-4 h-4 text-cyan-400" />
+            <span className="text-xs font-bold text-white font-mono uppercase tracking-wider">
+              PARTS MASTER DATA DICTIONARY ({filteredItems.length} รายการ)
+            </span>
+          </div>
+          <div className="text-[11px] text-slate-400 font-mono">
+            คลิกที่แถวพาร์ทเพื่อดูเอกสารสเปกแบบละเอียด (Click row to view specs)
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs font-mono border-collapse min-w-[1200px]">
+            {/* Multi-tier Table Header */}
+            <thead>
+              <tr className="bg-slate-950/90 text-slate-400 border-b border-slate-800 text-[11px]">
+                <th colSpan={3} className="py-2.5 px-3 border-r border-slate-800 text-cyan-400 font-bold">
+                  1. PART IDENTIFICATION
+                </th>
+                <th colSpan={9} className="py-2.5 px-3 border-r border-slate-800 text-amber-400 font-bold text-center bg-amber-950/10">
+                  2. INSTALL QUANTITY BY LINE (EA)
+                </th>
+                <th colSpan={8} className="py-2.5 px-3 border-r border-slate-800 text-blue-400 font-bold text-center bg-blue-950/10">
+                  3. STANDARDIZATION OF SHOT USAGE CYCLE (MILLION SHOTS)
+                </th>
+                <th colSpan={4} className="py-2.5 px-3 text-purple-400 font-bold text-center bg-purple-950/10">
+                  4. STANDARD RE-GRINDING
+                </th>
+              </tr>
+              <tr className="bg-slate-900/90 text-slate-300 border-b border-slate-800 text-[10px] tracking-wider">
+                {/* 1. Identification */}
+                <th className="py-2 px-2.5 text-center w-12 border-r border-slate-800/80">No</th>
+                <th className="py-2 px-3 border-r border-slate-800/80">Stage</th>
+                <th className="py-2 px-4 border-r border-slate-800 min-w-[220px]">Part Name</th>
+
+                {/* 2. Line Install Qty */}
+                <th className="py-2 px-2 text-center text-amber-300 bg-amber-950/20">E1</th>
+                <th className="py-2 px-2 text-center text-amber-300 bg-amber-950/20">E2</th>
+                <th className="py-2 px-2 text-center text-amber-300 bg-amber-950/20">E3(1)</th>
+                <th className="py-2 px-2 text-center text-amber-300 bg-amber-950/20">E3(2)</th>
+                <th className="py-2 px-2 text-center text-amber-300 bg-amber-950/20">E3(3)</th>
+                <th className="py-2 px-2 text-center text-amber-300 bg-amber-950/20">E4</th>
+                <th className="py-2 px-2 text-center text-amber-300 bg-amber-950/20">E5</th>
+                <th className="py-2 px-2 text-center text-amber-300 bg-amber-950/20">E6</th>
+                <th className="py-2 px-2.5 text-center text-white font-bold bg-amber-900/30 border-r border-slate-800">
+                  Total
+                </th>
+
+                {/* 3. Shot Usage Standards */}
+                <th className="py-2 px-2 text-center text-blue-300 bg-blue-950/20">E1 (PCM)</th>
+                <th className="py-2 px-2 text-center text-blue-300 bg-blue-950/20">E2 (Gold)</th>
+                <th className="py-2 px-2 text-center text-blue-300 bg-blue-950/20">E3(1)</th>
+                <th className="py-2 px-2 text-center text-blue-300 bg-blue-950/20">E3(2)</th>
+                <th className="py-2 px-2 text-center text-blue-300 bg-blue-950/20">E3(3)</th>
+                <th className="py-2 px-2 text-center text-blue-300 bg-blue-950/20">E4/E5</th>
+                <th className="py-2 px-2 text-center text-blue-300 bg-blue-950/20">E6 (PCM)</th>
+                <th className="py-2 px-2.5 text-center text-slate-400 bg-blue-950/20 border-r border-slate-800">
+                  Scrap Limit
+                </th>
+
+                {/* 4. Regrinding Standards */}
+                <th className="py-2 px-2.5 text-center text-purple-300 bg-purple-950/20">1 time (mm)</th>
+                <th className="py-2 px-2.5 text-center text-purple-300 bg-purple-950/20">Total (mm)</th>
+                <th className="py-2 px-3 text-center text-purple-300 bg-purple-950/20">Max Cycles</th>
+                <th className="py-2 px-4 text-purple-200 bg-purple-950/20 min-w-[180px]">Note / Standard</th>
+              </tr>
+            </thead>
+
+            {/* Table Body */}
+            <tbody className="divide-y divide-slate-800/60">
+              {filteredItems.map(item => {
+                const isSelected = selectedPartForDetail?.no === item.no;
+                const isDisposable = item.regrindStandard.perGrindMm.includes('Dispose');
+
+                return (
+                  <tr
+                    key={item.no}
+                    onClick={() => setSelectedPartForDetail(item)}
+                    className={`cursor-pointer transition-colors ${
+                      isSelected
+                        ? 'bg-cyan-950/40 border-l-4 border-l-cyan-400'
+                        : 'hover:bg-slate-800/40 bg-slate-900/20'
+                    }`}
+                  >
+                    {/* 1. Identification */}
+                    <td className="py-2.5 px-2.5 text-center font-bold text-slate-400 border-r border-slate-800/60">
+                      {item.no}
+                    </td>
+                    <td className="py-2.5 px-3 border-r border-slate-800/60">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getStageColor(item.stage)}`}>
+                        {item.stage}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-4 font-bold text-white border-r border-slate-800 flex items-center justify-between gap-2">
+                      <span>{item.partName}</span>
+                      {item.drawingNo && (
+                        <span className="text-[10px] font-normal text-slate-500 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">
+                          {item.drawingNo}
+                        </span>
+                      )}
+                    </td>
+
+                    {/* 2. Line Install Qty */}
+                    <td className="py-2.5 px-2 text-center text-slate-300">{item.installQty.e1 || '-'}</td>
+                    <td className="py-2.5 px-2 text-center text-slate-300">{item.installQty.e2 || '-'}</td>
+                    <td className="py-2.5 px-2 text-center text-slate-300">{item.installQty.e3_1 || '-'}</td>
+                    <td className="py-2.5 px-2 text-center text-slate-300">{item.installQty.e3_2 || '-'}</td>
+                    <td className="py-2.5 px-2 text-center text-slate-300">{item.installQty.e3_3 || '-'}</td>
+                    <td className="py-2.5 px-2 text-center text-slate-300">{item.installQty.e4 || '-'}</td>
+                    <td className="py-2.5 px-2 text-center text-slate-300">{item.installQty.e5 || '-'}</td>
+                    <td className="py-2.5 px-2 text-center text-slate-300">{item.installQty.e6 || '-'}</td>
+                    <td className="py-2.5 px-2.5 text-center font-bold text-amber-300 bg-amber-950/20 border-r border-slate-800">
+                      {item.installQty.totalQty > 0 ? item.installQty.totalQty : '-'}
+                    </td>
+
+                    {/* 3. Shot Usage Cycle Standards */}
+                    <td className="py-2.5 px-2 text-center text-blue-300">{item.shotLifeCycle.e1_pcm !== undefined ? `${item.shotLifeCycle.e1_pcm}M` : '-'}</td>
+                    <td className="py-2.5 px-2 text-center text-blue-300">{item.shotLifeCycle.e2_gold !== undefined ? `${item.shotLifeCycle.e2_gold}M` : '-'}</td>
+                    <td className="py-2.5 px-2 text-center text-blue-300">{item.shotLifeCycle.e3_1_pcm !== undefined ? `${item.shotLifeCycle.e3_1_pcm}M` : '-'}</td>
+                    <td className="py-2.5 px-2 text-center text-blue-300">{item.shotLifeCycle.e3_2_gold !== undefined ? `${item.shotLifeCycle.e3_2_gold}M` : '-'}</td>
+                    <td className="py-2.5 px-2 text-center text-blue-300">{item.shotLifeCycle.e3_3_gold !== undefined ? `${item.shotLifeCycle.e3_3_gold}M` : '-'}</td>
+                    <td className="py-2.5 px-2 text-center text-blue-300">{item.shotLifeCycle.e4_bare !== undefined ? `${item.shotLifeCycle.e4_bare}M` : '-'}</td>
+                    <td className="py-2.5 px-2 text-center text-blue-300">{item.shotLifeCycle.e6_pcm !== undefined ? `${item.shotLifeCycle.e6_pcm}M` : '-'}</td>
+                    <td className="py-2.5 px-2.5 text-center text-slate-400 border-r border-slate-800 text-[10px]">
+                      {item.shotLifeCycle.lowerSpecScrapLimit ? `${item.shotLifeCycle.lowerSpecScrapLimit} mm` : '-'}
+                    </td>
+
+                    {/* 4. Regrind Standards */}
+                    <td className="py-2.5 px-2.5 text-center">
+                      {isDisposable ? (
+                        <span className="text-[10px] text-rose-400 bg-rose-950/40 px-1.5 py-0.5 rounded border border-rose-900/60">
+                          Disposable
+                        </span>
+                      ) : (
+                        <span className="text-purple-300">{item.regrindStandard.perGrindMm}</span>
+                      )}
+                    </td>
+                    <td className="py-2.5 px-2.5 text-center text-purple-300">
+                      {item.regrindStandard.totalGrindMm !== '-' ? `${item.regrindStandard.totalGrindMm} mm` : '-'}
+                    </td>
+                    <td className="py-2.5 px-3 text-center text-purple-300 font-bold">
+                      {item.regrindStandard.regrindCycles}
+                    </td>
+                    <td className="py-2.5 px-4 text-slate-400 text-[11px] font-thai truncate max-w-[240px]" title={item.regrindStandard.note}>
+                      {item.regrindStandard.note !== '-' ? item.regrindStandard.note : '-'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ======================================================== */}
+      {/* 4. DETAIL SPECIFICATION DRAWER / MODAL */}
+      {/* ======================================================== */}
+      {selectedPartForDetail && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-[#0D1527] border border-cyan-500/60 rounded-2xl p-6 w-full max-w-2xl shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-cyan-950 border border-cyan-500 flex items-center justify-center text-cyan-400 font-bold font-mono">
+                  #{selectedPartForDetail.no}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getStageColor(selectedPartForDetail.stage)}`}>
+                      {selectedPartForDetail.stage}
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">Standard Ref 31.01.2025</span>
+                  </div>
+                  <h3 className="text-base font-bold text-white font-mono mt-0.5">
+                    {selectedPartForDetail.partName}
+                  </h3>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedPartForDetail(null)}
+                className="text-slate-400 hover:text-white px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-mono"
+              >
+                ปิด (Close)
               </button>
             </div>
-            <form onSubmit={handleAddPart} className="space-y-3.5 text-xs font-mono">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-400 mb-1 font-bold">PART CODE *</label>
-                  <input
-                    type="text"
-                    value={newPart.partCode}
-                    onChange={e => setNewPart({ ...newPart, partCode: e.target.value.toUpperCase() })}
-                    placeholder="รหัสชิ้นส่วน..."
-                    className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-cyan-300 font-bold focus:border-cyan-500 focus:outline-none"
-                    required
-                  />
+
+            {/* 4 Main Data Sections */}
+            <div className="space-y-4 text-xs font-mono">
+              {/* 1. Identification */}
+              <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 space-y-2">
+                <div className="text-cyan-400 font-bold flex items-center gap-1.5 text-xs">
+                  <Tag className="w-3.5 h-3.5" />
+                  <span>1. PART IDENTIFICATION & CLASSIFICATION</span>
                 </div>
-                <div>
-                  <label className="block text-slate-400 mb-1 font-bold">CATEGORY *</label>
-                  <select
-                    value={newPart.category}
-                    onChange={e => setNewPart({ ...newPart, category: e.target.value as any })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 focus:border-cyan-500 focus:outline-none"
-                  >
-                    <option value="PUNCH">PUNCH</option>
-                    <option value="DIE">DIE</option>
-                    <option value="BLADE">BLADE</option>
-                    <option value="PIN">PIN</option>
-                    <option value="CORNER_CUT">CORNER_CUT</option>
-                    <option value="CENTER_PUNCH">CENTER_PUNCH</option>
-                    <option value="OTHER">OTHER</option>
-                  </select>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1 text-slate-300">
+                  <div>
+                    <span className="text-slate-500 block text-[10px]">STAGE NAME:</span>
+                    <span className="text-white font-bold">{selectedPartForDetail.stage}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[10px]">ITEM NUMBER:</span>
+                    <span className="text-white font-bold">No. {selectedPartForDetail.no}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[10px]">DRAWING / SPEC NO:</span>
+                    <span className="text-cyan-300 font-bold">{selectedPartForDetail.drawingNo || 'STANDARD SPEC'}</span>
+                  </div>
                 </div>
               </div>
-              <div>
-                <label className="block text-slate-400 mb-1 font-bold">PART NAME *</label>
-                <input
-                  type="text"
-                  value={newPart.partName}
-                  onChange={e => setNewPart({ ...newPart, partName: e.target.value })}
-                  placeholder="Part Name..."
-                  className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-slate-100 font-sans font-semibold focus:border-cyan-500 focus:outline-none"
-                  required
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-400 mb-1 font-bold">STAGE NAME</label>
-                  <input
-                    type="text"
-                    value={newPart.stageName}
-                    onChange={e => setNewPart({ ...newPart, stageName: e.target.value })}
-                    placeholder="สเตจงาน..."
-                    className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 focus:border-cyan-500 focus:outline-none"
-                  />
+
+              {/* 2. Line Installed Quantities */}
+              <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 space-y-2">
+                <div className="text-amber-400 font-bold flex items-center gap-1.5 text-xs">
+                  <Factory className="w-3.5 h-3.5" />
+                  <span>2. INSTALL QUANTITY BY LINE (EA) - TOTAL: {selectedPartForDetail.installQty.totalQty} EA</span>
                 </div>
-                <div>
-                  <label className="block text-slate-400 mb-1 font-bold">DRAWING NUMBER</label>
-                  <input
-                    type="text"
-                    value={newPart.drawingNumber || ''}
-                    onChange={e => setNewPart({ ...newPart, drawingNumber: e.target.value })}
-                    placeholder="เลขที่แบบ..."
-                    className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 focus:border-cyan-500 focus:outline-none"
-                  />
+                <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 pt-1">
+                  {[
+                    { line: 'E1', val: selectedPartForDetail.installQty.e1 },
+                    { line: 'E2', val: selectedPartForDetail.installQty.e2 },
+                    { line: 'E3(1)', val: selectedPartForDetail.installQty.e3_1 },
+                    { line: 'E3(2)', val: selectedPartForDetail.installQty.e3_2 },
+                    { line: 'E3(3)', val: selectedPartForDetail.installQty.e3_3 },
+                    { line: 'E4', val: selectedPartForDetail.installQty.e4 },
+                    { line: 'E5', val: selectedPartForDetail.installQty.e5 },
+                    { line: 'E6', val: selectedPartForDetail.installQty.e6 },
+                  ].map(slot => (
+                    <div key={slot.line} className="bg-slate-900 border border-slate-800 rounded-lg p-2 text-center">
+                      <span className="text-[10px] text-slate-400 block">{slot.line}</span>
+                      <span className={`text-xs font-bold ${slot.val ? 'text-amber-300' : 'text-slate-600'}`}>
+                        {slot.val || '-'}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-400 mb-1 font-bold">UNIT COST (THB)</label>
-                  <input
-                    type="number"
-                    value={newPart.unitCostThb}
-                    onChange={e => setNewPart({ ...newPart, unitCostThb: parseFloat(e.target.value) || 0 })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-emerald-400 font-bold focus:border-cyan-500 focus:outline-none"
-                  />
+
+              {/* 3. Standardization of Shot Usage Cycle */}
+              <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 space-y-2">
+                <div className="text-blue-400 font-bold flex items-center gap-1.5 text-xs">
+                  <Gauge className="w-3.5 h-3.5" />
+                  <span>3. STANDARDIZATION OF SHOT USAGE CYCLE (MILLION SHOTS)</span>
                 </div>
-                <div>
-                  <label className="block text-slate-400 mb-1 font-bold">TUBE COMPATIBILITY</label>
-                  <select
-                    value={newPart.tubeSizeCompat}
-                    onChange={e => setNewPart({ ...newPart, tubeSizeCompat: e.target.value as TubeSizeCompat })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-cyan-300 font-bold focus:border-cyan-500 focus:outline-none"
-                  >
-                    <option value="Ø5">Ø5</option>
-                    <option value="Ø7">Ø7</option>
-                    <option value="Ø9.52">Ø9.52</option>
-                    <option value="BOTH">BOTH (All Tube Sizes)</option>
-                  </select>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1 text-slate-300">
+                  <div className="bg-slate-900 border border-slate-800 rounded-lg p-2">
+                    <span className="text-slate-500 block text-[10px]">E1 PCM / E6 PCM:</span>
+                    <span className="text-blue-300 font-bold">
+                      {selectedPartForDetail.shotLifeCycle.e1_pcm ? `${selectedPartForDetail.shotLifeCycle.e1_pcm}M shots` : '-'}
+                    </span>
+                  </div>
+                  <div className="bg-slate-900 border border-slate-800 rounded-lg p-2">
+                    <span className="text-slate-500 block text-[10px]">E2 GOLD:</span>
+                    <span className="text-blue-300 font-bold">
+                      {selectedPartForDetail.shotLifeCycle.e2_gold ? `${selectedPartForDetail.shotLifeCycle.e2_gold}M shots` : '-'}
+                    </span>
+                  </div>
+                  <div className="bg-slate-900 border border-slate-800 rounded-lg p-2">
+                    <span className="text-slate-500 block text-[10px]">E4 / E5 BARE:</span>
+                    <span className="text-blue-300 font-bold">
+                      {selectedPartForDetail.shotLifeCycle.e4_bare ? `${selectedPartForDetail.shotLifeCycle.e4_bare}M shots` : '-'}
+                    </span>
+                  </div>
+                  <div className="bg-slate-900 border border-slate-800 rounded-lg p-2">
+                    <span className="text-slate-500 block text-[10px]">SCRAP / LOWER LIMIT:</span>
+                    <span className="text-rose-400 font-bold">
+                      {selectedPartForDetail.shotLifeCycle.lowerSpecScrapLimit ? `${selectedPartForDetail.shotLifeCycle.lowerSpecScrapLimit} mm` : 'N/A'}
+                    </span>
+                  </div>
                 </div>
               </div>
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-sans text-xs"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded bg-cyan-600 hover:bg-cyan-500 text-white font-bold font-sans text-xs shadow-lg shadow-cyan-900/50 flex items-center gap-1.5"
-                >
-                  <Save className="w-3.5 h-3.5" />
-                  <span>Save to Part Master Catalog</span>
-                </button>
+
+              {/* 4. Standard Re-grinding & Maintenance Standard */}
+              <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 space-y-2">
+                <div className="text-purple-400 font-bold flex items-center gap-1.5 text-xs">
+                  <Wrench className="w-3.5 h-3.5" />
+                  <span>4. STANDARD RE-GRINDING & TOOLROOM INSTRUCTION</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1 text-slate-300">
+                  <div className="bg-slate-900 border border-slate-800 rounded-lg p-2">
+                    <span className="text-slate-500 block text-[10px]">1 TIME / RE-GRIND:</span>
+                    <span className="text-purple-300 font-bold">{selectedPartForDetail.regrindStandard.perGrindMm}</span>
+                  </div>
+                  <div className="bg-slate-900 border border-slate-800 rounded-lg p-2">
+                    <span className="text-slate-500 block text-[10px]">TOTAL GRIND DEPTH:</span>
+                    <span className="text-purple-300 font-bold">{selectedPartForDetail.regrindStandard.totalGrindMm} mm</span>
+                  </div>
+                  <div className="bg-slate-900 border border-slate-800 rounded-lg p-2">
+                    <span className="text-slate-500 block text-[10px]">MAX RE-GRIND CYCLES:</span>
+                    <span className="text-purple-300 font-bold">{selectedPartForDetail.regrindStandard.regrindCycles}</span>
+                  </div>
+                </div>
+                {selectedPartForDetail.regrindStandard.note && selectedPartForDetail.regrindStandard.note !== '-' && (
+                  <div className="bg-purple-950/30 border border-purple-900/50 rounded-lg p-2.5 text-purple-200 text-xs font-thai mt-2">
+                    <span className="font-bold font-mono text-[10px] text-purple-400 block uppercase">Special Note / Guideline:</span>
+                    {selectedPartForDetail.regrindStandard.note}
+                  </div>
+                )}
               </div>
-            </form>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-800">
+              <button
+                onClick={() => setSelectedPartForDetail(null)}
+                className="px-5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-mono font-bold transition-all shadow-md shadow-cyan-950"
+              >
+                ตกลง (OK)
+              </button>
+            </div>
           </div>
         </div>
       )}

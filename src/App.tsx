@@ -10,6 +10,7 @@ import { ViewSkeleton } from './components/common/ViewSkeleton';
 const TvDashboardView = React.lazy(() => import('./components/tv/TvDashboardView').then(m => ({ default: m.TvDashboardView })));
 const ShotEntryView = React.lazy(() => import('./views/ShotEntryView').then(m => ({ default: m.ShotEntryView })));
 const ReplacementEntryView = React.lazy(() => import('./views/ReplacementEntryView').then(m => ({ default: m.ReplacementEntryView })));
+const RegrindingManagementView = React.lazy(() => import('./views/RegrindingManagementView').then(m => ({ default: m.RegrindingManagementView })));
 const UnifiedToolingMasterView = React.lazy(() => import('./views/UnifiedToolingMasterView').then(m => ({ default: m.UnifiedToolingMasterView })));
 const SystemSettingsView = React.lazy(() => import('./views/SystemSettingsView').then(m => ({ default: m.SystemSettingsView })));
 const LoginView = React.lazy(() => import('./views/SystemSettingsView').then(m => ({ default: m.LoginView })));
@@ -79,10 +80,19 @@ export default function App() {
       case 'shot-entry':
         return <ShotEntryView initialLineId={targetLineId} />;
       case 'replacement-entry':
-      case 'regrinding-entry':
       case 'lock-position':
       case 'die-layout':
         return <ReplacementEntryView initialLineId={targetLineId} />;
+      case 'regrinding-management':
+      case 'regrinding-entry':
+      case 'regrinding':
+        return (
+          <RegrindingManagementView
+            selectedLine={targetLineId}
+            onNavigateToDieLayout={() => setActiveRoute('replacement-entry')}
+            currentUserName={currentUser.name}
+          />
+        );
       case 'line-configuration':
         return <UnifiedToolingMasterView initialTab="install" />;
       case 'unified-tooling-setup':
@@ -176,10 +186,10 @@ export default function App() {
         />
 
         {/* Content Body - Independent scrollable view container */}
-        <main className={`flex-1 min-h-0 overflow-y-auto p-2 sm:p-3 lg:p-3.5 custom-scrollbar transition-all duration-300 ${
+        <main className={`flex-1 min-h-0 overflow-y-auto p-2 sm:p-2.5 lg:p-3 custom-scrollbar transition-all duration-300 w-full ${
           isHmi ? 'bg-black text-green-400' : isLight ? 'bg-slate-100 text-slate-900' : 'bg-[#080E1B] text-slate-100'
         }`}>
-          <div className="max-w-[1440px] mx-auto pb-6">
+          <div className="w-full pb-4">
             <ErrorBoundary>
               <Suspense fallback={<ViewSkeleton />}>
                 {renderActiveView()}

@@ -146,7 +146,7 @@ export const Header: React.FC<HeaderProps> = ({
               className={`px-1.5 py-0.5 rounded flex items-center gap-1 transition-all ${
                 settings.theme === 'light'
                   ? 'bg-amber-500 text-slate-950 font-extrabold shadow'
-                  : isHmi ? 'text-green-500/70 hover:text-green-400' : 'text-slate-400 hover:text-slate-200'
+                  : isHmi ? 'text-green-500/70 hover:text-green-400' : isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-slate-200'
               }`}
               title="Theme สว่าง (Light Mode)"
             >

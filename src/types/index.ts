@@ -299,6 +299,46 @@ export interface PartLifeStandard {
 
 export type TubeSizeCompat = 'Ø5' | 'Ø7' | 'BOTH';
 
+export interface MoldDieMasterItem {
+  no: number;
+  stage: string;
+  partName: string;
+  drawingNo?: string;
+  // 2. Install Quantity by Line (EA)
+  installQty: {
+    e1?: number;
+    e2?: number;
+    e3_1?: number;
+    e3_2?: number;
+    e3_3?: number;
+    e4?: number;
+    e5?: number;
+    e6?: number;
+    totalQty: number;
+  };
+  // 3. Standardization of Shot Usage Cycle (Million Shots)
+  shotLifeCycle: {
+    newPunchLengthMm?: number | string;
+    e1_pcm?: number | string;
+    e2_gold?: number | string;
+    e3_1_pcm?: number | string;
+    e3_2_gold?: number | string;
+    e3_3_gold?: number | string;
+    e4_bare?: number | string;
+    e5_bare?: number | string;
+    e6_pcm?: number | string;
+    partsSpec?: number | string;
+    lowerSpecScrapLimit?: number | string;
+  };
+  // 4. Standard Re-grinding & Maintenance Standard
+  regrindStandard: {
+    perGrindMm: string; // e.g. "0.10", "0.25-0.35", "0.10-0.15", "0.15-0.20", "Dispose of after 1 use"
+    totalGrindMm: string; // e.g. "1.40", "1.50", "1.00", "-"
+    regrindCycles: string; // e.g. "12-13 time", "7-9 time", "3-4 time", "15 time", "14-15 time", "8-10 time", "4-5 time"
+    note: string; // e.g. "Change every 10-15 Day (เปลี่ยนทุกๆ 10-15 วัน)", "Dispose of after 1 use"
+  };
+}
+
 export interface PartMaster {
   partCode: string;
   partName: string;

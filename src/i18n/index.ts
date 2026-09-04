@@ -52,6 +52,7 @@ export interface SidebarTranslations {
   shotEntry: string;
   tvDashboard: string;
   partReplacement: string;
+  regrindingHub: string;
   dieAndPartMaster: string;
   systemSettings: string;
 }
@@ -121,6 +122,7 @@ export const TRANSLATIONS: Record<'EN' | 'TH' | 'KO', Dictionary> = {
       shotEntry: 'Shot Entry',
       tvDashboard: 'TV Dashboard',
       partReplacement: 'Part Replacement',
+      regrindingHub: 'Regrinding Hub',
       dieAndPartMaster: 'Die & Part Master',
       systemSettings: 'System Settings'
     },
@@ -181,6 +183,7 @@ export const TRANSLATIONS: Record<'EN' | 'TH' | 'KO', Dictionary> = {
       shotEntry: 'บันทึกช็อต',
       tvDashboard: 'มอนิเตอร์ช็อต',
       partReplacement: 'เปลี่ยนอะไหล่ & ผัง 2D',
+      regrindingHub: 'เจียรลับคมแม่พิมพ์',
       dieAndPartMaster: 'จัดการแม่พิมพ์/อะไหล่',
       systemSettings: 'ตั้งค่าระบบ'
     },
@@ -241,6 +244,7 @@ export const TRANSLATIONS: Record<'EN' | 'TH' | 'KO', Dictionary> = {
       shotEntry: '타수 입력',
       tvDashboard: 'TV 대시보드',
       partReplacement: '부품 교체 및 2D 도면',
+      regrindingHub: '연마 관리 시스템',
       dieAndPartMaster: '금형 및 부품 마스터',
       systemSettings: '시스템 설정'
     },
