@@ -24,7 +24,7 @@ interface LineQuickFilter {
 }
 
 const LINE_QUICK_FILTERS: LineQuickFilter[] = [
-  { id: 'ALL', label: 'ALL LINES', subLabel: 'ทุกสายการผลิต (E1-E6)' },
+  { id: 'ALL', label: 'ALL LINES', subLabel: 'ทุกสายการผลิต (7 Lines: E1-E5)' },
   { id: 'E1', label: 'E1', subLabel: 'Ø7 Slit, PCM' },
   { id: 'E2', label: 'E2', subLabel: 'Ø5 Slit, GOLD' },
   { id: 'E3-1', label: 'E3-1', subLabel: 'Slit 3P, PCM' },
@@ -32,7 +32,6 @@ const LINE_QUICK_FILTERS: LineQuickFilter[] = [
   { id: 'E3-3', label: 'E3-3', subLabel: 'Corr 4P, GOLD' },
   { id: 'E4', label: 'E4', subLabel: 'Ø5 Slit, BARE' },
   { id: 'E5', label: 'E5', subLabel: 'Ø5 Slit, BARE' },
-  { id: 'E6', label: 'E6', subLabel: 'Ø7 Louver, PCM' },
 ];
 
 const MONTH_DEFINITIONS = [
@@ -129,8 +128,7 @@ export const Excel31DayMatrixView: React.FC<Excel31DayMatrixViewProps> = ({
           selectedLine === 'E1' ||
           selectedLine === 'E3-1' ||
           selectedLine === 'E3-2' ||
-          selectedLine === 'E3-3' ||
-          selectedLine === 'E6';
+          selectedLine === 'E3-3';
         const is5 = selectedLine === 'E2' || selectedLine === 'E4' || selectedLine === 'E5';
         const lower = row.partName.toLowerCase();
         if (is7 && (lower.includes('7') || lower.includes('louver') || lower.includes('slit'))) {
@@ -157,8 +155,7 @@ export const Excel31DayMatrixView: React.FC<Excel31DayMatrixViewProps> = ({
           selectedLine === 'E1' ||
           selectedLine === 'E3-1' ||
           selectedLine === 'E3-2' ||
-          selectedLine === 'E3-3' ||
-          selectedLine === 'E6';
+          selectedLine === 'E3-3';
         const is5 = selectedLine === 'E2' || selectedLine === 'E4' || selectedLine === 'E5';
         const lower = row.partName.toLowerCase();
         if (is7 && (lower.includes('7') || lower.includes('louver') || lower.includes('slit'))) {

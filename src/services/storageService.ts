@@ -22,6 +22,9 @@ import {
   User,
   SystemSettings,
   PLCConfig,
+  PLCRegisterMapping,
+  GatewayStatusInfo,
+  SystemAlertItem,
   ProductionLineId,
   UserRole,
   PositionLockRecord,
@@ -38,7 +41,7 @@ import {
   INITIAL_PART_MASTERS,
   INITIAL_LINE_CONFIGS,
   INITIAL_PART_LIFE_STANDARDS,
-  INITIAL_LIVE_DATA_E6,
+  INITIAL_LIVE_DATA_E1,
   INITIAL_SPARE_STOCKS,
   INITIAL_REPLACEMENT_HISTORY,
   INITIAL_REGRIND_RECORDS,
@@ -49,6 +52,9 @@ import {
   INITIAL_DOWNTIME_LOGS,
   DEFAULT_SYSTEM_SETTINGS,
   DEFAULT_PLC_CONFIG,
+  INITIAL_PLC_REGISTER_MAPPINGS,
+  INITIAL_GATEWAY_STATUS,
+  INITIAL_SYSTEM_ALERTS,
   SEED_DATA_VERSION,
   SEED_SOURCE_LABEL
 } from '../data/seedData';
@@ -73,9 +79,13 @@ const STORAGE_KEYS = {
   AUDIT_LOGS: 'fin_press_audit_logs',
   SETTINGS: 'fin_press_settings',
   PLC_CONFIG: 'fin_press_plc_config',
+  PLC_MAPPINGS: 'fin_press_plc_mappings',
+  GATEWAY_STATUS: 'fin_press_gateway_status',
+  SYSTEM_ALERTS: 'fin_press_system_alerts',
+  OFFLINE_BUFFER: 'fin_press_offline_buffer',
   POSITION_LOCKS: 'fin_press_position_locks',
   DOWNTIME_LOGS: 'fin_press_downtime_logs',
-  SEED_INITIALIZED: 'fin_press_seed_init_v6'
+  SEED_INITIALIZED: 'fin_press_seed_init_v7'
 };
 
 type Listener = () => void;
@@ -175,16 +185,15 @@ class StorageService {
     localStorage.setItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(INITIAL_LINE_CONFIGS));
     localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(INITIAL_PART_LIFE_STANDARDS));
     
-    // Generate initial live monitoring dataset for all 8 production lines (E1, E2, E3-1, E3-2, E3-3, E4, E5, E6)
+    // Generate initial live monitoring dataset for 7 production lines (E1, E2, E3-1, E3-2, E3-3, E4, E5)
     const linesMonitoring: Record<ProductionLineId, LineLiveMonitoringData> = {
-      'E1': this.generateLineMonitoring('E1', INITIAL_LINE_CONFIGS[0], 128450190),
-      'E2': this.generateLineMonitoring('E2', INITIAL_LINE_CONFIGS[1], 142100800),
-      'E3-1': this.generateLineMonitoring('E3-1', INITIAL_LINE_CONFIGS[2], 98450200),
-      'E3-2': this.generateLineMonitoring('E3-2', INITIAL_LINE_CONFIGS[3], 115200300),
-      'E3-3': this.generateLineMonitoring('E3-3', INITIAL_LINE_CONFIGS[4], 88120400),
-      'E4': this.generateLineMonitoring('E4', INITIAL_LINE_CONFIGS[5], 134500100),
-      'E5': this.generateLineMonitoring('E5', INITIAL_LINE_CONFIGS[6], 129800600),
-      'E6': INITIAL_LIVE_DATA_E6
+      'E1': INITIAL_LIVE_DATA_E1,
+      'E2': this.generateLineMonitoring('E2', INITIAL_LINE_CONFIGS[1], 142890520),
+      'E3-1': this.generateLineMonitoring('E3-1', INITIAL_LINE_CONFIGS[2], 98450120),
+      'E3-2': this.generateLineMonitoring('E3-2', INITIAL_LINE_CONFIGS[3], 112450890),
+      'E3-3': this.generateLineMonitoring('E3-3', INITIAL_LINE_CONFIGS[4], 87620340),
+      'E4': this.generateLineMonitoring('E4', INITIAL_LINE_CONFIGS[5], 168920150),
+      'E5': this.generateLineMonitoring('E5', INITIAL_LINE_CONFIGS[6], 135400980)
     };
 
     localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(linesMonitoring));
@@ -199,6 +208,10 @@ class StorageService {
     localStorage.setItem(STORAGE_KEYS.DOWNTIME_LOGS, JSON.stringify(INITIAL_DOWNTIME_LOGS));
     localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(DEFAULT_SYSTEM_SETTINGS));
     localStorage.setItem(STORAGE_KEYS.PLC_CONFIG, JSON.stringify(DEFAULT_PLC_CONFIG));
+    localStorage.setItem(STORAGE_KEYS.PLC_MAPPINGS, JSON.stringify(INITIAL_PLC_REGISTER_MAPPINGS));
+    localStorage.setItem(STORAGE_KEYS.GATEWAY_STATUS, JSON.stringify(INITIAL_GATEWAY_STATUS));
+    localStorage.setItem(STORAGE_KEYS.SYSTEM_ALERTS, JSON.stringify(INITIAL_SYSTEM_ALERTS));
+    localStorage.setItem(STORAGE_KEYS.OFFLINE_BUFFER, JSON.stringify([]));
     localStorage.setItem(STORAGE_KEYS.SEED_INITIALIZED, SEED_DATA_VERSION);
 
     this.notify();
@@ -212,7 +225,7 @@ class StorageService {
     const standards = INITIAL_PART_LIFE_STANDARDS;
     const stocks = INITIAL_SPARE_STOCKS;
 
-    const baseItems = INITIAL_LIVE_DATA_E6.items.map((item, idx) => {
+    const baseItems = INITIAL_LIVE_DATA_E1.items.map((item, idx) => {
       const currentShotRatio = [0.45, 0.62, 0.78, 0.88, 0.55, 0.12, 0.12, 0.70, 0.65, 0.08, 0.52, 0.07][idx % 12];
       const curShot = Math.round((item.lifeLimit || 100000000) * currentShotRatio);
       const lastChange = Math.max(0, totalShots - curShot);
@@ -505,13 +518,8 @@ class StorageService {
     return JSON.parse(localStorage.getItem(STORAGE_KEYS.AUDIT_LOGS) || '[]');
   }
 
-  public getSettings(): SystemSettings {
-    return JSON.parse(localStorage.getItem(STORAGE_KEYS.SETTINGS) || JSON.stringify(DEFAULT_SYSTEM_SETTINGS));
-  }
-
-  public updateSettings(settings: SystemSettings) {
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
-    this.addAuditLog('SYSTEM', 'Updated system configuration and threshold settings');
+  public saveLinesMonitoring(lines: Record<ProductionLineId, LineLiveMonitoringData>): void {
+    localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(lines));
     this.notify();
   }
 
@@ -677,7 +685,7 @@ class StorageService {
     
     const draftRecord: ShotEntryRecord = {
       id: draft.id || `DRAFT-SHOT-${Date.now()}`,
-      lineId: draft.lineId || 'E6',
+      lineId: (draft.lineId as ProductionLineId) || 'E1',
       configurationId: draft.configurationId,
       configurationSlot: draft.configurationSlot,
       dieCode: draft.dieCode,
@@ -1429,7 +1437,7 @@ class StorageService {
 
   public previewReplacement(record: Partial<ReplacementRecord>) {
     const all = this.getLinesMonitoring();
-    const lineId = record.lineId || 'E6';
+    const lineId = record.lineId || 'E1';
     const line = all[lineId];
     const stocks = this.getSpareStocks();
     const standards = this.getLifeStandards();
@@ -1514,7 +1522,7 @@ class StorageService {
     const user = this.getCurrentUser();
     const replacements = this.getReplacements();
     const all = this.getLinesMonitoring();
-    const lineId = record.lineId || 'E6';
+    const lineId: ProductionLineId = record.lineId || 'E1';
     const line = all[lineId];
 
     if (!line) {
@@ -1843,10 +1851,10 @@ class StorageService {
       partCode: record.partCode || (std ? std.partCode : 'P-TOOL-001'),
       partName: record.partName || (std ? std.partName : 'Tooling Element'),
       serialNumber: record.partInstanceOrLot || record.serialNumber,
-      lineId: record.lineId || record.lineLastUsed || 'E6',
-      lineLastUsed: record.lineLastUsed || record.lineId || 'E6',
-      dieCode: record.dieCode || record.finDie || 'FD-E6-07',
-      finDie: record.finDie || record.dieCode || 'FD-E6-07',
+      lineId: (record.lineId as ProductionLineId) || (record.lineLastUsed as ProductionLineId) || 'E1',
+      lineLastUsed: (record.lineLastUsed as ProductionLineId) || (record.lineId as ProductionLineId) || 'E1',
+      dieCode: record.dieCode || record.finDie || 'FD-E1-07',
+      finDie: record.finDie || record.dieCode || 'FD-E1-07',
       previousLength: prevLength,
       currentLength: curLength,
       actualGrindingRemovedMm: mmRemoved,
@@ -2778,7 +2786,7 @@ class StorageService {
 
 
   private initializeDefaultPositionLocks(): PositionLockRecord[] {
-    const lines: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5', 'E6'];
+    const lines: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
     const result: PositionLockRecord[] = [];
 
     lines.forEach(lineId => {
@@ -2800,8 +2808,8 @@ class StorageService {
           let notes = '';
           let isSampleLocked = false;
 
-          // Keep some dummy locked data for testing as before
-          if (lineId === 'E6' && stg.stageCode.includes('PRC') && (i === 4 || i === 12)) {
+          // Sample locks for testing on Line E1
+          if (lineId === 'E1' && stg.stageCode.includes('PRC') && (i === 4 || i === 12)) {
             isSampleLocked = true;
             if (i === 4) {
               lockType = 'LOCKED_MAINTENANCE';
@@ -2816,7 +2824,7 @@ class StorageService {
               lockedAt = '2026-08-29T08:00:00.000Z';
               notes = 'Counter frozen during sample coil run.';
             }
-          } else if (lineId === 'E6' && stg.stageCode.includes('LOUV') && i === 18) {
+          } else if (lineId === 'E1' && stg.stageCode.includes('LOUV') && i === 18) {
             isSampleLocked = true;
             lockType = 'LOCKED_BYPASS';
             lockReason = 'Louver blade wear inspection hold';
@@ -3025,7 +3033,7 @@ class StorageService {
 
   public getLineDowntimeSummary30Days(): Downtime30DayReport {
     const logs = this.getDowntimeLogs();
-    const lineIds: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5', 'E6'];
+    const lineIds: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
     const now = Date.now();
     const thirtyDaysAgoMs = now - (30 * 24 * 3600 * 1000);
     const plannedHoursPerLine = 30 * 24; // 720 hours in 30 days
@@ -3116,6 +3124,182 @@ class StorageService {
       bottleneckLineId,
       lineSummaries
     };
+  }
+
+  // ==========================================
+  // SYSTEM SETTINGS & THEMES
+  // ==========================================
+
+  public getSettings(): SystemSettings {
+    const raw = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+    if (!raw) {
+      localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(DEFAULT_SYSTEM_SETTINGS));
+      return DEFAULT_SYSTEM_SETTINGS;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      // Ensure theme is never 'hmi'
+      if (parsed.theme === 'hmi') {
+        parsed.theme = 'dark';
+      }
+      return { ...DEFAULT_SYSTEM_SETTINGS, ...parsed };
+    } catch {
+      return DEFAULT_SYSTEM_SETTINGS;
+    }
+  }
+
+  public saveSettings(settings: Partial<SystemSettings>): void {
+    const current = this.getSettings();
+    const updated: SystemSettings = { ...current, ...settings };
+    if (updated.theme === ('hmi' as any)) {
+      updated.theme = 'dark';
+    }
+    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(updated));
+    this.addAuditLog('SYSTEM', 'Updated system preferences & operational thresholds');
+    this.notify();
+  }
+
+  public updateSettings(settings: Partial<SystemSettings>): void {
+    this.saveSettings(settings);
+  }
+
+  // ==========================================
+  // PLC REGISTER MAPPINGS (7 LINES)
+  // ==========================================
+
+  public getPLCRegisterMappings(): Record<ProductionLineId, PLCRegisterMapping> {
+    const raw = localStorage.getItem(STORAGE_KEYS.PLC_MAPPINGS);
+    if (!raw) {
+      localStorage.setItem(STORAGE_KEYS.PLC_MAPPINGS, JSON.stringify(INITIAL_PLC_REGISTER_MAPPINGS));
+      return INITIAL_PLC_REGISTER_MAPPINGS;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      return { ...INITIAL_PLC_REGISTER_MAPPINGS, ...parsed };
+    } catch {
+      return INITIAL_PLC_REGISTER_MAPPINGS;
+    }
+  }
+
+  public savePLCRegisterMapping(mapping: PLCRegisterMapping): void {
+    const all = this.getPLCRegisterMappings();
+    all[mapping.lineId] = { ...mapping, readOnly: true };
+    localStorage.setItem(STORAGE_KEYS.PLC_MAPPINGS, JSON.stringify(all));
+    const tag = mapping.tagName || mapping.plcTagName || 'ShotRegister';
+    this.addAuditLog('CONFIGURATION', `Updated PLC Register mapping for Line ${mapping.lineId} (${tag} @ ${mapping.registerAddress})`, undefined, mapping.lineId);
+    this.notify();
+  }
+
+  public savePLCRegisterMappings(mappings: Record<ProductionLineId, PLCRegisterMapping>): void {
+    localStorage.setItem(STORAGE_KEYS.PLC_MAPPINGS, JSON.stringify(mappings));
+    this.addAuditLog('CONFIGURATION', 'Updated all PLC register telemetry mappings (7 lines)');
+    this.notify();
+  }
+
+  // ==========================================
+  // GATEWAY STATUS & HEARTBEAT
+  // ==========================================
+
+  public getGatewayStatus(): GatewayStatusInfo {
+    const raw = localStorage.getItem(STORAGE_KEYS.GATEWAY_STATUS);
+    if (!raw) {
+      localStorage.setItem(STORAGE_KEYS.GATEWAY_STATUS, JSON.stringify(INITIAL_GATEWAY_STATUS));
+      return INITIAL_GATEWAY_STATUS;
+    }
+    try {
+      return { ...INITIAL_GATEWAY_STATUS, ...JSON.parse(raw) };
+    } catch {
+      return INITIAL_GATEWAY_STATUS;
+    }
+  }
+
+  public saveGatewayStatus(status: Partial<GatewayStatusInfo>): void {
+    const current = this.getGatewayStatus();
+    const updated: GatewayStatusInfo = { ...current, ...status, readOnlyEnforced: true };
+    localStorage.setItem(STORAGE_KEYS.GATEWAY_STATUS, JSON.stringify(updated));
+    this.notify();
+  }
+
+  // ==========================================
+  // SYSTEM ALERTS & NOTIFICATIONS
+  // ==========================================
+
+  public getSystemAlerts(): SystemAlertItem[] {
+    const raw = localStorage.getItem(STORAGE_KEYS.SYSTEM_ALERTS);
+    if (!raw) {
+      localStorage.setItem(STORAGE_KEYS.SYSTEM_ALERTS, JSON.stringify(INITIAL_SYSTEM_ALERTS));
+      return INITIAL_SYSTEM_ALERTS;
+    }
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return INITIAL_SYSTEM_ALERTS;
+    }
+  }
+
+  public addSystemAlert(alert: Omit<SystemAlertItem, 'id' | 'createdAt'>): SystemAlertItem {
+    const alerts = this.getSystemAlerts();
+    const newAlert: SystemAlertItem = {
+      id: `ALT-${Date.now().toString().slice(-6)}`,
+      createdAt: new Date().toISOString(),
+      isRead: false,
+      isAcknowledged: false,
+      ...alert
+    };
+    alerts.unshift(newAlert);
+    if (alerts.length > 50) alerts.length = 50;
+    localStorage.setItem(STORAGE_KEYS.SYSTEM_ALERTS, JSON.stringify(alerts));
+    this.notify();
+    return newAlert;
+  }
+
+  public acknowledgeAlert(id: string, userName: string): void {
+    const alerts = this.getSystemAlerts();
+    const item = alerts.find(a => a.id === id);
+    if (item) {
+      item.isAcknowledged = true;
+      item.acknowledgedBy = userName;
+      item.acknowledgedAt = new Date().toISOString();
+      item.isRead = true;
+      localStorage.setItem(STORAGE_KEYS.SYSTEM_ALERTS, JSON.stringify(alerts));
+      this.notify();
+    }
+  }
+
+  public markAlertAsRead(id: string): void {
+    const alerts = this.getSystemAlerts();
+    const item = alerts.find(a => a.id === id);
+    if (item) {
+      item.isRead = true;
+      localStorage.setItem(STORAGE_KEYS.SYSTEM_ALERTS, JSON.stringify(alerts));
+      this.notify();
+    }
+  }
+
+  // ==========================================
+  // OFFLINE TELEMETRY BUFFER
+  // ==========================================
+
+  public getOfflineTelemetryBuffer(): any[] {
+    const raw = localStorage.getItem(STORAGE_KEYS.OFFLINE_BUFFER);
+    try {
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  public pushTelemetryBuffer(record: any): void {
+    const buffer = this.getOfflineTelemetryBuffer();
+    buffer.push(record);
+    if (buffer.length > 500) {
+      buffer.splice(0, buffer.length - 500);
+    }
+    localStorage.setItem(STORAGE_KEYS.OFFLINE_BUFFER, JSON.stringify(buffer));
+  }
+
+  public clearTelemetryBuffer(): void {
+    localStorage.setItem(STORAGE_KEYS.OFFLINE_BUFFER, JSON.stringify([]));
   }
 }
 

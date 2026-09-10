@@ -15,7 +15,7 @@ export function usePLCConnection() {
   const [pingLatency, setPingLatency] = useState<number | null>(null);
   const [logs, setLogs] = useState<string[]>([
     `[${new Date().toLocaleTimeString()}] [PLC DRIVER] Driver initialized in standby mode.`,
-    `[${new Date().toLocaleTimeString()}] [PLC DRIVER] Hardware Target: Fin Press Counter Module (Lines E1 - E6+)`,
+    `[${new Date().toLocaleTimeString()}] [PLC DRIVER] Hardware Target: Fin Press Counter Module (Lines E1 - E5, 7 Lines Total)`,
     `[${new Date().toLocaleTimeString()}] [PLC DRIVER] Ready for socket / WebSocket / REST connection handshake.`
   ]);
 
@@ -138,7 +138,7 @@ export function usePLCConnection() {
     if (config.connectionMode === 'SIMULATION') {
       appendLog(`[PLC DRIVER] SIMULATION Mode Active. Polling interval: ${intervalMs}ms`);
       pollingTimer = setInterval(() => {
-        // Pick an active line or line E6 to simulate PLC shot increment
+        // Pick an active line (E1, E2, E3-1, E3-2, E3-3, E4, E5) to simulate PLC shot increment
         const activeLines = (Object.values(config.lineRegisters) as PLCLineRegisterMap[]).filter((r: PLCLineRegisterMap) => r.active);
         if (activeLines.length === 0) return;
 
@@ -169,14 +169,14 @@ export function usePLCConnection() {
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            const lineId = data.lineId || data.line || 'E6';
+            const lineId = data.lineId || data.line || 'E1';
             const inc = data.inc || data.shots || 1;
             const currentPending = pendingBatchRef.current.get(lineId) || 0;
             pendingBatchRef.current.set(lineId, currentPending + inc);
           } catch {
             // Raw text or pulse trigger
-            const currentPending = pendingBatchRef.current.get('E6') || 0;
-            pendingBatchRef.current.set('E6', currentPending + 1);
+            const currentPending = pendingBatchRef.current.get('E1') || 0;
+            pendingBatchRef.current.set('E1', currentPending + 1);
           }
         };
 
@@ -228,8 +228,8 @@ export function usePLCConnection() {
           }
         } catch {
           // Fallback simulation
-          const curr = pendingBatchRef.current.get('E6') || 0;
-          pendingBatchRef.current.set('E6', curr + 1);
+          const curr = pendingBatchRef.current.get('E1') || 0;
+          pendingBatchRef.current.set('E1', curr + 1);
         }
       }, intervalMs);
     }
@@ -238,7 +238,7 @@ export function usePLCConnection() {
     else if (config.connectionMode === 'MODBUS_TCP') {
       appendLog(`[PLC DRIVER] Modbus TCP Driver Active (${config.ip}:${config.port}, Slave ID: ${config.slaveId}). Polling ${intervalMs}ms`);
       pollingTimer = setInterval(() => {
-        // Poll registers %MW101-%MW108
+        // Poll registers %MW101-%MW107
         const activeLines = (Object.values(config.lineRegisters) as PLCLineRegisterMap[]).filter((r: PLCLineRegisterMap) => r.active);
         if (activeLines.length === 0) return;
 
@@ -287,7 +287,7 @@ export function usePLCConnection() {
       appendLog(`[PLC DRIVER] Socket handshake SUCCESS! Latency: ${latency}ms`);
       appendLog(`[PLC DRIVER] Target Holding Registers [${mappedAddresses}] Read SUCCESS (16 Bytes Parsed)`);
 
-      const sampleLine = config.lineRegisters['E6'];
+      const sampleLine = config.lineRegisters['E1'];
       if (sampleLine) {
         appendLog(`[PLC DRIVER] Sample Register Read: Line ${sampleLine.lineId} (${sampleLine.address}) = ${sampleLine.currentVal.toLocaleString()} shots`);
       }

@@ -2,7 +2,7 @@
  * Type definitions for Fin Press & Fin Die Spare Parts Shot Control System
  */
 
-export type ProductionLineId = 'E1' | 'E2' | 'E3-1' | 'E3-2' | 'E3-3' | 'E4' | 'E5' | 'E6';
+export type ProductionLineId = 'E1' | 'E2' | 'E3-1' | 'E3-2' | 'E3-3' | 'E4' | 'E5';
 
 export interface LineInfoDetails {
   id: ProductionLineId;
@@ -35,8 +35,8 @@ export const LINE_INFO_MAP: Record<ProductionLineId, LineInfoDetails> = {
   },
   'E3-1': {
     id: 'E3-1',
-    name: 'LINE E3',
-    nameTh: 'ไลน์ E3 (Slit 3P)',
+    name: 'LINE E3-1',
+    nameTh: 'ไลน์ E3-1 (Slit 3P)',
     shortTag: 'Slit 3P',
     tubeSize: 'Ø7',
     finType: 'Slit 3-Pass',
@@ -44,8 +44,8 @@ export const LINE_INFO_MAP: Record<ProductionLineId, LineInfoDetails> = {
   },
   'E3-2': {
     id: 'E3-2',
-    name: 'LINE E3',
-    nameTh: 'ไลน์ E3 (WL+ 4P)',
+    name: 'LINE E3-2',
+    nameTh: 'ไลน์ E3-2 (WL+ 4P)',
     shortTag: 'WL+ 4P',
     tubeSize: 'Ø7',
     finType: 'Wavy Louver 4P',
@@ -53,8 +53,8 @@ export const LINE_INFO_MAP: Record<ProductionLineId, LineInfoDetails> = {
   },
   'E3-3': {
     id: 'E3-3',
-    name: 'LINE E3',
-    nameTh: 'ไลน์ E3 (Corr 4P)',
+    name: 'LINE E3-3',
+    nameTh: 'ไลน์ E3-3 (Corr 4P)',
     shortTag: 'Corr 4P',
     tubeSize: 'Ø7',
     finType: 'Corrugate 4P',
@@ -77,15 +77,6 @@ export const LINE_INFO_MAP: Record<ProductionLineId, LineInfoDetails> = {
     tubeSize: 'Ø5',
     finType: 'Slit (half)',
     description: 'High Speed Ø5 Gold Slit'
-  },
-  'E6': {
-    id: 'E6',
-    name: 'LINE E6',
-    nameTh: 'ไลน์ E6 (Ø7 Louver)',
-    shortTag: 'Ø7 Louver',
-    tubeSize: 'Ø7',
-    finType: 'Lover',
-    description: 'Heavy Duty Ø7 PCM Louver'
   }
 };
 
@@ -377,7 +368,7 @@ export interface LineActiveConfiguration {
   lineId: ProductionLineId;
   lineName: string;
   configurationSlot?: string; // e.g. "SLOT-01", "Slot 1 - Primary Production"
-  machineId?: string; // Machine identifier e.g. "PRESS-E6 (OAK FP-100)"
+  machineId?: string; // Machine identifier e.g. "PRESS-E1 (OAK FP-100)"
   mainFinDie?: string; // Main Fin Die name
   dieCode: string;
   dieName: string;
@@ -786,18 +777,250 @@ export interface AuditLogEntry {
 
 export type AppTheme = 'dark' | 'light' | 'hmi' | 'industrial-dark';
 
-export type PLCConnectionMode = 'SIMULATION' | 'WEBSOCKET_MQTT' | 'REST_POLLING' | 'MODBUS_TCP';
+// 4 Connection Modes
+export type PLCConnectionMode = 
+  | 'SIMULATION' 
+  | 'EDGE_MQTT'
+  | 'EDGE_GATEWAY_MQTT' 
+  | 'REST_API_GATEWAY' 
+  | 'LOCAL_BRIDGE';
 
+// Supported Industrial Protocols
 export type PLCProtocol = 
   | 'MODBUS_TCP' 
   | 'SIEMENS_S7' 
   | 'OPC_UA' 
-  | 'OMRON_ETHERNET' 
-  | 'FIN_PLC_NATIVE' 
-  | 'WEBSOCKET_MQTT' 
-  | 'REST_API';
+  | 'MITSUBISHI_MC' 
+  | 'OMRON_FINS' 
+  | 'MQTT_GATEWAY' 
+  | 'REST_API_GATEWAY';
 
-export type PLCConnectionStatus = 'CONNECTED' | 'CONNECTING' | 'RECONNECTING' | 'DISCONNECTED' | 'ERROR';
+// 13 Gateway and PLC Statuses
+export type GatewayPLCConnectionStatus = 
+  | 'CONNECTED' 
+  | 'DISCONNECTED' 
+  | 'CONNECTING' 
+  | 'RECONNECTING' 
+  | 'PLC_TIMEOUT' 
+  | 'REGISTER_ERROR' 
+  | 'BAD_QUALITY' 
+  | 'COUNTER_RESET' 
+  | 'ABNORMAL_JUMP' 
+  | 'GATEWAY_OFFLINE' 
+  | 'BUFFERING' 
+  | 'SIMULATION' 
+  | 'DISABLED';
+
+export type PLCConnectionStatus = GatewayPLCConnectionStatus;
+
+// Register Types
+export type PLCRegisterType = 
+  | 'Holding Register' 
+  | 'Input Register' 
+  | 'Coil' 
+  | 'Discrete Input' 
+  | 'Data Block' 
+  | 'Memory Word' 
+  | 'PLC Tag';
+
+// Data Types
+export type PLCDataType = 
+  | 'Boolean' 
+  | 'UInt16' 
+  | 'Int16' 
+  | 'UInt32' 
+  | 'Int32' 
+  | 'Float32' 
+  | 'Float64';
+
+// Word Orders
+export type PLCWordOrder = 'ABCD' | 'BADC' | 'CDAB' | 'DCBA';
+
+// Telemetry Data Quality
+export type TelemetryQuality = 'GOOD' | 'BAD' | 'REVIEW_REQUIRED' | 'SIMULATED';
+
+// Exact Shot Telemetry Data Model
+export interface ShotTelemetryPayload {
+  schemaVersion?: number;
+  eventId?: string;
+  gatewayId: string;
+  lineId: ProductionLineId;
+  machineId?: string;
+  dieId?: string;
+  source: 'PLC' | 'SIMULATION' | 'BUFFER' | 'MANUAL';
+  protocol: string;
+  plcTotalShot?: number;
+  rawShotCount?: number;
+  deltaShot?: number;
+  shotDelta?: number;
+  spm?: number;
+  tagAddress?: string;
+  machineStatus: 'RUNNING' | 'IDLE' | 'STOPPED' | 'MAINTENANCE' | 'CHANGEOVER';
+  capturedAt?: string; // ISO 8601
+  receivedAt?: string; // ISO 8601
+  plcTimestamp?: string;
+  gatewayTimestamp?: string;
+  quality?: TelemetryQuality;
+  sequenceNumber: number;
+}
+
+export interface ShotTelemetryBatch {
+  gatewayId: string;
+  batchId: string;
+  connectionMode?: GatewayConnectionMode | string;
+  timestamp: string;
+  records?: ShotTelemetryPayload[];
+  items?: ShotTelemetryPayload[];
+}
+
+export type GatewayConnectionMode = 'SIMULATION' | 'EDGE_MQTT' | 'REST_API_GATEWAY' | 'LOCAL_BRIDGE' | PLCConnectionMode;
+
+// PLC Register Mapping for each line
+export interface PLCRegisterMapping {
+  mappingId?: string;
+  lineId: ProductionLineId;
+  lineName?: string;
+  machineId?: string;
+  machineModel?: string;
+  gatewayId?: string;
+  protocol: PLCProtocol | string;
+  plcIp?: string;
+  ipAddress?: string;
+  port: number;
+  unitId: number;
+  dbNumber?: number;
+  registerType?: PLCRegisterType;
+  registerAddress: string;
+  plcTagName?: string;
+  tagName?: string;
+  dataType?: PLCDataType | string;
+  byteOrder?: string;
+  wordOrder?: PLCWordOrder | string;
+  scale?: number;
+  scaleFactor?: number;
+  engineeringUnit?: string; // Default 'Shot'
+  pollingInterval?: number; // ms e.g. 1000
+  pollIntervalMs?: number;
+  maxExpectedShotRate?: number; // e.g. 500 shots per interval
+  maxAllowedDeltaPerInterval?: number;
+  enabled: boolean;
+  readOnly: boolean; // Must always be true for production
+  lastRawValue?: string | number;
+  lastDecodedValue?: number;
+  lastReadTime?: string;
+  dataQuality?: TelemetryQuality;
+  connectionStatus?: GatewayPLCConnectionStatus;
+}
+
+// Gateway and PLC Status Panel Info
+export interface GatewayStatusInfo {
+  gatewayId: string;
+  gatewayName: string;
+  connectionMode?: GatewayConnectionMode;
+  isOnline?: boolean;
+  gatewayIp?: string;
+  gatewayUrl?: string;
+  driverVersion?: string;
+  firmwareVersion?: string;
+  gatewayStatus?: GatewayPLCConnectionStatus;
+  plcConnectionStatus?: GatewayPLCConnectionStatus;
+  activeProtocol: PLCProtocol | string;
+  plcIp?: string;
+  plcPort?: number;
+  lastGatewayHeartbeat?: string;
+  lastHeartbeat?: string;
+  lastPlcRead?: string;
+  lastServerSync?: string;
+  latencyMs: number;
+  connectedLinesCount?: number;
+  totalLinesCount?: number;
+  uptimeSeconds?: number;
+  cpuUsagePercent?: number;
+  memoryUsagePercent?: number;
+  bufferedRecordsCount?: number;
+  bufferPendingRecordsCount?: number;
+  failedUploadCount?: number;
+  dataQuality?: TelemetryQuality;
+  syncStatus?: 'SYNCED' | 'BUFFERING' | 'RECONNECTING' | 'OFFLINE' | 'SYNCING';
+  readOnlyEnforced?: boolean;
+  lastError?: string | null;
+  latestErrorCode?: string;
+  latestErrorMessage?: string;
+}
+
+// Offline Store-and-Forward Buffer Record
+export interface OfflineBufferRecord {
+  id: string;
+  eventId: string;
+  gatewayId: string;
+  lineId: ProductionLineId;
+  telemetry: ShotTelemetryPayload;
+  capturedAt: string;
+  retryCount: number;
+  status: 'PENDING' | 'UPLOADED' | 'FAILED';
+  lastAttempt?: string;
+  error?: string;
+}
+
+// Counter Event (Counter Reset / Abnormal Jump)
+export interface CounterApprovalEvent {
+  id: string;
+  eventId: string;
+  lineId: ProductionLineId;
+  machineId: string;
+  eventType: 'COUNTER_RESET_DETECTED' | 'ABNORMAL_COUNTER_JUMP';
+  previousTotal: number;
+  currentTotal: number;
+  detectedDelta: number;
+  maxAllowedRate: number;
+  status: 'PENDING_REVIEW' | 'APPROVED_SET_BASELINE' | 'REJECTED';
+  detectedAt: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  resolutionNote?: string;
+  appliedNewBaseline?: number;
+}
+
+// System Alert Item
+export interface SystemAlertItem {
+  id: string;
+  alertId?: string;
+  severity?: 'INFO' | 'WARNING' | 'HIGH' | 'CRITICAL';
+  level?: 'INFO' | 'WARNING' | 'HIGH' | 'CRITICAL';
+  title?: string;
+  titleTh?: string;
+  lineId?: ProductionLineId;
+  machineId?: string;
+  partId?: string;
+  partCode?: string;
+  partName?: string;
+  source?: string;
+  eventType?: 
+    | 'PART_WARNING' 
+    | 'PART_PREPARE' 
+    | 'PART_CRITICAL' 
+    | 'PART_OVER_LIFE' 
+    | 'MISSING_PART_LIMIT' 
+    | 'PLC_DISCONNECTED' 
+    | 'GATEWAY_OFFLINE' 
+    | 'BAD_DATA_QUALITY' 
+    | 'COUNTER_RESET' 
+    | 'ABNORMAL_COUNTER_JUMP' 
+    | 'MISSING_SEQUENCE' 
+    | 'BUFFER_PENDING_TOO_LONG' 
+    | 'REGISTER_READ_ERROR';
+  message: string;
+  createdTime?: string;
+  createdAt?: string;
+  acknowledgedTime?: string;
+  acknowledgedAt?: string;
+  acknowledgedBy?: string;
+  resolutionNote?: string;
+  status?: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED';
+  assignedTo?: string;
+  isRead?: boolean;
+  isAcknowledged?: boolean;
+}
 
 export interface PLCLineRegisterMap {
   lineId: string;
@@ -809,15 +1032,29 @@ export interface PLCLineRegisterMap {
 }
 
 export interface PLCConfig {
-  connectionMode: PLCConnectionMode;
+  connectionMode: GatewayConnectionMode;
   protocol: PLCProtocol;
+  gatewayId: string;
+  gatewayName: string;
+  gatewayUrl: string;
   ip: string;
   port: number;
   slaveId: number;
+  unitId?: number;
   pollingIntervalMs: number;
-  wsUrl: string;
-  restApiUrl: string;
-  uiThrottleMs: number;
+  connectionTimeoutMs: number;
+  retryIntervalMs: number;
+  maxRetry: number;
+  heartbeatIntervalMs: number;
+  apiToken: string;
+  mqttBrokerUrl: string;
+  mqttClientId: string;
+  mqttTopicPrefix: string;
+  tlsEnabled: boolean;
+  readOnlyMode: boolean; // Must be true
+  wsUrl?: string;
+  restApiUrl?: string;
+  uiThrottleMs?: number;
   isAutoPolling: boolean;
   lineRegisters: Record<string, PLCLineRegisterMap>;
 }

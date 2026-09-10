@@ -1,4 +1,5 @@
 import {
+  ProductionLineId,
   PartMaster,
   PartLifeStandard,
   LineActiveConfiguration,
@@ -14,7 +15,10 @@ import {
   ShotEntryRecord,
   SystemSettings,
   PLCConfig,
-  DowntimeLogEntry
+  DowntimeLogEntry,
+  PLCRegisterMapping,
+  GatewayStatusInfo,
+  SystemAlertItem
 } from '../types';
 
 export const SEED_DATA_VERSION = '2025.01.31-REV1';
@@ -71,7 +75,7 @@ export const INITIAL_USERS: User[] = [
     nameTh: 'วิชัย รักษาผล',
     email: 'wichai.r@heatexchange.co.th',
     role: 'OPERATOR',
-    department: 'Line E6 Press Operator',
+    department: 'Line E5 Press Operator',
     employeeId: 'EMP-4091',
     isActive: true,
     lastLogin: '2026-08-28 14:55:00'
@@ -1408,91 +1412,6 @@ export const INITIAL_LINE_CONFIGS: LineActiveConfiguration[] = [
     }
   },
   {
-    id: 'CFG-E6-001',
-    lineId: 'E6',
-    lineName: 'Fin Press Line E6',
-    configurationSlot: 'SLOT-01 (Primary Run)',
-    machineId: 'PRESS-E6 (OAK FP-100)',
-    mainFinDie: 'Fin Die E6 (Ø7 PCM Slit/Full)',
-    dieCode: 'FD-E6-07',
-    dieName: 'Fin Die E6 (Ø7 PCM Slit/Full)',
-    tubeSize: 'Ø7',
-    rowsCount: 60,
-    columnsCount: 3,
-    pathsCount: '3P',
-    finType: 'Slit (half)',
-    material: 'PCM',
-    thicknessMm: 0.10,
-    effectiveFrom: '2025-01-01T08:00',
-    status: 'ACTIVE',
-    isActive: true,
-    defaultSpm: 120,
-    revision: 'Rev 1.0',
-    versionNumber: 1,
-    reasonForChange: 'LE6-1 Reference Master Die Configuration for PCM 0.10mm coil',
-    approvedBy: 'Somchai Prasert',
-    approvedAt: '2025-01-01T08:00',
-    notes: 'Heavy duty PCM line (LE6-1 Reference Line)',
-    installedPartQuantities: {
-      'P-FORM-001': 180,
-      'D-FORM-001': 180,
-      'P-PRC-001': 180,
-      'D-PRC-001': 180,
-      'P-IRON-001': 180,
-      'D-IRON-001': 180,
-      'P-SLIT-001': 180,
-      'D-SLIT-001': 15,
-      'P-REFL-001': 180,
-      'D-REFL-001': 180,
-      'P-CEN-001': 3,
-      'D-CEN-001': 31,
-      'P-COR-001': 62,
-      'D-COR-001': 62,
-      'P-SIDE-001': 2,
-      'D-SIDE-001': 2,
-      'P-PILOT-001': 60,
-      'P-RWS-001': 59,
-      'D-RWS-001': 59,
-      'P-CUT-001': 2,
-      'D-CUT-001': 2,
-    }
-  },
-  {
-    id: 'CFG-E6-002-DRAFT',
-    lineId: 'E6',
-    lineName: 'Fin Press Line E6',
-    configurationSlot: 'SLOT-02 (Upcoming Model Change)',
-    machineId: 'PRESS-E6 (OAK FP-100)',
-    mainFinDie: 'Fin Die E6 (Ø7 GOLD Lover)',
-    dieCode: 'FD-E6-07G',
-    dieName: 'Fin Die E6 (Ø7 GOLD Louver 0.11mm)',
-    tubeSize: 'Ø7',
-    rowsCount: 4,
-    columnsCount: 42,
-    pathsCount: '4P',
-    finType: 'Lover',
-    material: 'GOLD',
-    thicknessMm: 0.11,
-    effectiveFrom: '2026-09-01T08:00',
-    status: 'DRAFT',
-    isActive: false,
-    defaultSpm: 120,
-    revision: 'Rev 2.0-DRAFT',
-    versionNumber: 2,
-    reasonForChange: 'Prototype trial for high-corrosion gold fin product line',
-    createdBy: 'Anan Chaikit',
-    createdAt: '2026-08-25T14:30',
-    notes: 'Draft engineering revision for Q4 high efficiency trial',
-    installedPartQuantities: {
-      'P-LOUV-001': 138,
-      'D-LOUV-001': 12,
-      'B-ROW-SLIT-07': 90,
-      'P-CUT-OFF-07': 3,
-      'D-CUT-OFF-07': 3,
-      'P-PIN-FEED-07': 138
-    }
-  },
-  {
     id: 'CFG-E1-002-PENDING',
     lineId: 'E1',
     lineName: 'Fin Press Line E1',
@@ -2352,9 +2271,9 @@ export const INITIAL_PART_LIFE_STANDARDS: PartLifeStandard[] = [
   }
 ];
 
-export const INITIAL_LIVE_DATA_E6: LineLiveMonitoringData = {
-  lineId: 'E6',
-  lineName: 'E6',
+export const INITIAL_LIVE_DATA_E1: LineLiveMonitoringData = {
+  lineId: 'E1',
+  lineName: 'E1',
   machineStatus: 'RUNNING',
   machineShotTotal: 153474176,
   shiftShot: 245680,
@@ -2362,7 +2281,7 @@ export const INITIAL_LIVE_DATA_E6: LineLiveMonitoringData = {
   monthlyShot: 51827311,
   shotSignal: 'NORMAL',
   lastUpdate: '2026-08-28 14:55:18',
-  activeConfig: INITIAL_LINE_CONFIGS[7],
+  activeConfig: INITIAL_LINE_CONFIGS[0],
   alertBanner: 'Louver Punch : 97% (Remaining 2,674,770 Shot) | Forecast 03-Sep-2026 | Spare Stock 50/168 EA | PO ETA 15-Sep-2026 (RISK: 12 DAYS LATE)',
   items: [
     {
@@ -2384,7 +2303,7 @@ export const INITIAL_LIVE_DATA_E6: LineLiveMonitoringData = {
       regrindSpec: '0.25-0.35 mm (Max 1.00 mm)',
       orderStatus: 'NOT REQUIRED',
       alertStatus: 'WARNING',
-      configKeyString: buildCompositeKey('E6', 'CFG-E6-001', 'FD-E6-07', 'Slit (half)', 'PCM', 0.10, 'Ø7', 'P-BUCK-001', 'ALL', '2025-01-31')
+      configKeyString: buildCompositeKey('E1', 'CFG-E1-001', 'FD-E1-07', 'Slit (half)', 'PCM', 0.10, 'Ø7', 'P-BUCK-001', 'ALL', '2025-01-31')
     },
     {
       slotId: 'SLOT-02',
@@ -2405,7 +2324,7 @@ export const INITIAL_LIVE_DATA_E6: LineLiveMonitoringData = {
       regrindSpec: '0.15-0.20 mm (Max 1.50 mm)',
       orderStatus: 'NOT REQUIRED',
       alertStatus: 'NORMAL',
-      configKeyString: buildCompositeKey('E6', 'CFG-E6-001', 'FD-E6-07', 'Slit (half)', 'PCM', 0.10, 'Ø7', 'P-IRON-001', 'ALL', '2025-01-31')
+      configKeyString: buildCompositeKey('E1', 'CFG-E1-001', 'FD-E1-07', 'Slit (half)', 'PCM', 0.10, 'Ø7', 'P-IRON-001', 'ALL', '2025-01-31')
     },
     {
       slotId: 'SLOT-03',
@@ -2427,7 +2346,7 @@ export const INITIAL_LIVE_DATA_E6: LineLiveMonitoringData = {
       orderStatus: 'PR PREPARING',
       alertStatus: 'PREPARE',
       etaDeliveryDate: '2026-09-20',
-      configKeyString: buildCompositeKey('E6', 'CFG-E6-001', 'FD-E6-07', 'Slit (half)', 'PCM', 0.10, 'Ø7', 'D-IRON-001', 'ALL', '2025-01-31')
+      configKeyString: buildCompositeKey('E1', 'CFG-E1-001', 'FD-E1-07', 'Slit (half)', 'PCM', 0.10, 'Ø7', 'D-IRON-001', 'ALL', '2025-01-31')
     },
     {
       slotId: 'SLOT-04',
@@ -2451,7 +2370,7 @@ export const INITIAL_LIVE_DATA_E6: LineLiveMonitoringData = {
       etaDeliveryDate: '2026-09-15',
       deliveryRiskDays: 12,
       daysRemainingForecast: 5,
-      configKeyString: buildCompositeKey('E6', 'CFG-E6-001', 'FD-E6-07', 'Slit (half)', 'PCM', 0.10, 'Ø7', 'P-LOUV-001', 'ALL', '2025-01-31')
+      configKeyString: buildCompositeKey('E1', 'CFG-E1-001', 'FD-E1-07', 'Slit (half)', 'PCM', 0.10, 'Ø7', 'P-LOUV-001', 'ALL', '2025-01-31')
     },
     {
       slotId: 'SLOT-05',
@@ -2472,7 +2391,7 @@ export const INITIAL_LIVE_DATA_E6: LineLiveMonitoringData = {
       regrindSpec: 'Dispose after 1 use',
       orderStatus: 'NOT REQUIRED',
       alertStatus: 'NORMAL',
-      configKeyString: buildCompositeKey('E6', 'CFG-E6-001', 'FD-E6-07', 'Slit (half)', 'PCM', 0.10, 'Ø7', 'D-LOUV-001', 'ALL', '2025-01-31')
+      configKeyString: buildCompositeKey('E1', 'CFG-E1-001', 'FD-E1-07', 'Slit (half)', 'PCM', 0.10, 'Ø7', 'D-LOUV-001', 'ALL', '2025-01-31')
     },
     {
       slotId: 'SLOT-06',
@@ -2493,7 +2412,7 @@ export const INITIAL_LIVE_DATA_E6: LineLiveMonitoringData = {
       regrindSpec: '0.20 mm (Max 1.20 mm)',
       orderStatus: 'NOT REQUIRED',
       alertStatus: 'NORMAL',
-      configKeyString: buildCompositeKey('E6', 'CFG-E6-001', 'FD-E6-07', 'Slit (half)', 'PCM', 0.10, 'Ø7', 'P-REFL-001', 'ALL', '2025-01-31')
+      configKeyString: buildCompositeKey('E1', 'CFG-E1-001', 'FD-E1-07', 'Slit (half)', 'PCM', 0.10, 'Ø7', 'P-REFL-001', 'ALL', '2025-01-31')
     },
     {
       slotId: 'SLOT-07',
@@ -2514,7 +2433,7 @@ export const INITIAL_LIVE_DATA_E6: LineLiveMonitoringData = {
       regrindSpec: '0.20 mm (Max 1.20 mm)',
       orderStatus: 'NOT REQUIRED',
       alertStatus: 'NORMAL',
-      configKeyString: buildCompositeKey('E6', 'CFG-E6-001', 'FD-E6-07', 'Slit (half)', 'PCM', 0.10, 'Ø7', 'D-REFL-001', 'ALL', '2025-01-31')
+      configKeyString: buildCompositeKey('E1', 'CFG-E1-001', 'FD-E1-07', 'Slit (half)', 'PCM', 0.10, 'Ø7', 'D-REFL-001', 'ALL', '2025-01-31')
     },
     {
       slotId: 'SLOT-08',
@@ -2535,7 +2454,7 @@ export const INITIAL_LIVE_DATA_E6: LineLiveMonitoringData = {
       regrindSpec: '0.10 mm (Max 1.50 mm) | 10-15 Day',
       orderStatus: 'NOT REQUIRED',
       alertStatus: 'WARNING',
-      configKeyString: buildCompositeKey('E6', 'CFG-E6-001', 'FD-E6-07', 'Slit (half)', 'PCM', 0.10, 'Ø7', 'B-ROW-SLIT-07', 'ALL', '2025-01-31')
+      configKeyString: buildCompositeKey('E1', 'CFG-E1-001', 'FD-E1-07', 'Slit (half)', 'PCM', 0.10, 'Ø7', 'B-ROW-SLIT-07', 'ALL', '2025-01-31')
     },
     {
       slotId: 'SLOT-09',
@@ -2557,7 +2476,7 @@ export const INITIAL_LIVE_DATA_E6: LineLiveMonitoringData = {
       orderStatus: 'ORDERED',
       alertStatus: 'WARNING',
       etaDeliveryDate: '2026-09-08',
-      configKeyString: buildCompositeKey('E6', 'CFG-E6-001', 'FD-E6-07', 'Slit (half)', 'PCM', 0.10, 'Ø7', 'P-SIDE-CUT-3P-07', 'ALL', '2025-01-31')
+      configKeyString: buildCompositeKey('E1', 'CFG-E1-001', 'FD-E1-07', 'Slit (half)', 'PCM', 0.10, 'Ø7', 'P-SIDE-CUT-3P-07', 'ALL', '2025-01-31')
     },
     {
       slotId: 'SLOT-10',
@@ -2578,7 +2497,7 @@ export const INITIAL_LIVE_DATA_E6: LineLiveMonitoringData = {
       regrindSpec: '0.15-0.20 mm (Max 1.50 mm)',
       orderStatus: 'NOT REQUIRED',
       alertStatus: 'NORMAL',
-      configKeyString: buildCompositeKey('E6', 'CFG-E6-001', 'FD-E6-07', 'Slit (half)', 'PCM', 0.10, 'Ø7', 'D-SIDE-CUT-3P-07', 'ALL', '2025-01-31')
+      configKeyString: buildCompositeKey('E1', 'CFG-E1-001', 'FD-E1-07', 'Slit (half)', 'PCM', 0.10, 'Ø7', 'D-SIDE-CUT-3P-07', 'ALL', '2025-01-31')
     },
     {
       slotId: 'SLOT-11',
@@ -2599,7 +2518,7 @@ export const INITIAL_LIVE_DATA_E6: LineLiveMonitoringData = {
       regrindSpec: '0.10 mm (Max 1.50 mm)',
       orderStatus: 'PR PREPARING',
       alertStatus: 'NORMAL',
-      configKeyString: buildCompositeKey('E6', 'CFG-E6-001', 'FD-E6-07', 'Slit (half)', 'PCM', 0.10, 'Ø7', 'P-CUT-OFF-07', 'ALL', '2025-01-31')
+      configKeyString: buildCompositeKey('E1', 'CFG-E1-001', 'FD-E1-07', 'Slit (half)', 'PCM', 0.10, 'Ø7', 'P-CUT-OFF-07', 'ALL', '2025-01-31')
     },
     {
       slotId: 'SLOT-12',
@@ -2620,7 +2539,7 @@ export const INITIAL_LIVE_DATA_E6: LineLiveMonitoringData = {
       regrindSpec: '0.10 mm (Max 1.50 mm)',
       orderStatus: 'NOT REQUIRED',
       alertStatus: 'NORMAL',
-      configKeyString: buildCompositeKey('E6', 'CFG-E6-001', 'FD-E6-07', 'Slit (half)', 'PCM', 0.10, 'Ø7', 'D-CUT-OFF-07', 'ALL', '2025-01-31')
+      configKeyString: buildCompositeKey('E1', 'CFG-E1-001', 'FD-E1-07', 'Slit (half)', 'PCM', 0.10, 'Ø7', 'D-CUT-OFF-07', 'ALL', '2025-01-31')
     }
   ]
 };
@@ -2654,7 +2573,7 @@ export const INITIAL_SPARE_STOCKS: SpareStockItem[] = [
     actualDeliveryDate: '',
     procurementStatus: 'IN PRODUCTION',
     buyer: 'Thanaporn Srisuk (PUR-01)',
-    note: 'Active fin die E6 louver punch is at 97% shot life. Urgent tracking required.',
+    note: 'Active fin die E1 louver punch is at 97% shot life. Urgent tracking required.',
     forecastReplacementDate: '2026-09-02',
     deliveryRiskDays: 13,
     hasDeliveryRisk: true,
@@ -3191,10 +3110,10 @@ export const INITIAL_REGRIND_MASTER_STANDARDS: RegrindMasterStandard[] = [
 export const INITIAL_REPLACEMENT_HISTORY: ReplacementRecord[] = [
   {
     id: 'REP-2026-0089',
-    lineId: 'E6',
-    configurationId: 'CFG-E6-001',
-    configurationSlot: 'Slot 1 - Primary Production (E6)',
-    dieCode: 'FD-E6-07',
+    lineId: 'E1',
+    configurationId: 'CFG-E1-001',
+    configurationSlot: 'Slot 1 - Primary Production (E1)',
+    dieCode: 'FD-E1-07',
     partCode: 'P-LOUV-001',
     partName: 'Louver Punch',
     stageName: 'Louver Punch',
@@ -3235,10 +3154,10 @@ export const INITIAL_REPLACEMENT_HISTORY: ReplacementRecord[] = [
   },
   {
     id: 'REP-2026-0072',
-    lineId: 'E6',
-    configurationId: 'CFG-E6-001',
-    configurationSlot: 'Slot 1 - Primary Production (E6)',
-    dieCode: 'FD-E6-07',
+    lineId: 'E1',
+    configurationId: 'CFG-E1-001',
+    configurationSlot: 'Slot 1 - Primary Production (E1)',
+    dieCode: 'FD-E1-07',
     partCode: 'B-ROW-SLIT-07',
     partName: 'Row Slit Blade (Ø7)',
     stageName: 'Row Slit Blade',
@@ -3327,13 +3246,13 @@ export const INITIAL_REGRIND_RECORDS: RegrindingRecord[] = [
   {
     id: 'RGD-2026-0034',
     jobCode: 'JOB-RGD-034',
-    partInstanceOrLot: 'SET-E6-08',
+    partInstanceOrLot: 'SET-E1-08',
     partCode: 'B-ROW-SLIT-07',
     partName: 'Row Slit Blade (Ø7)',
-    serialNumber: 'SET-E6-08',
-    lineId: 'E6',
-    lineLastUsed: 'E6',
-    finDie: 'FD-E6-07',
+    serialNumber: 'SET-E1-08',
+    lineId: 'E1',
+    lineLastUsed: 'E1',
+    finDie: 'FD-E1-07',
     previousLength: 59.30,
     currentLength: 59.20,
     actualGrindingRemovedMm: 0.10,
@@ -3367,7 +3286,7 @@ export const INITIAL_REGRIND_RECORDS: RegrindingRecord[] = [
     technicianName: 'Somchai Prasert',
     completionDate: '2026-08-02 16:30:00',
     notes: 'Precision rotary diamond surface ground. Cutting edge straightness < 0.001mm, Ra 0.10µm within spec.',
-    remarks: 'Ready for re-installation on Line E6',
+    remarks: 'Ready for re-installation on Line E1',
     timestamp: '2026-08-02 16:30:00',
     isImportedSeed: true
   },
@@ -3378,9 +3297,9 @@ export const INITIAL_REGRIND_RECORDS: RegrindingRecord[] = [
     partCode: 'P-BUCK-001',
     partName: 'Bucking Punch',
     serialNumber: 'SN-BUCK-104',
-    lineId: 'E6',
-    lineLastUsed: 'E6',
-    finDie: 'FD-E6-07',
+    lineId: 'E1',
+    lineLastUsed: 'E1',
+    finDie: 'FD-E1-07',
     previousLength: 49.75,
     currentLength: 49.50,
     actualGrindingRemovedMm: 0.25,
@@ -3423,7 +3342,7 @@ export const INITIAL_REGRIND_RECORDS: RegrindingRecord[] = [
 export const INITIAL_INSPECTIONS: ConditionInspectionRecord[] = [
   {
     id: 'INSP-2026-0828-1',
-    lineId: 'E6',
+    lineId: 'E1',
     inspectionDate: '2026-08-28',
     shift: 'Shift 1 (Day)',
     inspectorName: 'Kittisak Wongsuwan',
@@ -3454,7 +3373,7 @@ export const INITIAL_INSPECTIONS: ConditionInspectionRecord[] = [
 export const INITIAL_SHOT_LOGS: ShotEntryRecord[] = [
   {
     id: 'SHOT-2026-0828-01',
-    lineId: 'E6',
+    lineId: 'E1',
     entryType: 'AUTOMATIC_PLC',
     shotsAdded: 245680,
     previousTotal: 153228496,
@@ -3468,7 +3387,7 @@ export const INITIAL_SHOT_LOGS: ShotEntryRecord[] = [
   },
   {
     id: 'SHOT-2026-0827-02',
-    lineId: 'E6',
+    lineId: 'E1',
     entryType: 'MANUAL_SHIFT',
     shotsAdded: 480200,
     previousTotal: 152748296,
@@ -3487,11 +3406,11 @@ export const INITIAL_AUDIT_LOGS: AuditLogEntry[] = [
     id: 'AUD-001',
     auditId: 'AUD-2026-0828-001',
     module: 'LINE_CONFIG',
-    recordId: 'CFG-E6-001',
+    recordId: 'CFG-E1-001',
     action: 'CONFIGURATION_ACTIVATION',
     fieldChanged: 'activeFinDie',
-    oldValue: 'FD-E6-05 (Standby)',
-    newValue: 'FD-E6-07 (Active Running)',
+    oldValue: 'FD-E1-05 (Standby)',
+    newValue: 'FD-E1-07 (Active Running)',
     reason: 'Production schedule switch to 0.10mm PCM Fin coil format',
     user: 'Somchai Prasert (EMP-1001)',
     userId: 'USR-001',
@@ -3502,16 +3421,16 @@ export const INITIAL_AUDIT_LOGS: AuditLogEntry[] = [
     timestamp: '2026-08-28 14:00:10',
     ipReference: '192.168.10.45',
     sessionReference: 'SES-94812',
-    lineId: 'E6',
+    lineId: 'E1',
     actionCategory: 'CONFIGURATION',
-    details: 'Verified Line E6 tooling configuration for PCM 0.10mm Ø7 (FD-E6-07)',
-    detailsTh: 'ตรวจสอบโครงสร้างแม่พิมพ์สาย E6 สำหรับอลูมิเนียม PCM 0.10 มม. Ø7'
+    details: 'Verified Line E1 tooling configuration for PCM 0.10mm Ø7 (FD-E1-07)',
+    detailsTh: 'ตรวจสอบโครงสร้างแม่พิมพ์สาย E1 สำหรับอลูมิเนียม PCM 0.10 มม. Ø7'
   },
   {
     id: 'AUD-002',
     auditId: 'AUD-2026-0828-002',
     module: 'LIFE_STANDARD',
-    recordId: 'STD-E6-003',
+    recordId: 'STD-E1-003',
     action: 'STANDARD_LIFE_CHANGE',
     fieldChanged: 'lifeLimitShots',
     oldValue: 90000000,
@@ -3526,9 +3445,9 @@ export const INITIAL_AUDIT_LOGS: AuditLogEntry[] = [
     timestamp: '2026-08-28 11:20:45',
     ipReference: '192.168.10.12',
     sessionReference: 'SES-93210',
-    lineId: 'E6',
+    lineId: 'E1',
     actionCategory: 'STANDARD_CHANGE',
-    details: 'Confirmed Part Life Standard for FD-E6-07 Louver Punch to 100,000,000 shots',
+    details: 'Confirmed Part Life Standard for FD-E1-07 Louver Punch to 100,000,000 shots',
     detailsTh: 'ปรับปรุงเกณฑ์อายุการใช้งาน Louver Punch เป็น 100 ล้านช็อต ตามผลการเคลือบ TiAlN'
   },
   {
@@ -3550,7 +3469,7 @@ export const INITIAL_AUDIT_LOGS: AuditLogEntry[] = [
     timestamp: '2026-08-28 09:40:00',
     ipReference: '192.168.10.88',
     sessionReference: 'SES-92015',
-    lineId: 'E6',
+    lineId: 'E1',
     actionCategory: 'PROCUREMENT',
     details: 'Updated PO-26-8902 status to IN PRODUCTION for 120 EA Louver Punches',
     detailsTh: 'ปรับสถานะใบสั่งซื้อ PO-26-8902 เป็น อยู่ระหว่างการผลิต (120 ชิ้น)'
@@ -3574,7 +3493,7 @@ export const INITIAL_AUDIT_LOGS: AuditLogEntry[] = [
     timestamp: '2026-08-28 08:30:00',
     ipReference: '192.168.10.18',
     sessionReference: 'SES-91402',
-    lineId: 'E6',
+    lineId: 'E1',
     actionCategory: 'REPLACEMENT',
     details: 'Logical cancellation with audit trail for draft replacement record REP-2026-0048',
     detailsTh: 'ยกเลิกรายการเปลี่ยนอะไหล่ฉบับร่างอย่างปลอดภัยพร้อมบันทึกประวัติการย้อนกลับ'
@@ -3588,7 +3507,7 @@ export const INITIAL_AUDIT_LOGS: AuditLogEntry[] = [
     fieldChanged: 'reservedQuantity',
     oldValue: 0,
     newValue: 30,
-    reason: 'Reserved 30 Louver Punches for scheduled weekend overhaul on Fin Die E6',
+    reason: 'Reserved 30 Louver Punches for scheduled weekend overhaul on Fin Die E1',
     user: 'Prakaidao Kaewkla (EMP-5021)',
     userId: 'USR-007',
     userName: 'Prakaidao Kaewkla',
@@ -3598,7 +3517,7 @@ export const INITIAL_AUDIT_LOGS: AuditLogEntry[] = [
     timestamp: '2026-08-27 16:20:00',
     ipReference: '192.168.10.60',
     sessionReference: 'SES-88301',
-    lineId: 'E6',
+    lineId: 'E1',
     actionCategory: 'STOCK',
     details: 'Reserved 30 Louver Punches for scheduled weekend maintenance',
     detailsTh: 'จองอะไหล่ Louver Punch 30 ชิ้นสำหรับรอบบำรุงรักษาประจำสัปดาห์'
@@ -3616,31 +3535,44 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   allowMultiEntryPerShift: false,
   shift1Start: '08:00',
   shift2Start: '20:00',
-  theme: 'industrial-dark',
+  theme: 'dark',
   enableSoundAlerts: true,
   tvAutoCycleIntervalSec: 15
 };
 
 export const DEFAULT_PLC_CONFIG: PLCConfig = {
-  connectionMode: 'MODBUS_TCP',
+  connectionMode: 'SIMULATION',
   protocol: 'MODBUS_TCP',
-  ip: '192.168.1.120',
+  gatewayId: 'GW-EDGE-01',
+  gatewayName: 'Fin Press Main Edge Gateway #1',
+  gatewayUrl: 'http://192.168.10.200:8080',
+  ip: '192.168.10.50',
   port: 502,
   slaveId: 1,
+  unitId: 1,
   pollingIntervalMs: 1000,
-  wsUrl: 'ws://192.168.1.120:1880/ws/plc',
-  restApiUrl: 'http://192.168.1.120:8080/api/v1/plc/shots',
+  connectionTimeoutMs: 3000,
+  retryIntervalMs: 2000,
+  maxRetry: 5,
+  heartbeatIntervalMs: 5000,
+  apiToken: 'jwt_edge_gateway_token_prod_sec_v1',
+  mqttBrokerUrl: 'mqtt://192.168.10.201:1883',
+  mqttClientId: 'findie_shot_monitor_sub_01',
+  mqttTopicPrefix: 'factory/finpress/telemetry',
+  tlsEnabled: false,
+  readOnlyMode: true,
+  wsUrl: 'ws://192.168.10.200:1880/ws/plc',
+  restApiUrl: 'http://192.168.10.200:8080/api/v1/telemetry/shots',
   uiThrottleMs: 1000,
-  isAutoPolling: false,
+  isAutoPolling: true,
   lineRegisters: {
-    'E1': { lineId: 'E1', lineName: 'LINE E1 (Ø7 Slit)', address: '%MW101', active: true, currentVal: 1185, lastPulse: '13:05:31' },
-    'E2': { lineId: 'E2', lineName: 'LINE E2 (Ø5 Slit)', address: '%MW102', active: true, currentVal: 2450, lastPulse: '13:05:30' },
-    'E3-1': { lineId: 'E3-1', lineName: 'LINE E3-1 (Slit 3P)', address: '%MW103', active: true, currentVal: 890, lastPulse: '13:05:28' },
-    'E3-2': { lineId: 'E3-2', lineName: 'LINE E3-2 (WL+ 4P)', address: '%MW104', active: true, currentVal: 1420, lastPulse: '13:05:29' },
-    'E3-3': { lineId: 'E3-3', lineName: 'LINE E3-3 (Corr 4P)', address: '%MW105', active: true, currentVal: 3110, lastPulse: '13:05:31' },
-    'E4': { lineId: 'E4', lineName: 'LINE E4 (Ø5 Slit)', address: '%MW106', active: true, currentVal: 670, lastPulse: '13:05:25' },
-    'E5': { lineId: 'E5', lineName: 'LINE E5 (Ø5 Slit)', address: '%MW107', active: true, currentVal: 4890, lastPulse: '13:05:29' },
-    'E6': { lineId: 'E6', lineName: 'LINE E6 (Ø7 Louver)', address: '%MW108', active: true, currentVal: 5452680, lastPulse: '13:05:31' }
+    'E1': { lineId: 'E1', lineName: 'LINE E1 (Ø7 Slit)', address: '%MW100', active: true, currentVal: 153474176, lastPulse: '14:55:18' },
+    'E2': { lineId: 'E2', lineName: 'LINE E2 (Ø5 Slit)', address: '%MW100', active: true, currentVal: 142890520, lastPulse: '14:55:18' },
+    'E3-1': { lineId: 'E3-1', lineName: 'LINE E3-1 (Slit 3P)', address: 'DB100.DBD0', active: true, currentVal: 98450120, lastPulse: '14:55:18' },
+    'E3-2': { lineId: 'E3-2', lineName: 'LINE E3-2 (WL+ 4P)', address: 'DB100.DBD4', active: true, currentVal: 112450890, lastPulse: '14:55:18' },
+    'E3-3': { lineId: 'E3-3', lineName: 'LINE E3-3 (Corr 4P)', address: 'DB100.DBD8', active: true, currentVal: 87620340, lastPulse: '14:55:18' },
+    'E4': { lineId: 'E4', lineName: 'LINE E4 (Ø5 Slit)', address: 'D1000', active: true, currentVal: 168920150, lastPulse: '14:55:18' },
+    'E5': { lineId: 'E5', lineName: 'LINE E5 (Ø5 Slit)', address: 'DM100', active: true, currentVal: 135400980, lastPulse: '14:55:18' }
   }
 };
 
@@ -3884,41 +3816,200 @@ export const INITIAL_DOWNTIME_LOGS: DowntimeLogEntry[] = [
     operatorOrTech: 'Somchai Prasert (ELEC)',
     isResolved: true,
     notes: 'Replaced Omron microswitch with sealed IP67 variant.'
-  },
+  }
+];
 
-  // Line E6 (~16.5 hrs)
+export const INITIAL_PLC_REGISTER_MAPPINGS: Record<ProductionLineId, PLCRegisterMapping> = {
+  'E1': {
+    lineId: 'E1',
+    lineName: 'Fin Press Line E1',
+    machineModel: 'OAK FP-100 (100T)',
+    protocol: 'MODBUS_TCP',
+    ipAddress: '192.168.10.51',
+    port: 502,
+    unitId: 1,
+    registerAddress: '%MW100',
+    tagName: 'PLC_E1_TotalShot',
+    dataType: 'UINT32',
+    wordOrder: 'ABCD',
+    scaleFactor: 1,
+    pollIntervalMs: 1000,
+    maxAllowedDeltaPerInterval: 500,
+    readOnly: true,
+    enabled: true
+  },
+  'E2': {
+    lineId: 'E2',
+    lineName: 'Fin Press Line E2',
+    machineModel: 'OAK FP-100 (100T)',
+    protocol: 'MODBUS_TCP',
+    ipAddress: '192.168.10.52',
+    port: 502,
+    unitId: 1,
+    registerAddress: '%MW100',
+    tagName: 'PLC_E2_TotalShot',
+    dataType: 'UINT32',
+    wordOrder: 'ABCD',
+    scaleFactor: 1,
+    pollIntervalMs: 1000,
+    maxAllowedDeltaPerInterval: 500,
+    readOnly: true,
+    enabled: true
+  },
+  'E3-1': {
+    lineId: 'E3-1',
+    lineName: 'Fin Press Line E3-1',
+    machineModel: 'HIDAKA HP-80 (80T)',
+    protocol: 'SIEMENS_S7',
+    ipAddress: '192.168.10.53',
+    port: 102,
+    unitId: 1,
+    dbNumber: 100,
+    registerAddress: 'DB100.DBD0',
+    tagName: 'DB_E3_1_ShotCount',
+    dataType: 'UINT32',
+    wordOrder: 'ABCD',
+    scaleFactor: 1,
+    pollIntervalMs: 1000,
+    maxAllowedDeltaPerInterval: 500,
+    readOnly: true,
+    enabled: true
+  },
+  'E3-2': {
+    lineId: 'E3-2',
+    lineName: 'Fin Press Line E3-2',
+    machineModel: 'HIDAKA HP-80 (80T)',
+    protocol: 'SIEMENS_S7',
+    ipAddress: '192.168.10.53',
+    port: 102,
+    unitId: 1,
+    dbNumber: 100,
+    registerAddress: 'DB100.DBD4',
+    tagName: 'DB_E3_2_ShotCount',
+    dataType: 'UINT32',
+    wordOrder: 'ABCD',
+    scaleFactor: 1,
+    pollIntervalMs: 1000,
+    maxAllowedDeltaPerInterval: 500,
+    readOnly: true,
+    enabled: true
+  },
+  'E3-3': {
+    lineId: 'E3-3',
+    lineName: 'Fin Press Line E3-3',
+    machineModel: 'HIDAKA HP-80 (80T)',
+    protocol: 'SIEMENS_S7',
+    ipAddress: '192.168.10.53',
+    port: 102,
+    unitId: 1,
+    dbNumber: 100,
+    registerAddress: 'DB100.DBD8',
+    tagName: 'DB_E3_3_ShotCount',
+    dataType: 'UINT32',
+    wordOrder: 'ABCD',
+    scaleFactor: 1,
+    pollIntervalMs: 1000,
+    maxAllowedDeltaPerInterval: 500,
+    readOnly: true,
+    enabled: true
+  },
+  'E4': {
+    lineId: 'E4',
+    lineName: 'Fin Press Line E4',
+    machineModel: 'OAK FP-150 (150T)',
+    protocol: 'MITSUBISHI_MC',
+    ipAddress: '192.168.10.54',
+    port: 5000,
+    unitId: 1,
+    registerAddress: 'D1000-D1001',
+    tagName: 'D_E4_ShotAccum',
+    dataType: 'UINT32',
+    wordOrder: 'BADC',
+    scaleFactor: 1,
+    pollIntervalMs: 1000,
+    maxAllowedDeltaPerInterval: 500,
+    readOnly: true,
+    enabled: true
+  },
+  'E5': {
+    lineId: 'E5',
+    lineName: 'Fin Press Line E5',
+    machineModel: 'OAK FP-150 (150T)',
+    protocol: 'OMRON_FINS',
+    ipAddress: '192.168.10.55',
+    port: 9600,
+    unitId: 1,
+    registerAddress: 'DM100-DM101',
+    tagName: 'DM_E5_ShotAccum',
+    dataType: 'UINT32',
+    wordOrder: 'ABCD',
+    scaleFactor: 1,
+    pollIntervalMs: 1000,
+    maxAllowedDeltaPerInterval: 500,
+    readOnly: true,
+    enabled: true
+  }
+};
+
+export const INITIAL_GATEWAY_STATUS: GatewayStatusInfo = {
+  gatewayId: 'GW-EDGE-01',
+  gatewayName: 'Fin Press Main Edge Gateway #1',
+  connectionMode: 'SIMULATION',
+  isOnline: true,
+  lastHeartbeat: new Date().toISOString(),
+  latencyMs: 14,
+  connectedLinesCount: 7,
+  totalLinesCount: 7,
+  activeProtocol: 'MODBUS_TCP',
+  firmwareVersion: 'v2.4.1-edge-arm64',
+  uptimeSeconds: 842100,
+  cpuUsagePercent: 12.4,
+  memoryUsagePercent: 34.2,
+  bufferPendingRecordsCount: 0,
+  syncStatus: 'SYNCED',
+  readOnlyEnforced: true,
+  lastError: null
+};
+
+export const INITIAL_SYSTEM_ALERTS: SystemAlertItem[] = [
   {
-    id: 'DT-E6-001',
-    lineId: 'E6',
-    ...getRelativePastIso(2, 6, 7.5),
-    category: 'DIE_CHANGEOVER',
-    reason: 'Louver & Flare Die Reground Full Set Replacement',
-    reasonTh: 'เปลี่ยนชุดอะไหล่ Louver & Flare หลังผ่านการเจียระไน',
-    operatorOrTech: 'Kittisak Wongsuwan (TOOL)',
-    isResolved: true,
-    notes: 'Replaced full set of 24 flare punches and 48 louver blades.'
+    id: 'ALT-2026-001',
+    level: 'CRITICAL',
+    title: 'Fin Die Part Life Critical (97%)',
+    titleTh: 'ชิ้นส่วนแม่พิมพ์ Louver Punch ใกล้หมดอายุการใช้งาน (97%)',
+    message: 'Line E1 Louver Punch (P-LOUV-001) has reached 97% shot lifetime (2,674,770 shots remaining). Delivery PO ETA is 15-Sep-2026.',
+    lineId: 'E1',
+    partCode: 'P-LOUV-001',
+    source: 'PART_LIFE',
+    createdAt: new Date(Date.now() - 3600000).toISOString(),
+    isRead: false,
+    isAcknowledged: false
   },
   {
-    id: 'DT-E6-002',
-    lineId: 'E6',
-    ...getRelativePastIso(15, 8, 6.0),
-    category: 'SCHEDULED_MAINTENANCE',
-    reason: 'Main Flywheel Brake Lining Check & PM',
-    reasonTh: 'ตรวจผ้าเบรกล้อตุนกำลังและบำรุงรักษาประจำเดือน',
-    operatorOrTech: 'Narongrit Promdee (MAINT)',
-    isResolved: true,
-    notes: 'Brake torque tested to 850 Nm. Safe operating margin.'
+    id: 'ALT-2026-002',
+    level: 'WARNING',
+    title: 'Tooling Regrind Prepare (92%)',
+    titleTh: 'ชิ้นส่วน Ironing Die ใกล้ถึงรอบลับคม/เปลี่ยน (92%)',
+    message: 'Line E1 Ironing Die (D-IRON-001) is at 92% life limit. PR preparation recommended.',
+    lineId: 'E1',
+    partCode: 'D-IRON-001',
+    source: 'PART_LIFE',
+    createdAt: new Date(Date.now() - 7200000).toISOString(),
+    isRead: false,
+    isAcknowledged: true,
+    acknowledgedBy: 'Narongrit Promdee',
+    acknowledgedAt: new Date(Date.now() - 3600000).toISOString()
   },
   {
-    id: 'DT-E6-003',
-    lineId: 'E6',
-    ...getRelativePastIso(25, 4, 3.0),
-    category: 'UNPLANNED_DOWN',
-    reason: 'Main Air Supply Pressure Drop Interlock',
-    reasonTh: 'แรงดันลมหลักโรงงานตกต่ำกว่า 5.5 Bar ระบบตัดการทำงาน',
-    operatorOrTech: 'Wichai Raksapol (OP)',
-    isResolved: true,
-    notes: 'Utility team switched on auxiliary compressor 3. Reset error.'
+    id: 'ALT-2026-003',
+    level: 'INFO',
+    title: 'Edge Gateway Telemetry Active',
+    titleTh: 'เกตเวย์รับส่งข้อมูล Telemetry ทำงานปกติ',
+    message: 'Edge Gateway GW-EDGE-01 initialized with 7 monitored lines in read-only telemetry mode.',
+    source: 'GATEWAY',
+    createdAt: new Date(Date.now() - 86400000).toISOString(),
+    isRead: true,
+    isAcknowledged: true
   }
 ];
 

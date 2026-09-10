@@ -29,7 +29,7 @@ export const LineOverviewView: React.FC<LineOverviewViewProps> = ({ onNavigate }
     return () => unsub();
   }, []);
 
-  const lineIds: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5', 'E6'];
+  const lineIds: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
 
   return (
     <div className="space-y-3">
@@ -41,14 +41,14 @@ export const LineOverviewView: React.FC<LineOverviewViewProps> = ({ onNavigate }
               Fin Press Production Lines Overview
             </h2>
             <span className="px-1.5 py-0.2 rounded text-[10px] font-mono bg-cyan-950 text-cyan-300 border border-cyan-800">
-              8 Lines Monitored
+              7 Lines Monitored
             </span>
             <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-amber-950/80 text-amber-300 border border-amber-600/80">
               SAMPLE DATA - NOT FOR PRODUCTION
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-0.5 font-thai">
-            ภาพรวมสายการผลิตปั๊มฟินแลกเปลี่ยนความร้อน E1 - E6 พร้อมสถานะชิ้นส่วนแม่พิมพ์แบบเรียลไทม์
+            ภาพรวมสายการผลิตปั๊มฟินแลกเปลี่ยนความร้อน E1 - E5 พร้อมสถานะชิ้นส่วนแม่พิมพ์แบบเรียลไทม์
           </p>
         </div>
 

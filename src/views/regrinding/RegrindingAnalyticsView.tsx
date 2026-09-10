@@ -254,7 +254,7 @@ export const RegrindingAnalyticsView: React.FC = () => {
 
   // 3. CHART DATA: Line Breakdown of Maintenance & Scraps
   const linePerformanceData = useMemo(() => {
-    const lines = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5', 'E6'];
+    const lines = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
     return lines.map(line => {
       const lineTickets = combinedRegrindData.filter(d => d.lineId === line);
       const repairedCount = lineTickets.filter(d => !d.isScrapped).length || Math.floor(Math.random() * 8 + 4);
@@ -351,8 +351,8 @@ export const RegrindingAnalyticsView: React.FC = () => {
               onChange={e => setSelectedLineFilter(e.target.value)}
               className="px-3 py-2 text-xs rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold text-slate-800 dark:text-slate-200"
             >
-              <option value="ALL">ทุกไลน์การผลิต (All Lines)</option>
-              {['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5', 'E6'].map(l => (
+              <option value="ALL">ทุกไลน์การผลิต (7 Lines: E1-E5)</option>
+              {['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'].map(l => (
                 <option key={l} value={l}>ไลน์ {l}</option>
               ))}
             </select>
@@ -659,7 +659,7 @@ export const RegrindingAnalyticsView: React.FC = () => {
               </h3>
             </div>
             <span className="text-[10px] text-slate-500 dark:text-slate-400">
-              Lines E1 - E6
+              Lines E1 - E5 (7 Lines)
             </span>
           </div>
 
@@ -694,7 +694,7 @@ export const RegrindingAnalyticsView: React.FC = () => {
           </div>
 
           <div className="p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl text-xs text-slate-600 dark:text-slate-400 flex items-center justify-between">
-            <span>ไลน์ที่มีภาระงานเจียรสูงสุด: <strong className="text-cyan-600 dark:text-cyan-400">LINE E6 (Ø7 Louver)</strong></span>
+            <span>ไลน์ที่มีภาระงานเจียรสูงสุด: <strong className="text-cyan-600 dark:text-cyan-400">LINE E1 (Ø7 Louver)</strong></span>
             <span className="font-mono font-bold">12 รายการ/เดือน</span>
           </div>
         </div>

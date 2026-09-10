@@ -17,7 +17,7 @@ import { LineFilterSelector } from '../components/common/LineFilterSelector';
 import { exportInspectionLogsExcel } from '../utils/excelExport';
 
 export const ConditionInspectionView: React.FC = () => {
-  const [lineId, setLineId] = useState<ProductionLineId>('E6');
+  const [lineId, setLineId] = useState<ProductionLineId>('E1');
   const [stageName, setStageName] = useState<string>('Louver Punch');
   const [burrHeight, setBurrHeight] = useState<number>(0.024);
   const [wearRating, setWearRating] = useState<number>(2);
@@ -109,7 +109,7 @@ export const ConditionInspectionView: React.FC = () => {
                   onChange={e => setLineId(e.target.value as ProductionLineId)}
                   className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm text-slate-100 focus:border-cyan-500 focus:outline-none"
                 >
-                  {['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5', 'E6'].map(l => {
+                  {['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'].map(l => {
                     const displayLine = l.startsWith('E3-') ? 'E3' : l;
                     const tag = LINE_INFO_MAP[l as ProductionLineId]?.shortTag || l;
                     return (

@@ -118,7 +118,7 @@ export const RegrindQueueTable: React.FC<RegrindQueueTableProps> = ({
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="ค้นหาชื่อทูลลิ่ง, Job Code, QR, หรือตำแหน่ง (เช่น Burring, E6)..."
+              placeholder="ค้นหาชื่อทูลลิ่ง, Job Code, QR, หรือตำแหน่ง (เช่น Burring, E1)..."
               className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-cyan-500"
             />
           </div>
@@ -128,12 +128,12 @@ export const RegrindQueueTable: React.FC<RegrindQueueTableProps> = ({
             onChange={e => setLineFilter(e.target.value)}
             className="px-3 py-2 text-xs font-semibold rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200"
           >
-            <option value="ALL">ทุกสายการผลิต (All Lines)</option>
-            <option value="E6">Line E6 (Heavy Louver)</option>
+            <option value="ALL">ทุกสายการผลิต (All Lines: E1-E5)</option>
             <option value="E1">Line E1 (7mm Standard)</option>
             <option value="E2">Line E2 (5mm Micro)</option>
             <option value="E3-1">Line E3-1</option>
             <option value="E3-2">Line E3-2</option>
+            <option value="E3-3">Line E3-3</option>
             <option value="E4">Line E4</option>
             <option value="E5">Line E5</option>
           </select>

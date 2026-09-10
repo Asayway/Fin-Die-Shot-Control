@@ -134,7 +134,8 @@ function getShiftInfo(date: Date = new Date()): { shiftName: string; shiftKey: '
   return { shiftName: 'กะพิเศษ (Special Shift)', shiftKey: 'Shift 3 (Overtime)', description: 'ช่วงปรับตั้งแม่พิมพ์ / พักเบรค' };
 }
 
-export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E6' }) => {
+export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E1' }) => {
+  const isHmi = false;
   const [selectedLineId, setSelectedLineId] = useState<ProductionLineId>(initialLineId);
   const [activeTab, setActiveTab] = useState<'entry' | 'history' | 'reset-logs' | 'drafts'>('entry');
 
@@ -239,7 +240,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
   const [historyStartDate, setHistoryStartDate] = useState<string>('');
   const [historyEndDate, setHistoryEndDate] = useState<string>('');
 
-  const linesList: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5', 'E6'];
+  const linesList: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
 
   const showNotification = (type: 'success' | 'error' | 'warning' | 'info', message: string) => {
     setNotification({ type, message });
@@ -663,10 +664,8 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
     });
   }, [shotLogs, historyLineFilter, historyShiftFilter, historySearch, historyStartDate, historyEndDate]);
 
-  const isHmi = systemSettings?.theme === 'hmi' || systemSettings?.theme === 'industrial-dark';
-
   return (
-    <div className={`space-y-2.5 select-none ${isHmi ? 'font-mono' : 'font-sans'}`}>
+    <div className="space-y-2.5 select-none font-sans">
       
       {/* Top Header: Integrated Line Bar + Terminal Header + Action Tabs (Sticky Locked at Top) */}
       <div className={`sticky top-0 z-30 backdrop-blur-md rounded-lg p-2 sm:p-2.5 shadow-xl space-y-2 border ${

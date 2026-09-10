@@ -33,18 +33,18 @@
   border-color: #166534 !important;
 }
 
-/* Light Theme Override: Professional High-Contrast Engineering Light Palette */
+/* Light Theme Override: LG Light Enterprise Style */
 .theme-light body {
-  background-color: #f8fafc;
-  color: #0f172a;
+  background-color: #F7F8FA;
+  color: #1F2937;
 }
 
 .theme-light {
-  background-color: #f3f4f6;
-  color: #0f172a;
+  background-color: #F7F8FA;
+  color: #1F2937;
 }
 
-/* 1. Main Backgrounds & Container Cards (Clean White with Subtle Elevation) */
+/* 1. Main Backgrounds & Container Cards (Clean White with Soft LG Elevation) */
 .theme-light .bg-\[\#070F1E\],
 .theme-light .bg-\[\#0B172E\],
 .theme-light .bg-\[\#0C1A33\],
@@ -64,9 +64,9 @@
 .theme-light .bg-zinc-950,
 .theme-light .bg-zinc-900 {
   background-color: #ffffff !important;
-  color: #0f172a !important;
-  border-color: #e2e8f0 !important;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+  color: #1F2937 !important;
+  border-color: #E2E8F0 !important;
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.08), 0 1px 2px -1px rgba(15, 23, 42, 0.04);
 }
 
 /* Inner Panels, Sub-cards & Grid Containers */
@@ -87,9 +87,26 @@
 .theme-light .bg-slate-800\/70,
 .theme-light .bg-slate-800\/60,
 .theme-light .bg-slate-800\/50 {
-  background-color: #f8fafc !important;
-  border-color: #e2e8f0 !important;
-  color: #0f172a !important;
+  background-color: #F8FAFC !important;
+  border-color: #E2E8F0 !important;
+  color: #1F2937 !important;
+}
+
+/* Form Controls & Inputs in Light Mode */
+.theme-light input,
+.theme-light select,
+.theme-light textarea {
+  background-color: #ffffff !important;
+  color: #1F2937 !important;
+  border-color: #CBD5E1 !important;
+}
+
+.theme-light input:focus,
+.theme-light select:focus,
+.theme-light textarea:focus {
+  border-color: #A50034 !important;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(165, 0, 52, 0.15) !important;
 }
 
 /* Table Headers & Section Bar Titles */
@@ -98,16 +115,16 @@
 .theme-light thead th,
 .theme-light .bg-\[\#0B172E\].border-b-2,
 .theme-light .bg-\[\#0C1A33\].rounded-t-lg {
-  background-color: #f1f5f9 !important;
-  color: #1e293b !important;
-  border-color: #cbd5e1 !important;
+  background-color: #F1F5F9 !important;
+  color: #1E293B !important;
+  border-color: #CBD5E1 !important;
 }
 
 /* 2. Text & Data Typography (High Contrast & Clear Hierarchy) */
 .theme-light .text-white,
 .theme-light .text-slate-100,
 .theme-light .text-slate-200 {
-  color: #0f172a !important;
+  color: #1F2937 !important;
 }
 
 .theme-light .text-slate-300,
@@ -117,10 +134,10 @@
 
 .theme-light .text-slate-500,
 .theme-light .text-slate-600 {
-  color: #64748b !important;
+  color: #64748B !important;
 }
 
-/* Deep Industrial Sky/Blue instead of Neon Cyan */
+/* Deep Industrial Blue/Sky for Data Text in Light Theme */
 .theme-light .text-cyan-400,
 .theme-light .text-cyan-300,
 .theme-light .text-cyan-200,
@@ -129,41 +146,41 @@
 .theme-light .text-sky-400,
 .theme-light .text-sky-300,
 .theme-light .text-sky-200 {
-  color: #0369a1 !important;
+  color: #0284C7 !important;
 }
 
-/* Deep Forest Green for Normal / Shots */
+/* Forest Green for Normal / Shots */
 .theme-light .text-emerald-400,
 .theme-light .text-emerald-300,
 .theme-light .text-emerald-500,
 .theme-light .text-green-400,
 .theme-light .text-green-300 {
-  color: #15803d !important;
+  color: #16A34A !important;
 }
 
-/* Deep Amber / Brown for Warning */
+/* Warm Amber / Brown for Warning */
 .theme-light .text-amber-400,
 .theme-light .text-amber-300,
 .theme-light .text-yellow-400,
 .theme-light .text-yellow-300,
 .theme-light .text-yellow-200 {
-  color: #92400e !important;
+  color: #D97706 !important;
 }
 
-/* Deep Crimson for Over Life / Broken / Critical */
+/* LG Red / Deep Crimson for Over Life / Broken / Critical */
 .theme-light .text-rose-400,
 .theme-light .text-rose-300,
 .theme-light .text-rose-200,
 .theme-light .text-red-400,
 .theme-light .text-red-300 {
-  color: #991b1b !important;
+  color: #DC2626 !important;
 }
 
 /* Deep Purple for Locked / Changeover */
 .theme-light .text-purple-400,
 .theme-light .text-purple-300,
 .theme-light .text-purple-200 {
-  color: #6b21a8 !important;
+  color: #7C3AED !important;
 }
 
 /* 3. Soft Contrast Status Badges & Pills */
@@ -178,9 +195,9 @@
 .theme-light .bg-emerald-900\/60,
 .theme-light .bg-green-950,
 .theme-light .bg-emerald-600 {
-  background-color: #dcfce7 !important;
-  color: #166534 !important;
-  border-color: #86efac !important;
+  background-color: #F0FDF4 !important;
+  color: #16A34A !important;
+  border-color: #86EFAC !important;
 }
 
 /* Warning / Idle / Missing */
@@ -196,9 +213,9 @@
 .theme-light .bg-yellow-400,
 .theme-light .bg-yellow-500,
 .theme-light .bg-amber-500 {
-  background-color: #fef3c7 !important;
-  color: #92400e !important;
-  border-color: #fde68a !important;
+  background-color: #FFFBEB !important;
+  color: #D97706 !important;
+  border-color: #FDE68A !important;
 }
 
 /* Prepare / Bypass */
@@ -209,9 +226,9 @@
 .theme-light .bg-orange-950\/40,
 .theme-light .bg-orange-900,
 .theme-light .bg-orange-600 {
-  background-color: #ffedd5 !important;
-  color: #9a3412 !important;
-  border-color: #fed7aa !important;
+  background-color: #FFF7ED !important;
+  color: #C2410C !important;
+  border-color: #FED7AA !important;
 }
 
 /* Over Life / Critical / Broken / Stopped / Down */
@@ -231,9 +248,9 @@
 .theme-light .bg-\[\#3B0707\],
 .theme-light .bg-\[\#2B0E17\],
 .theme-light .bg-\[\#2E0909\] {
-  background-color: #fee2e2 !important;
-  color: #991b1b !important;
-  border-color: #fca5a5 !important;
+  background-color: #FEF2F2 !important;
+  color: #DC2626 !important;
+  border-color: #FCA5A5 !important;
 }
 
 /* Info / Tags / Sky Pill */
@@ -246,9 +263,9 @@
 .theme-light .bg-cyan-500\/10,
 .theme-light .bg-blue-950,
 .theme-light .bg-\[\#0B1E2E\] {
-  background-color: #e0f2fe !important;
-  color: #0369a1 !important;
-  border-color: #bae6fd !important;
+  background-color: #EFF6FF !important;
+  color: #2563EB !important;
+  border-color: #BFDBFE !important;
 }
 
 /* Locked / Maintenance / Changeover */
@@ -259,56 +276,56 @@
 .theme-light .bg-purple-900\/60,
 .theme-light .bg-purple-900\/80,
 .theme-light .bg-\[\#19142B\] {
-  background-color: #f3e8ff !important;
-  color: #6b21a8 !important;
-  border-color: #d8b4fe !important;
+  background-color: #F3E8FF !important;
+  color: #7C3AED !important;
+  border-color: #DDD6FE !important;
 }
 
 /* 4. Interactive 2D Die Pins (Desaturated Clean Pin Graphics for Eye Comfort) */
 .theme-light button.bg-emerald-500,
 .theme-light .die-pin-normal {
-  background-color: #f0fdf4 !important;
-  color: #166534 !important;
-  border-color: #86efac !important;
+  background-color: #F0FDF4 !important;
+  color: #16A34A !important;
+  border-color: #86EFAC !important;
   box-shadow: none !important;
 }
 
 .theme-light button.bg-emerald-500:hover,
 .theme-light .die-pin-normal:hover {
-  background-color: #dcfce7 !important;
-  border-color: #22c55e !important;
-  box-shadow: 0 1px 3px 0 rgba(34, 197, 94, 0.25) !important;
+  background-color: #DCFCE7 !important;
+  border-color: #22C55E !important;
+  box-shadow: 0 1px 3px 0 rgba(34, 197, 94, 0.2) !important;
 }
 
 .theme-light button.bg-amber-400,
 .theme-light .die-pin-warning {
-  background-color: #fef3c7 !important;
-  color: #92400e !important;
-  border-color: #f59e0b !important;
-  box-shadow: 0 1px 3px 0 rgba(245, 158, 11, 0.2) !important;
+  background-color: #FFFBEB !important;
+  color: #D97706 !important;
+  border-color: #F59E0B !important;
+  box-shadow: 0 1px 3px 0 rgba(245, 158, 11, 0.15) !important;
 }
 
 .theme-light button.bg-rose-500,
 .theme-light .die-pin-broken {
-  background-color: #ef4444 !important;
-  color: #ffffff !important;
-  border-color: #b91c1c !important;
-  box-shadow: 0 2px 5px 0 rgba(239, 68, 68, 0.4) !important;
+  background-color: #FEF2F2 !important;
+  color: #DC2626 !important;
+  border-color: #EF4444 !important;
+  box-shadow: 0 1px 3px 0 rgba(239, 68, 68, 0.2) !important;
 }
 
 .theme-light button.bg-purple-900,
 .theme-light .die-pin-locked {
-  background-color: #f3e8ff !important;
-  color: #6b21a8 !important;
-  border-color: #a855f7 !important;
+  background-color: #F3E8FF !important;
+  color: #7C3AED !important;
+  border-color: #A855F7 !important;
   box-shadow: none !important;
 }
 
 .theme-light button.bg-orange-600,
 .theme-light .die-pin-bypass {
-  background-color: #ffedd5 !important;
-  color: #c2410c !important;
-  border-color: #f97316 !important;
+  background-color: #FFF7ED !important;
+  color: #C2410C !important;
+  border-color: #F97316 !important;
   box-shadow: none !important;
 }
 
@@ -322,7 +339,7 @@
 .theme-light .border-slate-700\/90,
 .theme-light .border-slate-700\/80,
 .theme-light .border-slate-700\/70 {
-  border-color: #e2e8f0 !important;
+  border-color: #E2E8F0 !important;
 }
 
 /* Modal Backdrops & Overlays */

@@ -101,7 +101,7 @@ export interface ToolingPartMasterItem {
 export interface RegrindWorkTicket {
   id: string; // e.g. "RGD-2026-0012"
   jobCode: string;
-  qrCode: string; // e.g. "QR-E6-BURR-07-004"
+  qrCode: string; // e.g. "QR-E1-BURR-07-004"
   partName: string;
   partCode: string;
   lineId: ProductionLineId;

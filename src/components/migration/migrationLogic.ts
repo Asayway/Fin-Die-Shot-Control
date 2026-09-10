@@ -109,7 +109,7 @@ export const parseReGrinding = (row: any, isDefault44to69: boolean) => {
 export const performValidation = () => {
   const parts = storageService.getPartMasters();
   
-  // E1, E2, E3-1, E3-2, E3-3, E4, E5, E6
+  // 7 Lines: E1, E2, E3-1, E3-2, E3-3, E4, E5
   // Match configuration to active configs
   const activeConfigs = storageService.getLineConfigs().filter(c => c.isActive);
   const findConfig = (lineId: string) => activeConfigs.find(c => c.lineId === lineId);
@@ -121,8 +121,7 @@ export const performValidation = () => {
     findConfig('E3-2'),
     findConfig('E3-3'),
     findConfig('E4'),
-    findConfig('E5'),
-    findConfig('E6')
+    findConfig('E5')
   ];
 
   const results: any[] = [];

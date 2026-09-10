@@ -12,8 +12,6 @@ import {
   Database,
   Lock,
   UserCheck,
-  Sun,
-  Moon,
   Plus,
   Trash2,
   Copy,
@@ -96,7 +94,7 @@ export const SystemSettingsView: React.FC = () => {
             System Settings & Thresholds
           </h2>
           <p className="text-sm text-slate-400 mt-1 font-thai">
-            ตั้งค่าเกณฑ์แจ้งเตือน (Alert Thresholds) ธีม และกู้คืนข้อมูลระบบ
+            ตั้งค่าเกณฑ์แจ้งเตือน (Alert Thresholds) และกู้คืนข้อมูลระบบ
           </p>
         </div>
 
@@ -164,100 +162,6 @@ export const SystemSettingsView: React.FC = () => {
                     className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-rose-400 font-bold text-base"
                   />
                   <div className="text-[10px] text-slate-500 mt-1">Default: 95% (Red alert & sound)</div>
-                </div>
-              </div>
-
-              <div className="pt-2 border-t border-slate-800/80">
-                <label className="block text-slate-200 font-bold mb-2 flex items-center gap-1.5">
-                  <SlidersHorizontal className="w-4 h-4 text-cyan-400" />
-                  <span>Visual Display Theme (เลือกธีมการแสดงผล - 3 รูปแบบ)</span>
-                </label>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {/* Light Theme Card */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const updated = { ...settings, theme: 'light' as const };
-                      setSettings(updated);
-                      storageService.updateSettings(updated);
-                    }}
-                    className={`p-3 rounded-lg border text-left transition-all ${
-                      settings.theme === 'light'
-                        ? 'bg-white text-slate-900 border-amber-500 ring-2 ring-amber-400/50 shadow-lg'
-                        : 'bg-slate-950 border-slate-800 hover:border-slate-700 opacity-70 hover:opacity-100'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center gap-2">
-                        <Sun className="w-4 h-4 text-amber-500 flex-shrink-0" />
-                        <span className={`font-bold text-sm ${settings.theme === 'light' ? 'text-slate-900' : 'text-slate-100'}`}>
-                          Theme สว่าง (Light)
-                        </span>
-                      </div>
-                      {settings.theme === 'light' && (
-                        <CheckCircle2 className="w-4 h-4 text-amber-600" />
-                      )}
-                    </div>
-                    <p className={`text-[11px] font-sans leading-relaxed ${settings.theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
-                      ดีไซน์พื้นหลังสีสว่าง คมชัด อ่านง่าย เหมาะสำหรับห้องออฟฟิศ
-                    </p>
-                  </button>
-
-                  {/* Dark Theme Card */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const updated = { ...settings, theme: 'dark' as const };
-                      setSettings(updated);
-                      storageService.updateSettings(updated);
-                    }}
-                    className={`p-3 rounded-lg border text-left transition-all ${
-                      settings.theme === 'dark'
-                        ? 'bg-slate-900 border-cyan-400 ring-2 ring-cyan-500/40 shadow-lg shadow-cyan-950/50'
-                        : 'bg-slate-950 border-slate-800 hover:border-slate-700 opacity-70 hover:opacity-100'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center gap-2">
-                        <Moon className="w-4 h-4 text-cyan-400 flex-shrink-0" />
-                        <span className="font-bold text-slate-100 text-sm">Theme มืด (Dark Slate)</span>
-                      </div>
-                      {settings.theme === 'dark' && (
-                        <CheckCircle2 className="w-4 h-4 text-cyan-400" />
-                      )}
-                    </div>
-                    <p className="text-[11px] text-slate-400 font-sans leading-relaxed">
-                      ดีไซน์ Dark Slate & Cyan ทันสมัย สบายตา สำหรับ Control Room
-                    </p>
-                  </button>
-
-                  {/* Industrial HMI Theme Card */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const updated = { ...settings, theme: 'hmi' as const };
-                      setSettings(updated);
-                      storageService.updateSettings(updated);
-                    }}
-                    className={`p-3 rounded-lg border text-left transition-all font-mono ${
-                      settings.theme === 'hmi' || settings.theme === 'industrial-dark'
-                        ? 'bg-black border-green-500 ring-2 ring-green-500/40 shadow-lg shadow-green-950/50'
-                        : 'bg-zinc-950 border-zinc-800 hover:border-zinc-700 opacity-70 hover:opacity-100'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center gap-2">
-                        <Terminal className="w-4 h-4 text-green-400 flex-shrink-0 animate-pulse" />
-                        <span className="font-bold text-green-400 text-sm">อุตสาหกรรม (HMI Black)</span>
-                      </div>
-                      {(settings.theme === 'hmi' || settings.theme === 'industrial-dark') && (
-                        <CheckCircle2 className="w-4 h-4 text-green-400" />
-                      )}
-                    </div>
-                    <p className="text-[11px] text-green-500/80 font-mono leading-relaxed">
-                      Solid Black & Matrix Green คอนทราสต์สูง สำหรับหน้าไลน์ผลิต
-                    </p>
-                  </button>
                 </div>
               </div>
 

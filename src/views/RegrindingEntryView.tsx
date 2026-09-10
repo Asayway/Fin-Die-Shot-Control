@@ -38,7 +38,7 @@ import { formatShots } from '../services/calculationService';
 import { exportRegrindingHistoryExcel } from '../utils/excelExport';
 
 export const RegrindingEntryView: React.FC = () => {
-  const [selectedLineId, setSelectedLineId] = useState<ProductionLineId>('E6');
+  const [selectedLineId, setSelectedLineId] = useState<ProductionLineId>('E1');
   const [standards, setStandards] = useState<RegrindMasterStandard[]>([]);
   const [historyRecords, setHistoryRecords] = useState<RegrindingRecord[]>([]);
   const [currentUser, setCurrentUser] = useState(storageService.getCurrentUser());
@@ -46,7 +46,7 @@ export const RegrindingEntryView: React.FC = () => {
   // Form Fields
   const [selectedPartCode, setSelectedPartCode] = useState<string>('P-LOUV-001');
   const [partInstanceOrLot, setPartInstanceOrLot] = useState<string>('');
-  const [dieCode, setDieCode] = useState<string>('FD-E6-07');
+  const [dieCode, setDieCode] = useState<string>('FD-E1-07');
   const [previousLength, setPreviousLength] = useState<number>(49.85);
   const [actualGrindingRemovedMm, setActualGrindingRemovedMm] = useState<number>(0.05);
   const [currentLength, setCurrentLength] = useState<number>(49.80);
@@ -78,7 +78,7 @@ export const RegrindingEntryView: React.FC = () => {
   const [quickInspectDecision, setQuickInspectDecision] = useState<'PASSED' | 'FAILED' | 'CONDITIONAL'>('PASSED');
   const [quickInspectNotes, setQuickInspectNotes] = useState<string>('');
 
-  const linesList: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5', 'E6'];
+  const linesList: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
 
   const reloadData = () => {
     setStandards(storageService.getRegrindMasterStandards());

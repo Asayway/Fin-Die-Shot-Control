@@ -303,7 +303,7 @@ interface InteractiveDieLayoutViewProps {
 }
 
 export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> = ({
-  initialLineId = 'E6',
+  initialLineId = 'E1',
   showLineSelector = true
 }) => {
   const [selectedLineId, setSelectedLineId] = useState<ProductionLineId>(initialLineId);

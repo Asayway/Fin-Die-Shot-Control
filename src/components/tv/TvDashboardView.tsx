@@ -47,7 +47,7 @@ interface TvDashboardViewProps {
 }
 
 export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
-  initialLineId = 'E6',
+  initialLineId = 'E1',
   isFullscreenMode = false,
   onToggleFullscreen
 }) => {
@@ -156,7 +156,7 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
     document.addEventListener('mouseup', onMouseUp);
   };
 
-  const linesList: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5', 'E6'];
+  const linesList: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
 
   const reloadData = () => {
     const rawData = storageService.getLineMonitoring(selectedLineId);

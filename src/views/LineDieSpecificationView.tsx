@@ -54,7 +54,6 @@ const ALL_LINE_OPTIONS: LineOption[] = [
   { id: 'E3-3', label: 'E3', tag: 'Corr 4P', defaultTube: 'Ø7', defaultFin: 'Corrugate', defaultPitch: '4P (Pitch)', defaultMaterial: 'GOLD (0.1mm)', defaultDieCode: 'FD-E33-07', defaultSpm: 100 },
   { id: 'E4', label: 'E4', tag: 'Ø5 Slit', defaultTube: 'Ø5', defaultFin: 'Slit Old', defaultPitch: '3P (Pitch)', defaultMaterial: 'BARE (0.1mm)', defaultDieCode: 'FD-E4-05', defaultSpm: 100 },
   { id: 'E5', label: 'E5', tag: 'Ø5 Slit', defaultTube: 'Ø5', defaultFin: 'New Slit', defaultPitch: '3P (Pitch)', defaultMaterial: 'BARE (0.1mm)', defaultDieCode: 'FD-E5-05', defaultSpm: 100 },
-  { id: 'E6', label: 'E6', tag: 'Ø7 Louver', defaultTube: 'Ø7', defaultFin: 'Louver', defaultPitch: '3P (Pitch)', defaultMaterial: 'PCM (0.1mm)', defaultDieCode: 'FD-E6-07', defaultSpm: 100 },
 ];
 
 export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> = ({
@@ -87,7 +86,7 @@ export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> =
     ALL_LINE_OPTIONS.forEach(opt => {
       const found = rawConfigs.find(c => c.lineId === opt.id);
       const liveData = storageService.getLineMonitoring(opt.id);
-      const machineStatus = liveData?.machineStatus || (opt.id === 'E5' || opt.id === 'E6' ? 'STOPPED' : 'RUNNING');
+      const machineStatus = liveData?.machineStatus || (opt.id === 'E5' ? 'STOPPED' : 'RUNNING');
       
       statusMap[opt.id] = machineStatus;
 
@@ -250,7 +249,7 @@ export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> =
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span>ALL LINES (E1-E6)</span>
+            <span>ALL LINES (7 Lines: E1-E5)</span>
           </button>
 
           {/* INDIVIDUAL LINE PILLS */}
@@ -330,7 +329,7 @@ export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> =
           </span>
         </div>
         <div className="text-slate-400 font-mono text-xs">
-          กำลังตั้งค่า: <span className="text-cyan-300 font-bold">{selectedLineFilter === 'ALL' ? 'ALL LINES (E1-E6)' : `LINE ${selectedLineFilter}`}</span>
+          กำลังตั้งค่า: <span className="text-cyan-300 font-bold">{selectedLineFilter === 'ALL' ? 'ALL LINES (7 Lines: E1-E5)' : `LINE ${selectedLineFilter}`}</span>
         </div>
       </div>
 

@@ -464,7 +464,7 @@ export const ReportsView: React.FC = () => {
             selectedLine={selectedLineFilter}
             onSelectLine={(l) => setSelectedLineFilter(l)}
             allowAll={true}
-            allLabel="ALL LINES (E1-E6)"
+            allLabel="ALL LINES (7 Lines: E1-E5)"
             label="LINE:"
           />
 

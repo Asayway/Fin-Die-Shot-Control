@@ -72,7 +72,7 @@ export const ToolLengthValidationForm: React.FC<ToolLengthValidationFormProps> =
   const [manualRemainingLength, setManualRemainingLength] = useState<number | null>(null);
   const [shimThickness, setShimThickness] = useState<number>(0.25);
   const [currentCycleCount, setCurrentCycleCount] = useState<number>(1);
-  const [lineId, setLineId] = useState<string>(initialTicket?.lineId || 'E6');
+  const [lineId, setLineId] = useState<string>(initialTicket?.lineId || 'E1');
   const [notes, setNotes] = useState<string>('');
 
   // Scrap Prompt Modal state
@@ -98,7 +98,7 @@ export const ToolLengthValidationForm: React.FC<ToolLengthValidationFormProps> =
       setGrindDepth(initialTicket.grindDepthMm || 0.25);
       setShimThickness(initialTicket.shimAddedMm || 0.25);
       setCurrentCycleCount((initialTicket.regrindCountBefore || 0) + 1);
-      setLineId(initialTicket.lineId || 'E6');
+      setLineId(initialTicket.lineId || 'E1');
       setSerialOrLot(initialTicket.qrCode || `SN-${Date.now().toString().slice(-6)}`);
       setManualRemainingLength(null);
     } else if (activeMaster) {
@@ -244,7 +244,7 @@ export const ToolLengthValidationForm: React.FC<ToolLengthValidationFormProps> =
         partCode: activeMaster.partCode,
         quantity: 10,
         workTicketId: `VAL-SCRAP-${Date.now()}`,
-        lineId: (lineId as any) || 'E6',
+        lineId: (lineId as any) || 'E1',
         requestedBy: technicianName,
         reason: 'SCRAPPED_TOOLING_REPLACEMENT'
       });
@@ -388,7 +388,7 @@ export const ToolLengthValidationForm: React.FC<ToolLengthValidationFormProps> =
                     onChange={e => setLineId(e.target.value)}
                     className="w-24 px-2.5 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
                   >
-                    {['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5', 'E6'].map(l => (
+                    {['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'].map(l => (
                       <option key={l} value={l}>{l}</option>
                     ))}
                   </select>

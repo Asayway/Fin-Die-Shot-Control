@@ -15,13 +15,13 @@ export interface LineFilterSelectorProps {
   showShortTag?: boolean;
 }
 
-const LINES_LIST: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5', 'E6'];
+const LINES_LIST: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
 
 export const LineFilterSelector: React.FC<LineFilterSelectorProps> = ({
   selectedLine,
   onSelectLine,
   allowAll = false,
-  allLabel = 'ALL LINES (E1-E6)',
+  allLabel = 'ALL 7 LINES (E1-E5)',
   isHmi = false,
   label = 'LINE:',
   className = '',
@@ -31,9 +31,7 @@ export const LineFilterSelector: React.FC<LineFilterSelectorProps> = ({
   return (
     <div className={`flex items-center gap-1 sm:gap-1.5 flex-wrap ${className}`}>
       {label && (
-        <span className={`text-[11px] font-mono font-bold tracking-wider uppercase mr-0.5 flex items-center gap-1 ${
-          isHmi ? 'text-green-400' : 'text-cyan-400'
-        }`}>
+        <span className="text-[11px] font-mono font-bold tracking-wider uppercase mr-0.5 flex items-center gap-1 text-cyan-400">
           {label}
         </span>
       )}
@@ -42,13 +40,9 @@ export const LineFilterSelector: React.FC<LineFilterSelectorProps> = ({
         <button
           type="button"
           onClick={() => onSelectLine('ALL')}
-          className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold transition-all flex items-center gap-1 border whitespace-nowrap active:scale-95 ${
+          className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold transition-all flex items-center gap-1 border whitespace-nowrap active:scale-95 cursor-pointer ${
             selectedLine === 'ALL'
-              ? isHmi
-                ? 'bg-green-500 text-black border-green-300 shadow-sm ring-1 ring-green-300 font-bold'
-                : 'bg-cyan-400 text-slate-950 border-cyan-200 shadow-sm ring-1 ring-cyan-300 font-bold'
-              : isHmi
-              ? 'bg-zinc-950 hover:bg-zinc-900 text-green-400 border-zinc-800'
+              ? 'bg-cyan-400 text-slate-950 border-cyan-200 shadow-sm ring-1 ring-cyan-300 font-bold'
               : 'bg-slate-900/90 hover:bg-slate-800 text-slate-300 border-slate-700/80 hover:text-white'
           }`}
         >
@@ -70,20 +64,16 @@ export const LineFilterSelector: React.FC<LineFilterSelectorProps> = ({
         const isSelected = selectedLine === line;
         const lineMon = storageService.getLineMonitoring(line);
         const lineStatus = lineMon?.machineStatus || 'RUNNING';
-        const displayLine = line.startsWith('E3-') ? 'E3' : line;
+        const displayLine = line.startsWith('E3-') ? line : line;
 
         return (
           <button
             key={line}
             type="button"
             onClick={() => onSelectLine(line)}
-            className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold transition-all flex items-center gap-1 border whitespace-nowrap active:scale-95 ${
+            className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold transition-all flex items-center gap-1 border whitespace-nowrap active:scale-95 cursor-pointer ${
               isSelected
-                ? isHmi
-                  ? 'bg-green-500 text-black border-green-300 shadow-sm ring-1 ring-green-300 font-bold'
-                  : 'bg-cyan-400 text-slate-950 border-cyan-200 shadow-sm ring-1 ring-cyan-300 font-bold'
-                : isHmi
-                ? 'bg-zinc-950 hover:bg-zinc-900 text-green-400 border-zinc-800'
+                ? 'bg-cyan-400 text-slate-950 border-cyan-200 shadow-sm ring-1 ring-cyan-300 font-bold'
                 : 'bg-slate-900/90 hover:bg-slate-800 text-slate-200 border-slate-700/90'
             }`}
           >
@@ -108,11 +98,7 @@ export const LineFilterSelector: React.FC<LineFilterSelectorProps> = ({
               <span
                 className={`text-[9.5px] px-1 py-0 rounded font-mono ${
                   isSelected
-                    ? isHmi
-                      ? 'bg-black text-green-300 font-bold'
-                      : 'bg-slate-950 text-cyan-300 font-bold'
-                    : isHmi
-                    ? 'bg-zinc-900 text-zinc-400'
+                    ? 'bg-slate-950 text-cyan-300 font-bold'
                     : 'bg-slate-800 text-slate-400'
                 }`}
               >

@@ -37,7 +37,7 @@ interface LineQuickFilter {
 }
 
 const LINE_QUICK_FILTERS: LineQuickFilter[] = [
-  { id: 'ALL', label: 'ALL LINES', subLabel: 'ทุกสายการผลิต (E1-E6)', tube: 'ALL', material: 'ALL', finType: 'ALL', paths: '-' },
+  { id: 'ALL', label: 'ALL LINES', subLabel: 'ทุกสายการผลิต (7 Lines: E1-E5)', tube: 'ALL', material: 'ALL', finType: 'ALL', paths: '-' },
   { id: 'E1', label: 'E1', subLabel: 'Ø7 Slit, PCM', tube: 'Ø7', material: 'PCM', finType: 'Slit Old', paths: '4P (Pitch)' },
   { id: 'E2', label: 'E2', subLabel: 'Ø5 Slit, GOLD', tube: 'Ø5', material: 'GOLD', finType: 'Slit Old', paths: '4P (Pitch)' },
   { id: 'E3-1', label: 'E3-1', subLabel: 'Slit 3P, PCM', tube: 'Ø7', material: 'PCM', finType: 'New Slit', paths: '3P (Pitch)' },
@@ -45,7 +45,6 @@ const LINE_QUICK_FILTERS: LineQuickFilter[] = [
   { id: 'E3-3', label: 'E3-3', subLabel: 'Corr 4P, GOLD', tube: 'Ø7', material: 'GOLD', finType: 'Corrugate', paths: '4P (Pitch)' },
   { id: 'E4', label: 'E4', subLabel: 'Ø5 Slit, BARE', tube: 'Ø5', material: 'BARE', finType: 'Slit Old', paths: '3P (Pitch)' },
   { id: 'E5', label: 'E5', subLabel: 'Ø5 Slit, BARE', tube: 'Ø5', material: 'BARE', finType: 'New Slit', paths: '3P (Pitch)' },
-  { id: 'E6', label: 'E6', subLabel: 'Ø7 Louver, PCM', tube: 'Ø7', material: 'PCM', finType: 'Louver', paths: '3P (Pitch)' },
 ];
 
 export const PartLifeStandardSetupView: React.FC = () => {
@@ -878,7 +877,7 @@ export const PartLifeStandardSetupView: React.FC = () => {
                     onChange={e => setNewStd({ ...newStd, lineId: e.target.value })}
                     className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-cyan-300 font-bold text-xs focus:border-cyan-500 focus:outline-none"
                   >
-                    <option value="ALL">ALL (ทุกไลน์)</option>
+                    <option value="ALL">ALL (ทุกไลน์: E1-E5)</option>
                     <option value="E1">E1 (Ø7 Slit, PCM)</option>
                     <option value="E2">E2 (Ø5 Slit, GOLD)</option>
                     <option value="E3-1">E3-1 (Slit 3P, PCM)</option>
@@ -886,7 +885,6 @@ export const PartLifeStandardSetupView: React.FC = () => {
                     <option value="E3-3">E3-3 (Corr 4P, GOLD)</option>
                     <option value="E4">E4 (Ø5 Slit, BARE)</option>
                     <option value="E5">E5 (Ø5 Slit, BARE)</option>
-                    <option value="E6">E6 (Ø7 Louver, PCM)</option>
                   </select>
                 </div>
 
@@ -1023,7 +1021,7 @@ export const InstallQuantitySetupView: React.FC = () => {
     return () => unsub();
   }, []);
 
-  const lineIds = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5', 'E6'];
+  const lineIds = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
 
   interface InstallMatrixRow {
     no: number;

@@ -23,19 +23,11 @@ export const UnifiedToolingMasterView: React.FC<UnifiedToolingMasterViewProps> =
   const [activeTab, setActiveTab] = useState<'specs' | 'standards' | 'master' | 'install'>(initialTab);
   const [showMigrationModal, setShowMigrationModal] = useState(false);
 
-  // System Settings & HMI Theme
-  const systemSettings = storageService.getSettings();
-  const isHmi = systemSettings?.theme === 'hmi' || systemSettings?.theme === 'industrial-dark';
-
   return (
     <div className="space-y-2.5 animate-fadeIn font-sans text-slate-100 pb-4">
       
       {/* Top Header & Sub-Tabs Navigation Bar (Sticky Locked at Top) */}
-      <div className={`sticky top-0 z-30 backdrop-blur-md rounded-lg p-2 sm:p-2.5 shadow-xl space-y-2 border ${
-        isHmi 
-          ? 'bg-black/95 border-2 border-green-500 text-green-400' 
-          : 'bg-[#0E172A]/95 border-slate-800/90 text-slate-100'
-      }`}>
+      <div className="sticky top-0 z-30 backdrop-blur-md rounded-lg p-2 sm:p-2.5 shadow-xl space-y-2 border bg-[#0E172A]/95 border-slate-800/90 text-slate-100">
         
         {/* Row 1: Title Bar */}
         <div className="flex flex-wrap items-center justify-between gap-2 pb-1.5 border-b border-slate-800/80">
@@ -45,13 +37,13 @@ export const UnifiedToolingMasterView: React.FC<UnifiedToolingMasterViewProps> =
               <span>DIE & PART MASTER HUB</span>
             </span>
             <span className="hidden md:inline text-slate-400 text-xs font-thai">
-              จัดการสเปกไลน์ (E1-E6), สเปกแม่พิมพ์, มาตรฐานช็อต และอะไหล่
+              จัดการสเปกไลน์ (7 Lines: E1-E5), สเปกแม่พิมพ์, มาตรฐานช็อต และอะไหล่
             </span>
           </div>
           
           <button 
             onClick={() => setShowMigrationModal(true)}
-            className="px-2.5 py-1 bg-indigo-900/40 hover:bg-indigo-900 text-indigo-300 border border-indigo-700/50 rounded text-xs font-mono flex items-center gap-1.5 transition-all shadow-sm"
+            className="px-2.5 py-1 bg-indigo-900/40 hover:bg-indigo-900 text-indigo-300 border border-indigo-700/50 rounded text-xs font-mono flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
           >
             <DatabaseZap className="w-3 h-3" />
             <span>MIGRATE STANDARD</span>
@@ -64,14 +56,10 @@ export const UnifiedToolingMasterView: React.FC<UnifiedToolingMasterViewProps> =
           <button
             id="tab-specs"
             onClick={() => setActiveTab('specs')}
-            className={`px-3 py-1.5 rounded-md font-bold text-xs transition-all flex items-center gap-1.5 border ${
+            className={`px-3 py-1.5 rounded-md font-bold text-xs transition-all flex items-center gap-1.5 border cursor-pointer ${
               activeTab === 'specs'
-                ? isHmi
-                  ? 'bg-green-500 text-black border-green-400 shadow-sm font-extrabold'
-                  : 'bg-cyan-400 text-slate-950 border-cyan-300 shadow-sm font-bold'
-                : isHmi
-                  ? 'bg-zinc-950 text-green-400 border-green-900 hover:bg-zinc-900'
-                  : 'bg-slate-900 text-slate-300 hover:text-white border-slate-700'
+                ? 'bg-cyan-400 text-slate-950 border-cyan-300 shadow-sm font-bold'
+                : 'bg-slate-900 text-slate-300 hover:text-white border-slate-700'
             }`}
           >
             <Factory className="w-3.5 h-3.5" />
@@ -81,14 +69,10 @@ export const UnifiedToolingMasterView: React.FC<UnifiedToolingMasterViewProps> =
           <button
             id="tab-standards"
             onClick={() => setActiveTab('standards')}
-            className={`px-3 py-1.5 rounded-md font-bold text-xs transition-all flex items-center gap-1.5 border ${
+            className={`px-3 py-1.5 rounded-md font-bold text-xs transition-all flex items-center gap-1.5 border cursor-pointer ${
               activeTab === 'standards'
-                ? isHmi
-                  ? 'bg-green-500 text-black border-green-400 shadow-sm font-extrabold'
-                  : 'bg-cyan-400 text-slate-950 border-cyan-300 shadow-sm font-bold'
-                : isHmi
-                  ? 'bg-zinc-950 text-green-400 border-green-900 hover:bg-zinc-900'
-                  : 'bg-slate-900 text-slate-300 hover:text-white border-slate-700'
+                ? 'bg-cyan-400 text-slate-950 border-cyan-300 shadow-sm font-bold'
+                : 'bg-slate-900 text-slate-300 hover:text-white border-slate-700'
             }`}
           >
             <Sliders className="w-3.5 h-3.5" />
@@ -98,14 +82,10 @@ export const UnifiedToolingMasterView: React.FC<UnifiedToolingMasterViewProps> =
           <button
             id="tab-master"
             onClick={() => setActiveTab('master')}
-            className={`px-3 py-1.5 rounded-md font-bold text-xs transition-all flex items-center gap-1.5 border ${
+            className={`px-3 py-1.5 rounded-md font-bold text-xs transition-all flex items-center gap-1.5 border cursor-pointer ${
               activeTab === 'master'
-                ? isHmi
-                  ? 'bg-green-500 text-black border-green-400 shadow-sm font-extrabold'
-                  : 'bg-cyan-400 text-slate-950 border-cyan-300 shadow-sm font-bold'
-                : isHmi
-                  ? 'bg-zinc-950 text-green-400 border-green-900 hover:bg-zinc-900'
-                  : 'bg-slate-900 text-slate-300 hover:text-white border-slate-700'
+                ? 'bg-cyan-400 text-slate-950 border-cyan-300 shadow-sm font-bold'
+                : 'bg-slate-900 text-slate-300 hover:text-white border-slate-700'
             }`}
           >
             <Box className="w-3.5 h-3.5" />
@@ -115,14 +95,10 @@ export const UnifiedToolingMasterView: React.FC<UnifiedToolingMasterViewProps> =
           <button
             id="tab-install"
             onClick={() => setActiveTab('install')}
-            className={`px-3 py-1.5 rounded-md font-bold text-xs transition-all flex items-center gap-1.5 border ${
+            className={`px-3 py-1.5 rounded-md font-bold text-xs transition-all flex items-center gap-1.5 border cursor-pointer ${
               activeTab === 'install'
-                ? isHmi
-                  ? 'bg-green-500 text-black border-green-400 shadow-sm font-extrabold'
-                  : 'bg-cyan-400 text-slate-950 border-cyan-300 shadow-sm font-bold'
-                : isHmi
-                  ? 'bg-zinc-950 text-green-400 border-green-900 hover:bg-zinc-900'
-                  : 'bg-slate-900 text-slate-300 hover:text-white border-slate-700'
+                ? 'bg-cyan-400 text-slate-950 border-cyan-300 shadow-sm font-bold'
+                : 'bg-slate-900 text-slate-300 hover:text-white border-slate-700'
             }`}
           >
             <Layers className="w-3.5 h-3.5" />

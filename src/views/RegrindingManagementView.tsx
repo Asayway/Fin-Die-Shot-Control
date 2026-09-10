@@ -43,7 +43,7 @@ interface RegrindingManagementViewProps {
 }
 
 export const RegrindingManagementView: React.FC<RegrindingManagementViewProps> = ({
-  selectedLine = 'E6',
+  selectedLine = 'E1',
   onNavigateToDieLayout,
   currentUserName = 'Kittisak Wongsuwan'
 }) => {

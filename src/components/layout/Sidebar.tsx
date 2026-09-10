@@ -52,10 +52,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   userRole,
   collapsed = false,
   onToggleCollapse,
-  theme = 'hmi',
+  theme = 'dark',
   language = 'EN' as LanguageCode
 }) => {
-  const isHmi = theme === 'hmi' || theme === 'industrial-dark';
   const isLight = theme === 'light';
   const t = getI18n(language);
 
@@ -124,11 +123,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Main Sidebar Container */}
       <aside
-        className={`flex flex-col flex-shrink-0 transition-all duration-300 select-none shadow-2xl h-full min-h-0 z-40 ${
-          isHmi 
-            ? 'bg-black border-r-2 border-green-500/80 text-green-400 font-mono' 
-            : isLight
-            ? 'bg-slate-50 border-r border-slate-300 text-slate-800 font-sans'
+        className={`flex flex-col flex-shrink-0 transition-all duration-300 select-none shadow-xl h-full min-h-0 z-40 ${
+          isLight
+            ? 'bg-white border-r border-slate-200 text-slate-800 font-sans'
             : 'bg-[#0B1120] border-r border-slate-800/80 text-slate-200 font-sans'
         } ${
           // Mobile vs Desktop responsive positioning
@@ -140,24 +137,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Top Toggle Button Inside Sidebar */}
       {onToggleCollapse && (
         <div className={`p-1.5 border-b flex items-center justify-between ${
-          isHmi ? 'border-green-900/60 bg-zinc-950' : isLight ? 'border-slate-300 bg-slate-100' : 'border-slate-800/60 bg-slate-950/40'
+          isLight ? 'border-slate-200 bg-slate-50' : 'border-slate-800/60 bg-slate-950/40'
         }`}>
           <button
             onClick={onToggleCollapse}
             className={`p-1 rounded transition-colors border ${
-              isHmi
-                ? 'hover:bg-green-950 text-green-400 hover:text-green-200 border-green-900/50'
-                : isLight
-                ? 'hover:bg-slate-200 text-slate-700 border-slate-300'
+              isLight
+                ? 'hover:bg-slate-200 text-slate-700 border-slate-200'
                 : 'hover:bg-slate-800 text-slate-400 hover:text-cyan-300 border-slate-800'
             } ${collapsed ? 'w-full flex justify-center' : 'ml-auto'}`}
             title={collapsed ? "ขยายเมนู (Expand Sidebar)" : "ย่อเมนู (Collapse Sidebar)"}
             aria-label="Toggle Sidebar Collapse"
           >
             {collapsed ? (
-              <ChevronRight className={`w-3.5 h-3.5 ${isHmi ? 'text-green-400' : isLight ? 'text-cyan-600' : 'text-cyan-400'}`} />
+              <ChevronRight className={`w-3.5 h-3.5 ${isLight ? 'text-[#A50034]' : 'text-cyan-400'}`} />
             ) : (
-              <ChevronLeft className={`w-3.5 h-3.5 ${isHmi ? 'text-green-400' : isLight ? 'text-slate-600' : 'text-slate-400'}`} />
+              <ChevronLeft className={`w-3.5 h-3.5 ${isLight ? 'text-slate-600' : 'text-slate-400'}`} />
             )}
           </button>
         </div>
@@ -165,15 +160,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Navigation Links */}
       <div className={`flex-1 overflow-y-auto py-1.5 px-1 space-y-1.5 custom-scrollbar ${
-        isHmi ? 'bg-black' : isLight ? 'bg-slate-50' : 'bg-[#0B1120]'
+        isLight ? 'bg-white' : 'bg-[#0B1120]'
       }`}>
         {sections.map((section, sIdx) => (
           <div key={sIdx} className="space-y-0.5">
             {!collapsed && (
-              <div className={`px-2 pb-0.5 border-b ${isHmi ? 'border-green-950' : 'border-slate-800/60'}`}>
-                <div className={`text-[8.5px] font-bold font-mono tracking-widest uppercase ${
-                  isHmi ? 'text-green-500' : 'text-slate-400'
-                }`}>
+              <div className={`px-2 pb-0.5 border-b ${isLight ? 'border-slate-200' : 'border-slate-800/60'}`}>
+                <div className={`text-[8.5px] font-bold font-mono tracking-widest uppercase ${isLight ? 'text-slate-400' : 'text-slate-400'}`}>
                   {section.title}
                 </div>
               </div>
@@ -192,14 +185,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       }
                     }}
                     className={`w-full flex items-center gap-2 px-2 py-1 rounded text-left transition-all group ${
-                      isHmi
+                      isLight
                         ? isActive
-                          ? 'bg-green-500 text-black border border-green-400 font-extrabold shadow-sm'
-                          : 'bg-zinc-950/80 text-green-400 border border-zinc-900 hover:border-green-500/50 hover:bg-green-950/60'
-                        : isLight
-                        ? isActive
-                          ? 'bg-sky-50 text-sky-800 border-l-2 border-sky-600 font-semibold shadow-sm'
-                          : 'text-slate-700 hover:bg-slate-200/70 hover:text-slate-900 border border-transparent'
+                          ? 'bg-[#FFF1F2] text-[#A50034] border-l-2 border-[#A50034] font-semibold shadow-2xs'
+                          : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-transparent'
                         : isActive
                           ? 'bg-cyan-500/15 text-cyan-200 border-l-2 border-cyan-400 font-semibold shadow-sm'
                           : 'text-slate-300 hover:bg-slate-800/70 hover:text-white border border-transparent'
@@ -208,10 +197,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   >
                     <Icon
                       className={`w-3.5 h-3.5 flex-shrink-0 transition-colors ${
-                        isHmi
-                          ? isActive ? 'text-black font-bold' : 'text-green-400 group-hover:text-green-300'
-                          : isLight
-                          ? isActive ? 'text-sky-600' : 'text-slate-500 group-hover:text-slate-900'
+                        isLight
+                          ? isActive ? 'text-[#A50034]' : 'text-slate-500 group-hover:text-slate-900'
                           : isActive ? 'text-cyan-400' : 'text-slate-400 group-hover:text-cyan-300'
                       }`}
                     />
@@ -219,10 +206,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <div className="flex-1 min-w-0 flex items-center justify-between">
                         <div className="truncate">
                           <div className={`text-[11.5px] tracking-tight truncate leading-tight ${
-                            isHmi
-                              ? isActive ? 'text-black font-extrabold' : 'text-green-300 group-hover:text-green-200'
-                              : isLight
-                              ? isActive ? 'text-sky-900 font-semibold' : 'text-slate-700 group-hover:text-slate-900'
+                            isLight
+                              ? isActive ? 'text-[#A50034] font-semibold' : 'text-slate-700 group-hover:text-slate-900'
                               : isActive ? 'text-white font-medium' : 'text-slate-200 group-hover:text-white'
                           }`}>
                             {item.label}
@@ -231,17 +216,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         {item.badge && (
                           <span
                             className={`ml-1 text-[8px] font-mono px-1 py-0 rounded border font-bold ${
-                              isHmi
+                              isLight
                                 ? isActive
-                                ? 'bg-black text-green-400 border-black'
-                                : item.badgeColor || 'bg-green-950 text-green-400 border-green-600'
-                                : isLight
-                                ? isActive
-                                ? 'bg-sky-100 text-sky-800 border-sky-300'
-                                : 'bg-slate-200 text-slate-700 border-slate-300'
+                                  ? 'bg-rose-100 text-[#A50034] border-rose-200'
+                                  : 'bg-slate-100 text-slate-600 border-slate-200'
                                 : isActive
-                                ? 'bg-cyan-950 text-cyan-300 border-cyan-600'
-                                : item.badgeColor || 'bg-slate-800/90 text-slate-400 border-slate-700/80'
+                                  ? 'bg-cyan-950 text-cyan-300 border-cyan-600'
+                                  : item.badgeColor || 'bg-slate-800/90 text-slate-400 border-slate-700/80'
                             }`}
                           >
                             {item.badge}
@@ -259,19 +240,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Footer Info */}
       {!collapsed && (
-        <div className={`p-2 border-t text-[9px] space-y-0.5 ${
-          isHmi 
-            ? 'border-green-900/80 bg-zinc-950 text-green-500/80' 
-            : 'border-slate-800/80 bg-slate-950/40 text-slate-400'
-        }`}>
+        <div className="p-2 border-t border-slate-800/80 bg-slate-950/40 text-slate-400 text-[9px] space-y-0.5">
           <div className="flex items-center justify-between font-mono">
             <span>DATA SOURCE</span>
-            <span className={isHmi ? 'text-green-400 font-bold' : 'text-emerald-400 font-semibold'}>
+            <span className="text-emerald-400 font-semibold">
               EXCEL 31.01.2025
             </span>
           </div>
-          <div className={`text-[8.5px] truncate font-mono ${isHmi ? 'text-green-600' : 'text-slate-500'}`}>
-            HE FIN DIE SHOT CONTROL SYSTEM
+          <div className="text-[8.5px] truncate font-mono text-slate-500">
+            FIN DIE SHOT & LIFETIME MONITOR
           </div>
         </div>
       )}

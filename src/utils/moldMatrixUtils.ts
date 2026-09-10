@@ -21,7 +21,6 @@ export function getMoldTypeForLine(lineId: string): MoldType {
     case 'E4':
     case 'E5':
       return 'TYPE_E'; // Ø5 Slit / Louver 3Pitch 66Row
-    case 'E6':
     default:
       return 'TYPE_A';
   }

@@ -1431,7 +1431,7 @@ export const MOLD_DIE_MASTER_ITEMS_2025: MoldDieMasterItem[] = [
     partName: 'PUNCH',
     drawingNo: 'DWG-SN-153',
     installQty: { totalQty: 0 },
-    shotLifeCycle: { e1_pcm: '-', e2_gold: '-', e3_1_pcm: '-', e3_2_gold: '-', e3_3_gold: '-', e4_bare: '-', e5_bare: '-', e6_pcm: '-' },
+    shotLifeCycle: { e1_pcm: '-', e2_gold: '-', e3_1_pcm: '-', e3_2_gold: '-', e3_3_gold: '-', e4_bare: '-', e5_bare: '-' },
     regrindStandard: { perGrindMm: '-', totalGrindMm: '-', regrindCycles: '-', note: '-' }
   },
   {
@@ -1440,7 +1440,7 @@ export const MOLD_DIE_MASTER_ITEMS_2025: MoldDieMasterItem[] = [
     partName: 'STRIPPER RIB',
     drawingNo: 'DWG-SN-154',
     installQty: { totalQty: 0 },
-    shotLifeCycle: { e1_pcm: '-', e2_gold: '-', e3_1_pcm: '-', e3_2_gold: '-', e3_3_gold: '-', e4_bare: '-', e5_bare: '-', e6_pcm: '-' },
+    shotLifeCycle: { e1_pcm: '-', e2_gold: '-', e3_1_pcm: '-', e3_2_gold: '-', e3_3_gold: '-', e4_bare: '-', e5_bare: '-' },
     regrindStandard: { perGrindMm: '-', totalGrindMm: '-', regrindCycles: '-', note: '-' }
   },
   {
@@ -1449,7 +1449,7 @@ export const MOLD_DIE_MASTER_ITEMS_2025: MoldDieMasterItem[] = [
     partName: 'STRIPPER SPACER',
     drawingNo: 'DWG-SN-155',
     installQty: { totalQty: 0 },
-    shotLifeCycle: { e1_pcm: '-', e2_gold: '-', e3_1_pcm: '-', e3_2_gold: '-', e3_3_gold: '-', e4_bare: '-', e5_bare: '-', e6_pcm: '-' },
+    shotLifeCycle: { e1_pcm: '-', e2_gold: '-', e3_1_pcm: '-', e3_2_gold: '-', e3_3_gold: '-', e4_bare: '-', e5_bare: '-' },
     regrindStandard: { perGrindMm: '-', totalGrindMm: '-', regrindCycles: '-', note: '-' }
   },
   {
@@ -1458,7 +1458,7 @@ export const MOLD_DIE_MASTER_ITEMS_2025: MoldDieMasterItem[] = [
     partName: 'BACK PLATE',
     drawingNo: 'DWG-SN-156',
     installQty: { totalQty: 0 },
-    shotLifeCycle: { e1_pcm: '-', e2_gold: '-', e3_1_pcm: '-', e3_2_gold: '-', e3_3_gold: '-', e4_bare: '-', e5_bare: '-', e6_pcm: '-' },
+    shotLifeCycle: { e1_pcm: '-', e2_gold: '-', e3_1_pcm: '-', e3_2_gold: '-', e3_3_gold: '-', e4_bare: '-', e5_bare: '-' },
     regrindStandard: { perGrindMm: '-', totalGrindMm: '-', regrindCycles: '-', note: '-' }
   },
   {
@@ -1467,7 +1467,7 @@ export const MOLD_DIE_MASTER_ITEMS_2025: MoldDieMasterItem[] = [
     partName: 'PUNCH HOLDER',
     drawingNo: 'DWG-SN-157',
     installQty: { totalQty: 0 },
-    shotLifeCycle: { e1_pcm: '-', e2_gold: '-', e3_1_pcm: '-', e3_2_gold: '-', e3_3_gold: '-', e4_bare: '-', e5_bare: '-', e6_pcm: '-' },
+    shotLifeCycle: { e1_pcm: '-', e2_gold: '-', e3_1_pcm: '-', e3_2_gold: '-', e3_3_gold: '-', e4_bare: '-', e5_bare: '-' },
     regrindStandard: { perGrindMm: '-', totalGrindMm: '-', regrindCycles: '-', note: '-' }
   }
 ];

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { User, ProductionLineId, SystemSettings } from './types';
 import { storageService } from './services/storageService';
+import { gatewayService } from './services/gatewayService';
 import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
@@ -18,17 +19,23 @@ const LoginView = React.lazy(() => import('./views/SystemSettingsView').then(m =
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User>(storageService.getCurrentUser());
   const [activeRoute, setActiveRoute] = useState<string>('tv-monitoring');
-  const [targetLineId, setTargetLineId] = useState<ProductionLineId>('E6');
+  const [targetLineId, setTargetLineId] = useState<ProductionLineId>('E1');
   const [settings, setSettings] = useState<SystemSettings>(storageService.getSettings());
   const [isTvFullscreen, setIsTvFullscreen] = useState<boolean>(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
 
   useEffect(() => {
+    // Initialize gateway driver service on startup
+    gatewayService.init();
+
     const unsub = storageService.subscribe(() => {
       setSettings(storageService.getSettings());
       setCurrentUser(storageService.getCurrentUser());
     });
-    return () => unsub();
+    return () => {
+      unsub();
+      gatewayService.destroy();
+    };
   }, []);
 
   // Sync with browser native fullscreen exit (e.g. Esc key)
@@ -126,14 +133,13 @@ export default function App() {
     }
   };
 
-  // If in dedicated fullscreen TV mode, display without outer shell header/sidebar, 100% viewport fit
-  const isHmi = settings.theme === 'hmi' || settings.theme === 'industrial-dark';
+  // Theme state: Industrial Dark Theme (default) or Clean Light Theme
   const isLight = settings.theme === 'light';
 
   if (isTvFullscreen && activeRoute === 'tv-monitoring') {
     return (
       <div className={`fixed inset-0 z-50 overflow-hidden flex flex-col h-screen w-screen max-h-screen max-w-screen p-0 m-0 ${
-        isHmi ? 'theme-hmi bg-black text-green-400 font-mono' : isLight ? 'theme-light bg-slate-100 text-slate-900 font-sans' : 'theme-dark bg-[#070D18] text-slate-100 font-sans'
+        isLight ? 'theme-light bg-slate-100 text-slate-900 font-sans' : 'theme-dark bg-[#070D18] text-slate-100 font-sans'
       }`}>
         <Suspense fallback={<ViewSkeleton />}>
           <TvDashboardView
@@ -149,9 +155,7 @@ export default function App() {
   return (
     <div 
       className={`h-screen max-h-screen overflow-hidden flex flex-col transition-colors duration-200 ${
-        isHmi
-          ? 'theme-hmi bg-black text-green-400 font-mono selection:bg-green-500 selection:text-black'
-          : isLight
+        isLight
           ? 'theme-light bg-slate-100 text-slate-900 font-sans selection:bg-cyan-600 selection:text-white'
           : 'theme-dark bg-[#070D18] text-slate-100 font-sans selection:bg-cyan-500 selection:text-slate-950'
       }`}
@@ -186,7 +190,7 @@ export default function App() {
 
         {/* Content Body - Independent scrollable view container */}
         <main className={`flex-1 min-h-0 overflow-y-auto p-2 sm:p-2.5 lg:p-3 custom-scrollbar transition-all duration-300 w-full ${
-          isHmi ? 'bg-black text-green-400' : isLight ? 'bg-slate-100 text-slate-900' : 'bg-[#080E1B] text-slate-100'
+          settings.theme === 'light' ? 'bg-[#F7F8FA] text-slate-900' : 'bg-[#080E1B] text-slate-100'
         }`}>
           <div className="w-full pb-4">
             <ErrorBoundary>

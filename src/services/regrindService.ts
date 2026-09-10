@@ -401,7 +401,7 @@ class RegrindService {
 
     const newId = `RGD-${new Date().getFullYear()}-${String(tickets.length + 1).padStart(4, '0')}`;
     const jobCode = `JOB-RGD-${new Date().getFullYear()}-${String(tickets.length + 1).padStart(3, '0')}`;
-    const qrCode = data.qrCode || `QR-${data.lineId || 'E6'}-${Date.now().toString().slice(-4)}`;
+    const qrCode = data.qrCode || `QR-${data.lineId || 'E1'}-${Date.now().toString().slice(-4)}`;
 
     const nominal = master?.nominalLengthMm || data.nominalLengthMm || 70.00;
     const minLimit = master?.minAllowedLengthMm || data.minAllowedLengthMm || 65.00;
@@ -413,7 +413,7 @@ class RegrindService {
       qrCode,
       partName: master?.partName || data.partName || 'Tooling Part',
       partCode: master?.partCode || data.partCode || 'TOOL-CUSTOM',
-      lineId: data.lineId || 'E6',
+      lineId: data.lineId || 'E1',
       stageName: data.stageName || 'Tooling Room',
       positionId: data.positionId || 'SHOP-01',
       picCategory: master?.picCategory || data.picCategory || 'burring_7',

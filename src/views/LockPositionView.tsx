@@ -38,7 +38,7 @@ interface LockPositionViewProps {
   initialLineId?: ProductionLineId;
 }
 
-const ALL_LINES: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5', 'E6'];
+const ALL_LINES: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
 
 const LOCK_TYPE_INFO: Record<PositionLockStatus, { label: string; labelTh: string; color: string; bg: string; border: string }> = {
   UNLOCKED: {
@@ -96,7 +96,7 @@ const COMMON_LOCK_REASONS = [
   'Periodic engineering maintenance lockout'
 ];
 
-export const LockPositionView: React.FC<LockPositionViewProps> = ({ initialLineId = 'E6' }) => {
+export const LockPositionView: React.FC<LockPositionViewProps> = ({ initialLineId = 'E1' }) => {
   const [selectedLineId, setSelectedLineId] = useState<ProductionLineId>(initialLineId);
   const [positionLocks, setPositionLocks] = useState<PositionLockRecord[]>([]);
   const [selectedStage, setSelectedStage] = useState<string>('ALL');

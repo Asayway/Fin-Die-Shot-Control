@@ -32,7 +32,7 @@ export const NewRegrindOrderModal: React.FC<NewRegrindOrderModalProps> = ({
   currentUserName = 'Somchai Prasert'
 }) => {
   const [selectedPartName, setSelectedPartName] = useState<string>(toolingMasters[0]?.partName || 'Burring Ø 7');
-  const [lineId, setLineId] = useState<ProductionLineId>('E6');
+  const [lineId, setLineId] = useState<ProductionLineId>('E1');
   const [stageName, setStageName] = useState<string>('Stage 1: Piercing & Burring');
   const [positionId, setPositionId] = useState<string>('BURR-01');
   const [defectReason, setDefectReason] = useState<DefectReasonCode>('NORMAL_WEAR');
@@ -126,11 +126,11 @@ export const NewRegrindOrderModal: React.FC<NewRegrindOrderModalProps> = ({
                 onChange={e => setLineId(e.target.value as ProductionLineId)}
                 className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white font-bold"
               >
-                <option value="E6">E6 (Heavy Louver)</option>
                 <option value="E1">E1 (Standard 7mm)</option>
                 <option value="E2">E2 (Micro 5mm)</option>
                 <option value="E3-1">E3-1 (Fin Press)</option>
                 <option value="E3-2">E3-2 (Fin Press)</option>
+                <option value="E3-3">E3-3 (Fin Press)</option>
                 <option value="E4">E4 (5mm High Speed)</option>
                 <option value="E5">E5 (5mm Dual Row)</option>
               </select>

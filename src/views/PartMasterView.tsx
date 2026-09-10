@@ -58,7 +58,6 @@ export const PartMasterView: React.FC = () => {
           'E3-3': item.installQty.e3_3,
           'E4': item.installQty.e4,
           'E5': item.installQty.e5,
-          'E6': item.installQty.e6,
         };
         const lineQty = qtyMap[selectedLineFilter];
         if (!lineQty || lineQty <= 0) return false;
@@ -128,7 +127,6 @@ export const PartMasterView: React.FC = () => {
       'E3(3) Qty',
       'E4 Qty',
       'E5 Qty',
-      'E6 Qty',
       'Total Qty',
       'E1 Shot Life (M)',
       'E2 Shot Life (M)',
@@ -137,7 +135,6 @@ export const PartMasterView: React.FC = () => {
       'E3(3) Shot Life (M)',
       'E4 Shot Life (M)',
       'E5 Shot Life (M)',
-      'E6 Shot Life (M)',
       'Spec Parts',
       'Lower Spec Limit',
       '1 time / re-grind (mm)',
@@ -158,7 +155,6 @@ export const PartMasterView: React.FC = () => {
       item.installQty.e3_3 || '-',
       item.installQty.e4 || '-',
       item.installQty.e5 || '-',
-      item.installQty.e6 || '-',
       item.installQty.totalQty,
       item.shotLifeCycle.e1_pcm || '-',
       item.shotLifeCycle.e2_gold || '-',
@@ -167,7 +163,6 @@ export const PartMasterView: React.FC = () => {
       item.shotLifeCycle.e3_3_gold || '-',
       item.shotLifeCycle.e4_bare || '-',
       item.shotLifeCycle.e5_bare || '-',
-      item.shotLifeCycle.e6_pcm || '-',
       item.shotLifeCycle.partsSpec || '-',
       item.shotLifeCycle.lowerSpecScrapLimit || '-',
       `"${item.regrindStandard.perGrindMm}"`,
@@ -253,7 +248,7 @@ export const PartMasterView: React.FC = () => {
           <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-3">
             <div className="text-[11px] text-slate-400 font-mono">3. PRODUCTION LINES</div>
             <div className="text-lg font-bold text-amber-400 font-mono mt-0.5">
-              E1 - E6 <span className="text-xs text-slate-400 font-normal">(8 Line Configs)</span>
+              E1 - E5 <span className="text-xs text-slate-400 font-normal">(7 Line Configs)</span>
             </div>
             <div className="text-[10px] text-slate-500 mt-0.5">PCM, Gold, Bare Fin Types</div>
           </div>
@@ -311,7 +306,6 @@ export const PartMasterView: React.FC = () => {
                 <option value="E3-3" className="bg-slate-900 text-white">Line E3 (Corr 4P)</option>
                 <option value="E4" className="bg-slate-900 text-white">Line E4 (Ø5 Slit)</option>
                 <option value="E5" className="bg-slate-900 text-white">Line E5 (Ø5 Slit)</option>
-                <option value="E6" className="bg-slate-900 text-white">Line E6 (Ø7 Louver)</option>
               </select>
             </div>
 
@@ -387,10 +381,10 @@ export const PartMasterView: React.FC = () => {
                 <th colSpan={3} className="py-2.5 px-3 border-r border-slate-800 text-cyan-400 font-bold">
                   1. PART IDENTIFICATION
                 </th>
-                <th colSpan={9} className="py-2.5 px-3 border-r border-slate-800 text-amber-400 font-bold text-center bg-amber-950/10">
+                <th colSpan={8} className="py-2.5 px-3 border-r border-slate-800 text-amber-400 font-bold text-center bg-amber-950/10">
                   2. INSTALL QUANTITY BY LINE (EA)
                 </th>
-                <th colSpan={8} className="py-2.5 px-3 border-r border-slate-800 text-blue-400 font-bold text-center bg-blue-950/10">
+                <th colSpan={7} className="py-2.5 px-3 border-r border-slate-800 text-blue-400 font-bold text-center bg-blue-950/10">
                   3. STANDARDIZATION OF SHOT USAGE CYCLE (MILLION SHOTS)
                 </th>
                 <th colSpan={4} className="py-2.5 px-3 text-purple-400 font-bold text-center bg-purple-950/10">
@@ -411,7 +405,6 @@ export const PartMasterView: React.FC = () => {
                 <th className="py-2 px-2 text-center text-amber-300 bg-amber-950/20">E3(3)</th>
                 <th className="py-2 px-2 text-center text-amber-300 bg-amber-950/20">E4</th>
                 <th className="py-2 px-2 text-center text-amber-300 bg-amber-950/20">E5</th>
-                <th className="py-2 px-2 text-center text-amber-300 bg-amber-950/20">E6</th>
                 <th className="py-2 px-2.5 text-center text-white font-bold bg-amber-900/30 border-r border-slate-800">
                   Total
                 </th>
@@ -423,7 +416,6 @@ export const PartMasterView: React.FC = () => {
                 <th className="py-2 px-2 text-center text-blue-300 bg-blue-950/20">E3(2)</th>
                 <th className="py-2 px-2 text-center text-blue-300 bg-blue-950/20">E3(3)</th>
                 <th className="py-2 px-2 text-center text-blue-300 bg-blue-950/20">E4/E5</th>
-                <th className="py-2 px-2 text-center text-blue-300 bg-blue-950/20">E6 (PCM)</th>
                 <th className="py-2 px-2.5 text-center text-slate-400 bg-blue-950/20 border-r border-slate-800">
                   Scrap Limit
                 </th>
@@ -478,7 +470,6 @@ export const PartMasterView: React.FC = () => {
                     <td className="py-2.5 px-2 text-center text-slate-300">{item.installQty.e3_3 || '-'}</td>
                     <td className="py-2.5 px-2 text-center text-slate-300">{item.installQty.e4 || '-'}</td>
                     <td className="py-2.5 px-2 text-center text-slate-300">{item.installQty.e5 || '-'}</td>
-                    <td className="py-2.5 px-2 text-center text-slate-300">{item.installQty.e6 || '-'}</td>
                     <td className="py-2.5 px-2.5 text-center font-bold text-amber-300 bg-amber-950/20 border-r border-slate-800">
                       {item.installQty.totalQty > 0 ? item.installQty.totalQty : '-'}
                     </td>
@@ -490,7 +481,6 @@ export const PartMasterView: React.FC = () => {
                     <td className="py-2.5 px-2 text-center text-blue-300">{item.shotLifeCycle.e3_2_gold !== undefined ? `${item.shotLifeCycle.e3_2_gold}M` : '-'}</td>
                     <td className="py-2.5 px-2 text-center text-blue-300">{item.shotLifeCycle.e3_3_gold !== undefined ? `${item.shotLifeCycle.e3_3_gold}M` : '-'}</td>
                     <td className="py-2.5 px-2 text-center text-blue-300">{item.shotLifeCycle.e4_bare !== undefined ? `${item.shotLifeCycle.e4_bare}M` : '-'}</td>
-                    <td className="py-2.5 px-2 text-center text-blue-300">{item.shotLifeCycle.e6_pcm !== undefined ? `${item.shotLifeCycle.e6_pcm}M` : '-'}</td>
                     <td className="py-2.5 px-2.5 text-center text-slate-400 border-r border-slate-800 text-[10px]">
                       {item.shotLifeCycle.lowerSpecScrapLimit ? `${item.shotLifeCycle.lowerSpecScrapLimit} mm` : '-'}
                     </td>
@@ -584,7 +574,7 @@ export const PartMasterView: React.FC = () => {
                   <Factory className="w-3.5 h-3.5" />
                   <span>2. INSTALL QUANTITY BY LINE (EA) - TOTAL: {selectedPartForDetail.installQty.totalQty} EA</span>
                 </div>
-                <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 pt-1">
+                <div className="grid grid-cols-4 sm:grid-cols-7 gap-2 pt-1">
                   {[
                     { line: 'E1', val: selectedPartForDetail.installQty.e1 },
                     { line: 'E2', val: selectedPartForDetail.installQty.e2 },
@@ -593,7 +583,6 @@ export const PartMasterView: React.FC = () => {
                     { line: 'E3(3)', val: selectedPartForDetail.installQty.e3_3 },
                     { line: 'E4', val: selectedPartForDetail.installQty.e4 },
                     { line: 'E5', val: selectedPartForDetail.installQty.e5 },
-                    { line: 'E6', val: selectedPartForDetail.installQty.e6 },
                   ].map(slot => (
                     <div key={slot.line} className="bg-slate-900 border border-slate-800 rounded-lg p-2 text-center">
                       <span className="text-[10px] text-slate-400 block">{slot.line}</span>
@@ -613,7 +602,7 @@ export const PartMasterView: React.FC = () => {
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1 text-slate-300">
                   <div className="bg-slate-900 border border-slate-800 rounded-lg p-2">
-                    <span className="text-slate-500 block text-[10px]">E1 PCM / E6 PCM:</span>
+                    <span className="text-slate-500 block text-[10px]">E1 PCM / E3(1) PCM:</span>
                     <span className="text-blue-300 font-bold">
                       {selectedPartForDetail.shotLifeCycle.e1_pcm ? `${selectedPartForDetail.shotLifeCycle.e1_pcm}M shots` : '-'}
                     </span>
