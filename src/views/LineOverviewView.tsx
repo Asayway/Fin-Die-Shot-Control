@@ -60,14 +60,6 @@ export const LineOverviewView: React.FC<LineOverviewViewProps> = ({ onNavigate }
             <Tv className="w-3.5 h-3.5" />
             <span>OPEN TV DASHBOARD</span>
           </button>
-
-          <button
-            onClick={() => onNavigate('shot-entry')}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 rounded text-xs transition-all"
-          >
-            <PlusCircle className="w-3.5 h-3.5 text-cyan-400" />
-            <span>SHOT ENTRY</span>
-          </button>
         </div>
       </div>
 

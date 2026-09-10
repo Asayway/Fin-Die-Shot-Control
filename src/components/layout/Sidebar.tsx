@@ -64,13 +64,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       title: t.sidebar.operations,
       items: [
         {
-          id: 'shot-entry',
-          label: t.sidebar.shotEntry,
-          icon: PlusCircle,
-          badge: 'HMI',
-          badgeColor: 'bg-green-950 text-green-300 border-green-500'
-        },
-        {
           id: 'tv-monitoring',
           label: t.sidebar.tvDashboard,
           icon: Tv,

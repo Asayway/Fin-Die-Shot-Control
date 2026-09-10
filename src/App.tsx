@@ -17,7 +17,7 @@ const LoginView = React.lazy(() => import('./views/SystemSettingsView').then(m =
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User>(storageService.getCurrentUser());
-  const [activeRoute, setActiveRoute] = useState<string>('shot-entry');
+  const [activeRoute, setActiveRoute] = useState<string>('tv-monitoring');
   const [targetLineId, setTargetLineId] = useState<ProductionLineId>('E6');
   const [settings, setSettings] = useState<SystemSettings>(storageService.getSettings());
   const [isTvFullscreen, setIsTvFullscreen] = useState<boolean>(false);
@@ -70,6 +70,7 @@ export default function App() {
   const renderActiveView = () => {
     switch (activeRoute) {
       case 'tv-monitoring':
+      case 'shot-entry':
         return (
           <TvDashboardView
             initialLineId={targetLineId}
@@ -77,8 +78,6 @@ export default function App() {
             onToggleFullscreen={handleToggleFullscreen}
           />
         );
-      case 'shot-entry':
-        return <ShotEntryView initialLineId={targetLineId} />;
       case 'replacement-entry':
       case 'lock-position':
       case 'die-layout':
