@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { MonthlyCalendarMatrix } from '../../types/regrind';
+import { MonthlyCalendarMatrix, RegrindWorkTicket } from '../../types/regrind';
+import { regrindService } from '../../services/regrindService';
 import { ToolingPicThumbnail } from '../../components/regrind/ToolingPicThumbnail';
 import {
   FileSpreadsheet,
@@ -14,7 +15,11 @@ import {
   AlertOctagon,
   Factory,
   RotateCcw,
-  Sparkles
+  Sparkles,
+  Plus,
+  Clock,
+  User,
+  AlertTriangle
 } from 'lucide-react';
 
 interface LineQuickFilter {
@@ -55,15 +60,23 @@ interface Excel31DayMatrixViewProps {
   matrix: MonthlyCalendarMatrix;
   onUpdateCell: (category: 'REPAIR' | 'DEFECT_SCRAP', partName: string, day: number, count: number) => void;
   onMonthChange: (year: number, month: number) => void;
+  mode?: 'REPAIR' | 'DEFECT_SCRAP';
+  selectedGlobalPart?: string;
+  onRefreshData?: () => void;
 }
 
 export const Excel31DayMatrixView: React.FC<Excel31DayMatrixViewProps> = ({
   matrix,
   onUpdateCell,
-  onMonthChange
+  onMonthChange,
+  mode,
+  selectedGlobalPart = 'ALL',
+  onRefreshData
 }) => {
   const [selectedLine, setSelectedLine] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  
+  // Inline cell edit state
   const [editingCell, setEditingCell] = useState<{
     category: 'REPAIR' | 'DEFECT_SCRAP';
     partName: string;
@@ -71,8 +84,24 @@ export const Excel31DayMatrixView: React.FC<Excel31DayMatrixViewProps> = ({
     value: number;
   } | null>(null);
 
+  // Matrix Cell New Repair Job Creation Pop-up Modal State (Module 1 Requirement)
+  const [cellJobModal, setCellJobModal] = useState<{
+    partName: string;
+    day: number;
+    month: number;
+    year: number;
+    currentCount: number;
+  } | null>(null);
+
+  const [modalQuantity, setModalQuantity] = useState<number>(1);
+  const [modalTargetDate, setModalTargetDate] = useState<string>('');
+  const [modalNote, setModalNote] = useState<string>('');
+  const [hoveredCellKey, setHoveredCellKey] = useState<string | null>(null);
+
+  // Get current tickets to map status & tooltips onto matrix cells
+  const tickets = useMemo(() => regrindService.getQueueTickets(), [matrix, cellJobModal]);
+
   // Exact days calculation based on standard calendar rules
-  // (e.g., Feb 2026 = 28, Feb 2028 = 29, April = 30, Nov = 30, Jan/Mar/May/Jul/Aug/Oct/Dec = 31)
   const daysInMonth = useMemo(() => {
     return new Date(matrix.year, matrix.month, 0).getDate();
   }, [matrix.year, matrix.month]);
@@ -118,6 +147,10 @@ export const Excel31DayMatrixView: React.FC<Excel31DayMatrixViewProps> = ({
   // Filter rows
   const filteredRepairRows = useMemo(() => {
     return matrix.repairRows.filter(row => {
+      if (selectedGlobalPart !== 'ALL' && row.partName.toLowerCase() !== selectedGlobalPart.toLowerCase()) {
+        return false;
+      }
+
       const matchSearch =
         row.partName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         row.partCode.toLowerCase().includes(searchTerm.toLowerCase());
@@ -141,10 +174,14 @@ export const Excel31DayMatrixView: React.FC<Excel31DayMatrixViewProps> = ({
       }
       return matchSearch && matchLine;
     });
-  }, [matrix.repairRows, searchTerm, selectedLine]);
+  }, [matrix.repairRows, searchTerm, selectedLine, selectedGlobalPart]);
 
   const filteredDefectRows = useMemo(() => {
     return matrix.defectRows.filter(row => {
+      if (selectedGlobalPart !== 'ALL' && row.partName.toLowerCase() !== selectedGlobalPart.toLowerCase()) {
+        return false;
+      }
+
       const matchSearch =
         row.partName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         row.partCode.toLowerCase().includes(searchTerm.toLowerCase());
@@ -168,7 +205,7 @@ export const Excel31DayMatrixView: React.FC<Excel31DayMatrixViewProps> = ({
       }
       return matchSearch && matchLine;
     });
-  }, [matrix.defectRows, searchTerm, selectedLine]);
+  }, [matrix.defectRows, searchTerm, selectedLine, selectedGlobalPart]);
 
   // Export CSV (Adjusted to exact days in current month)
   const handleExportCsv = () => {
@@ -408,51 +445,58 @@ export const Excel31DayMatrixView: React.FC<Excel31DayMatrixViewProps> = ({
       </div>
 
       {/* Summary KPI Mini-Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="p-3 rounded-xl bg-[#131E35] border border-emerald-500/40 flex items-center justify-between shadow-md">
-          <div className="flex items-center gap-2.5">
-            <span className="p-2 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-              <Wrench className="w-4 h-4" />
-            </span>
-            <div>
-              <span className="text-xs font-bold text-white block">
-                HE Grinding Repair (งานเจียรสำเร็จ)
+      {(!mode || mode === 'REPAIR') && (
+        <div className="grid grid-cols-1 gap-3">
+          <div className="p-3 rounded-xl bg-[#131E35] border border-emerald-500/40 flex items-center justify-between shadow-md">
+            <div className="flex items-center gap-2.5">
+              <span className="p-2 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                <Wrench className="w-4 h-4" />
               </span>
-              <span className="text-[11px] text-emerald-400 font-mono">
-                {filteredRepairRows.length} รายการ | {currentMonthInfo.nameTh} {matrix.year} ({daysInMonth} วัน)
-              </span>
+              <div>
+                <span className="text-xs font-bold text-white block">
+                  HE Grinding Repair (งานเจียรสำเร็จจากคิวงาน)
+                </span>
+                <span className="text-[11px] text-emerald-400 font-mono">
+                  {filteredRepairRows.length} รายการ | {currentMonthInfo.nameTh} {matrix.year} ({daysInMonth} วัน)
+                </span>
+              </div>
+            </div>
+            <div className="text-2xl font-black font-mono text-emerald-400">
+              {filteredRepairTotal.toLocaleString()}
+              <span className="text-xs font-normal text-slate-400 ml-1">ชิ้น</span>
             </div>
           </div>
-          <div className="text-2xl font-black font-mono text-emerald-400">
-            {filteredRepairTotal.toLocaleString()}
-            <span className="text-xs font-normal text-slate-400 ml-1">ชิ้น</span>
-          </div>
         </div>
+      )}
 
-        <div className="p-3 rounded-xl bg-[#131E35] border border-rose-500/40 flex items-center justify-between shadow-md">
-          <div className="flex items-center gap-2.5">
-            <span className="p-2 rounded-lg bg-rose-500/20 text-rose-400 border border-rose-500/30">
-              <AlertOctagon className="w-4 h-4" />
-            </span>
-            <div>
-              <span className="text-xs font-bold text-white block">
-                HE Grinding Defect / Scrap (ซ่อมไม่ได้/ทิ้ง)
+      {(!mode || mode === 'DEFECT_SCRAP') && (
+        <div className="grid grid-cols-1 gap-3">
+          <div className="p-3 rounded-xl bg-[#131E35] border border-rose-500/40 flex items-center justify-between shadow-md">
+            <div className="flex items-center gap-2.5">
+              <span className="p-2 rounded-lg bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                <AlertOctagon className="w-4 h-4" />
               </span>
-              <span className="text-[11px] text-rose-400 font-mono">
-                {filteredDefectRows.length} รายการ | ชิ้นส่วนที่หมดอายุหรือแตกหัก
-              </span>
+              <div>
+                <span className="text-xs font-bold text-white block">
+                  HE Grinding Defect / Scrap (งานซ่อมไม่ได้ / ทิ้ง)
+                </span>
+                <span className="text-[11px] text-rose-400 font-mono">
+                  {filteredDefectRows.length} รายการ | ชิ้นส่วนที่หมดอายุหรือแตกหัก
+                </span>
+              </div>
+            </div>
+            <div className="text-2xl font-black font-mono text-rose-400">
+              {filteredDefectTotal.toLocaleString()}
+              <span className="text-xs font-normal text-slate-400 ml-1">ชิ้น</span>
             </div>
           </div>
-          <div className="text-2xl font-black font-mono text-rose-400">
-            {filteredDefectTotal.toLocaleString()}
-            <span className="text-xs font-normal text-slate-400 ml-1">ชิ้น</span>
-          </div>
         </div>
-      </div>
+      )}
 
       {/* ========================================================================= */}
       {/* SECTION 1: HE Grinding Repair Matrix (งานเจียรสำเร็จ) */}
       {/* ========================================================================= */}
+      {(!mode || mode === 'REPAIR') && (
       <div className="bg-[#131E35] rounded-xl border border-slate-700 shadow-lg overflow-hidden">
         <div className="px-4 py-2.5 bg-emerald-950/90 border-b border-emerald-700/60 text-white flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -518,31 +562,118 @@ export const Excel31DayMatrixView: React.FC<Excel31DayMatrixViewProps> = ({
                     />
                   </td>
                   {daysArray.map(day => {
-                    const count = row.dailyCounts[day];
+                    const count = row.dailyCounts[day] || 0;
+                    
+                    // Find ticket for this part and day
+                    const matchingTicket = tickets.find(t => {
+                      const matchName = t.partName.toLowerCase() === row.partName.toLowerCase();
+                      const ticketDate = t.targetCompletionDate ? new Date(t.targetCompletionDate) : new Date(t.createdAt);
+                      return matchName && ticketDate.getDate() === day && (ticketDate.getMonth() + 1) === matrix.month;
+                    });
+
+                    const now = new Date();
+                    const targetDateObj = matchingTicket?.targetCompletionDate ? new Date(matchingTicket.targetCompletionDate) : null;
+                    const isOverdue = matchingTicket && matchingTicket.status !== 'READY' && matchingTicket.status !== 'SCRAP' && ((targetDateObj && targetDateObj < now) || matchingTicket.isDelayed);
+
+                    // Color status calculation (Module 1 Requirement)
+                    let statusBgClass = 'text-slate-600 hover:bg-slate-800/80';
+                    let statusBadgeLabel = '';
+
+                    if (matchingTicket) {
+                      switch (matchingTicket.status) {
+                        case 'PENDING':
+                          statusBgClass = 'bg-yellow-400 text-slate-950 font-black shadow-xs';
+                          statusBadgeLabel = '🟡 PENDING';
+                          break;
+                        case 'IN_PROCESS':
+                          statusBgClass = 'bg-blue-600 text-white font-black shadow-xs';
+                          statusBadgeLabel = '🔵 IN-PROCESS';
+                          break;
+                        case 'READY':
+                          statusBgClass = 'bg-emerald-600 text-white font-black shadow-xs';
+                          statusBadgeLabel = '🟢 READY';
+                          break;
+                        case 'SCRAP':
+                          statusBgClass = 'bg-rose-600 text-white font-black shadow-xs';
+                          statusBadgeLabel = '🔴 SCRAP';
+                          break;
+                      }
+                    } else if (count > 0) {
+                      statusBgClass = 'bg-emerald-950/60 text-emerald-300 font-bold border border-emerald-700/60';
+                    }
+
+                    const overdueBorderClass = isOverdue ? 'border-2 border-orange-500 animate-pulse ring-2 ring-orange-400' : 'border-r border-slate-800/60';
+
+                    const cellKey = `${row.partName}-${day}`;
+
                     return (
                       <td
                         key={`repair-cell-${row.partName}-${day}`}
-                        onClick={() =>
-                          setEditingCell({
-                            category: 'REPAIR',
+                        onMouseEnter={() => setHoveredCellKey(cellKey)}
+                        onMouseLeave={() => setHoveredCellKey(null)}
+                        onClick={() => {
+                          const targetIso = `${matrix.year}-${String(matrix.month).padStart(2, '0')}-${String(day).padStart(2, '0')}T17:00`;
+                          setModalQuantity(count > 0 ? count : 1);
+                          setModalTargetDate(targetIso);
+                          setModalNote('');
+                          setCellJobModal({
                             partName: row.partName,
                             day,
-                            value: count || 0
-                          })
-                        }
-                        className={`p-1 text-center font-mono border-r border-slate-800/60 cursor-pointer transition-all hover:bg-emerald-950/70 ${
-                          count
-                            ? 'bg-emerald-950/40 text-emerald-300 font-bold'
-                            : 'text-slate-600'
-                        }`}
-                        title={`คลิกเพื่อแก้ไขจำนวน: ${row.partName} วันที่ ${day} ${currentMonthInfo.nameTh}`}
+                            month: matrix.month,
+                            year: matrix.year,
+                            currentCount: count
+                          });
+                        }}
+                        className={`p-1 text-center font-mono cursor-pointer transition-all relative ${statusBgClass} ${overdueBorderClass}`}
+                        title={`คลิกเปิดใบงาน / วางแผนเจียร: ${row.partName} วันที่ ${day} ${currentMonthInfo.nameTh}`}
                       >
-                        {count !== undefined && count > 0 ? (
-                          <span className="inline-block px-1 rounded bg-emerald-900/60 text-emerald-300 text-[10px] border border-emerald-700/50">
+                        {count > 0 ? (
+                          <span className="font-extrabold text-[11px] block">
                             {count}
                           </span>
+                        ) : matchingTicket ? (
+                          <span className="text-[10px] font-bold">1</span>
                         ) : (
                           '-'
+                        )}
+
+                        {/* Hover Tooltip (Module 1 Requirement) */}
+                        {hoveredCellKey === cellKey && (matchingTicket || count > 0) && (
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-2.5 rounded-xl bg-slate-950 text-white border border-slate-700 shadow-2xl z-50 text-left pointer-events-none text-[11px]">
+                            <div className="font-bold text-cyan-300 border-b border-slate-800 pb-1 mb-1 flex justify-between items-center">
+                              <span>{row.partName}</span>
+                              <span className="text-[10px] font-mono text-slate-400">Day {day} {currentMonthInfo.shortEn}</span>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-slate-300">
+                                <strong className="text-slate-400">จำนวน:</strong> {count || matchingTicket?.quantity || 1} ชิ้น
+                              </p>
+                              {matchingTicket && (
+                                <>
+                                  <p className="flex items-center gap-1 font-mono text-[10px] text-cyan-400">
+                                    <strong>Ticket:</strong> {matchingTicket.jobCode}
+                                  </p>
+                                  <p className="flex items-center gap-1">
+                                    <strong>สถานะ:</strong> <span className="font-bold">{statusBadgeLabel || matchingTicket.status}</span>
+                                  </p>
+                                  <p className="text-slate-400 text-[10px]">
+                                    <strong>เป้าหมาย:</strong> {matchingTicket.targetCompletionDate ? new Date(matchingTicket.targetCompletionDate).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '17:00'}
+                                  </p>
+                                  {isOverdue && (
+                                    <p className="text-orange-400 font-bold flex items-center gap-1 animate-pulse">
+                                      <AlertTriangle className="w-3 h-3" />
+                                      Overdue / Delayed [ย้ายวันอัตโนมัติ]
+                                    </p>
+                                  )}
+                                </>
+                              )}
+                              {!matchingTicket && (
+                                <p className="text-emerald-400 font-semibold">
+                                  บันทึกงานสำเร็จในตาราง {count} ชิ้น
+                                </p>
+                              )}
+                            </div>
+                          </div>
                         )}
                       </td>
                     );
@@ -582,10 +713,12 @@ export const Excel31DayMatrixView: React.FC<Excel31DayMatrixViewProps> = ({
           </table>
         </div>
       </div>
+      )}
 
       {/* ========================================================================= */}
       {/* SECTION 2: ซ่อมไม่ได้ (ทิ้ง) / HE Grinding Defect Matrix */}
       {/* ========================================================================= */}
+      {(!mode || mode === 'DEFECT_SCRAP') && (
       <div className="bg-[#131E35] rounded-xl border border-slate-700 shadow-lg overflow-hidden">
         <div className="px-4 py-2.5 bg-rose-950/90 border-b border-rose-700/60 text-white flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -599,7 +732,7 @@ export const Excel31DayMatrixView: React.FC<Excel31DayMatrixViewProps> = ({
           </span>
         </div>
 
-        <div className="overflow-x-auto max-h-[350px] custom-scrollbar">
+        <div className="overflow-x-auto max-h-[500px] custom-scrollbar">
           <table className="w-full text-left border-collapse text-[11px]">
             <thead className="bg-[#0B1220] text-slate-300 sticky top-0 z-20 border-b border-slate-700 shadow">
               <tr>
@@ -715,6 +848,119 @@ export const Excel31DayMatrixView: React.FC<Excel31DayMatrixViewProps> = ({
           </table>
         </div>
       </div>
+      )}
+
+      {/* Pop-up Modal to Create Repair Job from Cell (Module 1 Requirement) */}
+      {cellJobModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn"
+          onClick={() => setCellJobModal(null)}
+        >
+          <div
+            className="bg-[#0D1527] border border-cyan-500/50 rounded-2xl p-5 max-w-sm w-full shadow-2xl space-y-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-cyan-500/20 text-cyan-400">
+                  <Plus className="w-4 h-4" />
+                </span>
+                <span className="text-sm font-bold text-white tracking-tight">
+                  เปิดใบงานเจียรลับคม (Planning Board)
+                </span>
+              </div>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-700">
+                Day {cellJobModal.day} {currentMonthInfo.shortEn} {cellJobModal.year}
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              {/* Part Name (Auto-filled) */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                  ชื่อชิ้นส่วนทูลลิ่ง (Part Name - Auto Filled):
+                </label>
+                <div className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 font-bold text-cyan-300 text-xs">
+                  {cellJobModal.partName}
+                </div>
+              </div>
+
+              {/* Quantity */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                  จำนวน (Qty - ชิ้น):
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={modalQuantity}
+                  onChange={e => setModalQuantity(parseInt(e.target.value) || 1)}
+                  className="w-full px-3 py-2 rounded-xl bg-[#070D19] border border-slate-700 font-mono text-cyan-300 text-sm font-bold focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+                />
+              </div>
+
+              {/* Target Completion Date / Time */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                  กำหนดเสร็จ (Target Completion Date & Time):
+                </label>
+                <input
+                  type="datetime-local"
+                  value={modalTargetDate}
+                  onChange={e => setModalTargetDate(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-[#070D19] border border-slate-700 font-mono text-slate-200 text-xs focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+                />
+              </div>
+
+              {/* Note / Remarks */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                  หมายเหตุ / อาการชำรุด (Note):
+                </label>
+                <textarea
+                  rows={2}
+                  value={modalNote}
+                  onChange={e => setModalNote(e.target.value)}
+                  placeholder="ระบุหมายเหตุการเจียร เช่น คมบิ่นเล็กน้อย, ลับคมประจำวัน..."
+                  className="w-full px-3 py-2 rounded-xl bg-[#070D19] border border-slate-700 text-slate-200 text-xs focus:ring-2 focus:ring-cyan-500 focus:outline-none resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setCellJobModal(null)}
+                className="flex-1 py-2 text-xs font-semibold rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 transition-colors"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  regrindService.createTicketFromMatrix({
+                    partName: cellJobModal.partName,
+                    day: cellJobModal.day,
+                    month: cellJobModal.month,
+                    year: cellJobModal.year,
+                    quantity: modalQuantity,
+                    targetCompletionDate: modalTargetDate || `${cellJobModal.year}-${String(cellJobModal.month).padStart(2, '0')}-${String(cellJobModal.day).padStart(2, '0')}T17:00:00`,
+                    note: modalNote || 'เปิดใบงานผ่านตาราง Matrix'
+                  });
+                  onUpdateCell('REPAIR', cellJobModal.partName, cellJobModal.day, (cellJobModal.currentCount || 0) + modalQuantity);
+                  setCellJobModal(null);
+                  if (onRefreshData) onRefreshData();
+                }}
+                className="flex-1 py-2 text-xs font-bold rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow transition-colors flex items-center justify-center gap-1 font-bold"
+              >
+                <Check className="w-4 h-4" />
+                <span>ยืนยันสร้างใบงาน</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Inline Cell Edit Modal */}
       {editingCell && (

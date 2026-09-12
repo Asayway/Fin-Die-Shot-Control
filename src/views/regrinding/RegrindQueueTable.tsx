@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { RegrindWorkTicket, RegrindQueueStatus, DEFECT_REASON_LABELS } from '../../types/regrind';
 import { ToolingPicThumbnail } from '../../components/regrind/ToolingPicThumbnail';
 import {
@@ -32,6 +32,7 @@ interface RegrindQueueTableProps {
   onOpenNewOrderModal: () => void;
   onOpenQrScanner: () => void;
   onViewPrDetails?: (prNumber: string) => void;
+  selectedGlobalPart?: string;
 }
 
 export const RegrindQueueTable: React.FC<RegrindQueueTableProps> = ({
@@ -44,34 +45,63 @@ export const RegrindQueueTable: React.FC<RegrindQueueTableProps> = ({
   onValidateLength,
   onOpenNewOrderModal,
   onOpenQrScanner,
-  onViewPrDetails
+  onViewPrDetails,
+  selectedGlobalPart = 'ALL'
 }) => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [lineFilter, setLineFilter] = useState<string>('ALL');
 
-  const filteredTickets = tickets.filter(t => {
-    // Status filter
-    if (activeStatusFilter !== 'ALL' && t.status !== activeStatusFilter) {
-      return false;
-    }
-    // Line filter
-    if (lineFilter !== 'ALL' && t.lineId !== lineFilter) {
-      return false;
-    }
-    // Search query
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchName = t.partName.toLowerCase().includes(q);
-      const matchJob = t.jobCode.toLowerCase().includes(q);
-      const matchQr = t.qrCode.toLowerCase().includes(q);
-      const matchPos = (t.positionId || '').toLowerCase().includes(q);
-      const matchLine = t.lineId.toLowerCase().includes(q);
-      if (!matchName && !matchJob && !matchQr && !matchPos && !matchLine) {
+  const filteredTickets = useMemo(() => {
+    const list = tickets.filter(t => {
+      // Global Part Filter (Module 3 Requirement)
+      if (selectedGlobalPart !== 'ALL' && t.partName.toLowerCase() !== selectedGlobalPart.toLowerCase()) {
         return false;
       }
-    }
-    return true;
-  });
+      // Status filter
+      if (activeStatusFilter !== 'ALL' && t.status !== activeStatusFilter) {
+        return false;
+      }
+      // Line filter
+      if (lineFilter !== 'ALL' && t.lineId !== lineFilter) {
+        return false;
+      }
+      // Search query
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchName = t.partName.toLowerCase().includes(q);
+        const matchJob = t.jobCode.toLowerCase().includes(q);
+        const matchQr = t.qrCode.toLowerCase().includes(q);
+        const matchPos = (t.positionId || '').toLowerCase().includes(q);
+        const matchLine = t.lineId.toLowerCase().includes(q);
+        if (!matchName && !matchJob && !matchQr && !matchPos && !matchLine) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    // Priority-Sorted List: Delayed/Overdue jobs stay at the TOP (Module 2 Requirement)
+    return list.sort((a, b) => {
+      const now = new Date();
+      const aTarget = a.targetCompletionDate ? new Date(a.targetCompletionDate) : null;
+      const bTarget = b.targetCompletionDate ? new Date(b.targetCompletionDate) : null;
+
+      const aIsOverdue = a.isDelayed || (aTarget && aTarget < now && a.status !== 'READY' && a.status !== 'SCRAP');
+      const bIsOverdue = b.isDelayed || (bTarget && bTarget < now && b.status !== 'READY' && b.status !== 'SCRAP');
+
+      if (aIsOverdue && !bIsOverdue) return -1;
+      if (!aIsOverdue && bIsOverdue) return 1;
+
+      // Secondary sort: status priority PENDING -> IN_PROCESS -> READY -> SCRAP
+      const statusOrder: Record<RegrindQueueStatus, number> = {
+        PENDING: 1,
+        IN_PROCESS: 2,
+        READY: 3,
+        SCRAP: 4
+      };
+      return statusOrder[a.status] - statusOrder[b.status];
+    });
+  }, [tickets, activeStatusFilter, lineFilter, searchQuery, selectedGlobalPart]);
 
   const getStatusBadge = (status: RegrindQueueStatus) => {
     switch (status) {
@@ -240,14 +270,24 @@ export const RegrindQueueTable: React.FC<RegrindQueueTableProps> = ({
                   >
                     {/* Part & Line Position */}
                     <td className="p-3">
-                      <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 flex-wrap">
                         <span>{ticket.partName}</span>
                         <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
                           {ticket.lineId}
                         </span>
+                        {ticket.isDelayed && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded font-extrabold bg-orange-500 text-white animate-pulse shadow-xs">
+                            [Delayed] เลื่อนวัน
+                          </span>
+                        )}
                       </div>
                       <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mt-0.5">
                         <span>ตำแหน่ง: <strong className="text-slate-700 dark:text-slate-300 font-mono">{ticket.positionId || 'Common'}</strong></span>
+                        {ticket.quantity && ticket.quantity > 1 && (
+                          <span className="text-[10px] font-bold text-cyan-600 dark:text-cyan-400">
+                            (Qty: {ticket.quantity} ชิ้น)
+                          </span>
+                        )}
                         {ticket.source === 'AUTO_FROM_DIE_LAYOUT' && (
                           <span className="text-[9px] px-1 rounded bg-cyan-100 text-cyan-800 dark:bg-cyan-950 dark:text-cyan-300 font-semibold">
                             Auto-Queue
@@ -344,17 +384,6 @@ export const RegrindQueueTable: React.FC<RegrindQueueTableProps> = ({
                     {/* Actions */}
                     <td className="p-3 text-right">
                       <div className="flex items-center justify-end gap-1.5">
-                        {onValidateLength && (
-                          <button
-                            type="button"
-                            onClick={() => onValidateLength(ticket)}
-                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-cyan-100 dark:bg-slate-800 dark:hover:bg-cyan-950/60 text-slate-700 hover:text-cyan-800 dark:text-slate-300 dark:hover:text-cyan-300 border border-slate-200 dark:border-slate-700 hover:border-cyan-400 font-semibold text-xs transition-colors"
-                            title="เปิดแบบฟอร์มตรวจสอบความยาว & มาตรฐาน Part Life Standard"
-                          >
-                            <Ruler className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
-                            <span className="hidden sm:inline">ตรวจสเปค</span>
-                          </button>
-                        )}
 
                         {ticket.status === 'PENDING' && (
                           <button
@@ -399,15 +428,12 @@ export const RegrindQueueTable: React.FC<RegrindQueueTableProps> = ({
                         {ticket.status === 'SCRAP' && (
                           <div className="flex items-center gap-1">
                             {ticket.purchasingPrNumber ? (
-                              <button
-                                type="button"
-                                onClick={() => onViewPrDetails && onViewPrDetails(ticket.purchasingPrNumber || '')}
-                                className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-amber-800 dark:text-amber-300 bg-amber-100 dark:bg-amber-950/60 px-2 py-1 rounded-lg border border-amber-300 dark:border-amber-800 hover:underline"
-                                title="คลิกเพื่อดูใบขอสั่งซื้อทดแทน"
+                              <span
+                                className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-amber-800 dark:text-amber-300 bg-amber-100 dark:bg-amber-950/60 px-2 py-1 rounded-lg border border-amber-300 dark:border-amber-800"
+                                title="เลขที่ใบขอสั่งซื้อทดแทน"
                               >
                                 <span>{ticket.purchasingPrNumber}</span>
-                                <ExternalLink className="w-3 h-3" />
-                              </button>
+                              </span>
                             ) : (
                               <span className="text-[10px] text-rose-600 font-bold bg-rose-50 px-2 py-1 rounded">
                                 Scrapped

@@ -54,11 +54,11 @@ export const LINE_INFO_MAP: Record<ProductionLineId, LineInfoDetails> = {
   'E3-3': {
     id: 'E3-3',
     name: 'LINE E3-3',
-    nameTh: 'ไลน์ E3-3 (Corr 4P)',
-    shortTag: 'Corr 4P',
+    nameTh: 'ไลน์ E3-3 (New Cor 4P)',
+    shortTag: 'New Cor 4P',
     tubeSize: 'Ø7',
-    finType: 'Corrugate 4P',
-    description: 'Evaporator Ø7 Corrugate 4P'
+    finType: 'New Corrugate 4P',
+    description: 'Evaporator Ø7 New Corrugate 4P'
   },
   'E4': {
     id: 'E4',

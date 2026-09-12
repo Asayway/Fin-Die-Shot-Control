@@ -1,3 +1,12 @@
+import i18n from './config';
+import en from './locales/en.json';
+import th from './locales/th.json';
+import ko from './locales/ko.json';
+
+export { i18n };
+export * from './config';
+export * from './LanguageContext';
+
 export type LanguageCode = 'EN' | 'TH' | 'KO' | 'DUAL';
 
 export interface TableTranslations {
@@ -73,17 +82,17 @@ export interface Dictionary {
 export const TRANSLATIONS: Record<'EN' | 'TH' | 'KO', Dictionary> = {
   EN: {
     table: {
-      no: 'NO.',
-      partName: 'PART NAME',
-      limit: 'LIMIT',
-      current: 'CURRENT',
-      usage: 'USAGE',
-      remain: 'REMAIN',
-      progress: 'PROGRESS',
-      lastChange: 'LAST CHANGE',
-      installed: 'INSTALLED',
-      spare: 'SPARE',
-      status: 'STATUS'
+      no: en.table.no,
+      partName: en.table.partName,
+      limit: en.table.limit,
+      current: en.table.current,
+      usage: en.table.usage,
+      remain: en.table.remain,
+      progress: en.table.progress,
+      lastChange: en.table.lastChange,
+      installed: en.table.installed,
+      spare: en.table.spare,
+      status: en.table.status
     },
     controls: {
       line: 'LINE',
@@ -116,35 +125,35 @@ export const TRANSLATIONS: Record<'EN' | 'TH' | 'KO', Dictionary> = {
       clickStatusHint: 'Click STATUS button for detailed part breakdown and maintenance advice'
     },
     sidebar: {
-      operations: 'OPERATIONS',
-      toolingSetup: 'TOOLING SETUP',
-      settings: 'SETTINGS',
-      shotEntry: 'Shot Entry',
-      tvDashboard: 'TV Dashboard',
-      partReplacement: 'Part Replacement',
-      regrindingHub: 'Regrinding Hub',
-      dieAndPartMaster: 'Die & Part Master',
-      systemSettings: 'System Settings'
+      operations: en.sidebar.operations,
+      toolingSetup: en.sidebar.toolingSetup,
+      settings: en.sidebar.settings,
+      shotEntry: en.sidebar.shotEntry,
+      tvDashboard: en.sidebar.tvDashboard,
+      partReplacement: en.sidebar.partReplacement,
+      regrindingHub: en.sidebar.regrindingHub,
+      dieAndPartMaster: en.sidebar.dieAndPartMaster,
+      systemSettings: en.sidebar.systemSettings
     },
     header: {
-      subtitle: 'FIN DIE SHOT & LIFETIME MONITOR',
-      liveStatus: 'LIVE ONLINE',
-      hmiStatus: 'HMI ACTIVE'
+      subtitle: en.header.subtitle,
+      liveStatus: en.header.liveStatus,
+      hmiStatus: en.header.hmiStatus
     }
   },
   TH: {
     table: {
-      no: 'ลำดับ',
-      partName: 'ชื่อชิ้นส่วน',
-      limit: 'ลิมิตช็อต',
-      current: 'ช็อตปัจจุบัน',
-      usage: 'สัดส่วน %',
-      remain: 'คงเหลือ',
-      progress: 'ความคืบหน้า',
-      lastChange: 'เปลี่ยนล่าสุด',
-      installed: 'ติดตั้ง',
-      spare: 'สำรอง',
-      status: 'สถานะ'
+      no: th.table.no,
+      partName: th.table.partName,
+      limit: th.table.limit,
+      current: th.table.current,
+      usage: th.table.usage,
+      remain: th.table.remain,
+      progress: th.table.progress,
+      lastChange: th.table.lastChange,
+      installed: th.table.installed,
+      spare: th.table.spare,
+      status: th.table.status
     },
     controls: {
       line: 'สายผลิต',
@@ -177,35 +186,35 @@ export const TRANSLATIONS: Record<'EN' | 'TH' | 'KO', Dictionary> = {
       clickStatusHint: 'กดที่ปุ่ม STATUS เพื่อดูรายละเอียดสถานะและแจ้งเตือนของแต่ละชิ้นส่วน'
     },
     sidebar: {
-      operations: 'การทำงาน',
-      toolingSetup: 'ตั้งค่าแม่พิมพ์',
-      settings: 'ตั้งค่าระบบ',
-      shotEntry: 'บันทึกช็อต',
-      tvDashboard: 'มอนิเตอร์ช็อต',
-      partReplacement: 'เปลี่ยนอะไหล่ & ผัง 2D',
-      regrindingHub: 'เจียรลับคมแม่พิมพ์',
-      dieAndPartMaster: 'จัดการแม่พิมพ์/อะไหล่',
-      systemSettings: 'ตั้งค่าระบบ'
+      operations: th.sidebar.operations,
+      toolingSetup: th.sidebar.toolingSetup,
+      settings: th.sidebar.settings,
+      shotEntry: th.sidebar.shotEntry,
+      tvDashboard: th.sidebar.tvDashboard,
+      partReplacement: th.sidebar.partReplacement,
+      regrindingHub: th.sidebar.regrindingHub,
+      dieAndPartMaster: th.sidebar.dieAndPartMaster,
+      systemSettings: th.sidebar.systemSettings
     },
     header: {
-      subtitle: 'ระบบควบคุมช็อตแม่พิมพ์และอายุการใช้งาน',
-      liveStatus: 'ออนไลน์สด',
-      hmiStatus: 'HMI ทำงานอยู่'
+      subtitle: th.header.subtitle,
+      liveStatus: th.header.liveStatus,
+      hmiStatus: th.header.hmiStatus
     }
   },
   KO: {
     table: {
-      no: '번호',
-      partName: '부품명',
-      limit: '한계 타수',
-      current: '현재 타수',
-      usage: '사용률',
-      remain: '잔여 타수',
-      progress: '진행률',
-      lastChange: '최종 교체',
-      installed: '장착 수량',
-      spare: '재고 수량',
-      status: '상태'
+      no: ko.table.no,
+      partName: ko.table.partName,
+      limit: ko.table.limit,
+      current: ko.table.current,
+      usage: ko.table.usage,
+      remain: ko.table.remain,
+      progress: ko.table.progress,
+      lastChange: ko.table.lastChange,
+      installed: ko.table.installed,
+      spare: ko.table.spare,
+      status: ko.table.status
     },
     controls: {
       line: '라인',
@@ -238,20 +247,20 @@ export const TRANSLATIONS: Record<'EN' | 'TH' | 'KO', Dictionary> = {
       clickStatusHint: '상태 버튼을 클릭하여 세부 정보 및 유지보수 권장사항을 확인하세요'
     },
     sidebar: {
-      operations: '운영',
-      toolingSetup: '금형 설정',
-      settings: '시스템 설정',
-      shotEntry: '타수 입력',
-      tvDashboard: 'TV 대시보드',
-      partReplacement: '부품 교체 및 2D 도면',
-      regrindingHub: '연마 관리 시스템',
-      dieAndPartMaster: '금형 및 부품 마스터',
-      systemSettings: '시스템 설정'
+      operations: ko.sidebar.operations,
+      toolingSetup: ko.sidebar.toolingSetup,
+      settings: ko.sidebar.settings,
+      shotEntry: ko.sidebar.shotEntry,
+      tvDashboard: ko.sidebar.tvDashboard,
+      partReplacement: ko.sidebar.partReplacement,
+      regrindingHub: ko.sidebar.regrindingHub,
+      dieAndPartMaster: ko.sidebar.dieAndPartMaster,
+      systemSettings: ko.sidebar.systemSettings
     },
     header: {
-      subtitle: '핀 다이 타수 및 수명 모니터링 시스템',
-      liveStatus: '실시간 온라인',
-      hmiStatus: 'HMI 활성'
+      subtitle: ko.header.subtitle,
+      liveStatus: ko.header.liveStatus,
+      hmiStatus: ko.header.hmiStatus
     }
   }
 };

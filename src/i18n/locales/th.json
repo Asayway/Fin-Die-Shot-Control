@@ -1,0 +1,60 @@
+{
+  "header": {
+    "title": "FIN DIE SHOT CONTROL",
+    "subtitle": "ระบบควบคุมช็อตแม่พิมพ์และอายุการใช้งาน",
+    "liveStatus": "ออนไลน์สด",
+    "hmiStatus": "HMI ทำงานอยู่"
+  },
+  "sidebar": {
+    "operations": "การทำงาน",
+    "toolingSetup": "ตั้งค่าแม่พิมพ์",
+    "settings": "ตั้งค่าระบบ",
+    "shotEntry": "บันทึกช็อต",
+    "tvDashboard": "มอนิเตอร์ช็อต",
+    "partReplacement": "เปลี่ยนอะไหล่ & ผัง 2D",
+    "regrindingHub": "เจียรลับคมแม่พิมพ์",
+    "dieAndPartMaster": "จัดการแม่พิมพ์/อะไหล่",
+    "systemSettings": "ตั้งค่าระบบ"
+  },
+  "table": {
+    "no": "ลำดับ",
+    "partName": "ชื่อชิ้นส่วน",
+    "limit": "ลิมิตช็อต",
+    "current": "ช็อตปัจจุบัน",
+    "usage": "สัดส่วน %",
+    "remain": "คงเหลือ",
+    "progress": "ความคืบหน้า",
+    "lastChange": "เปลี่ยนล่าสุด",
+    "installed": "ติดตั้ง",
+    "spare": "สำรอง",
+    "status": "สถานะ",
+    "stage": "สเตจแม่พิมพ์"
+  },
+  "kpi": {
+    "totalShots": "ช็อตรวมทั้งหมด",
+    "activeParts": "อะไหล่ติดตั้งใช้งาน",
+    "criticalAlerts": "การเตือนวิกฤต",
+    "regrindQueue": "คิวรอเจียรลับคม",
+    "scrapCount": "จำนวนตัดทิ้ง"
+  },
+  "actions": {
+    "save": "บันทึก",
+    "cancel": "ยกเลิก",
+    "edit": "แก้ไข",
+    "delete": "ลบ",
+    "search": "ค้นหา...",
+    "filter": "กรองข้อมูล",
+    "export": "ส่งออก CSV",
+    "done": "เสร็จสิ้น",
+    "confirm": "ยืนยัน",
+    "add": "เพิ่มรายการ"
+  },
+  "status": {
+    "normal": "ปกติ",
+    "warning": "เฝ้าระวัง",
+    "prepare": "เตรียมอะไหล่",
+    "critical": "วิกฤต",
+    "overLife": "เกินอายุ",
+    "missing": "ไม่มีมาตรฐาน"
+  }
+}

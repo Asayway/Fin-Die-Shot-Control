@@ -371,3 +371,96 @@ export function exportInspectionLogsExcel(
   saveWorkbookAsExcel(workbook, `FinDie_Condition_Inspection_Logs_${lineFilter}_${dateStr}.xlsx`);
 }
 
+/**
+ * Export Part Master list to Excel (.xlsx)
+ */
+export function exportPartMasterExcel(items: any[]) {
+  const data = items.map((item, idx) => ({
+    'NO.': idx + 1,
+    'STAGE (สเตจ)': item.stage || '',
+    'PART CODE (รหัสพาร์ท)': item.partCode || '',
+    'PART NAME (ชื่อพาร์ท)': item.partName || '',
+    'DRAWING CODE (เลขที่แบบ)': item.drawingNo || item.partCode || '',
+    'E1 (Ø7 Slit)': item.shotLifeCycle?.e1_pcm !== undefined ? `${item.shotLifeCycle.e1_pcm}M` : '-',
+    'E2 (Ø5 Slit)': item.shotLifeCycle?.e2_gold !== undefined ? `${item.shotLifeCycle.e2_gold}M` : '-',
+    'E3-1 (Slit 3P)': item.shotLifeCycle?.e3_1_pcm !== undefined ? `${item.shotLifeCycle.e3_1_pcm}M` : '-',
+    'E3-2 (WL+ 4P)': item.shotLifeCycle?.e3_2_gold !== undefined ? `${item.shotLifeCycle.e3_2_gold}M` : '-',
+    'E3-3 (New Cor 4P)': item.shotLifeCycle?.e3_3_gold !== undefined ? `${item.shotLifeCycle.e3_3_gold}M` : '-',
+    'E4 (Ø5 Slit)': item.shotLifeCycle?.e4_bare !== undefined ? `${item.shotLifeCycle.e4_bare}M` : '-',
+    'E5 (Ø5 Slit)': item.shotLifeCycle?.e5_bare !== undefined ? `${item.shotLifeCycle.e5_bare}M` : '-',
+    'SCRAP LIMIT (mm)': item.shotLifeCycle?.lowerSpecScrapLimit || '62.50',
+    'REGRIND / TIME (mm)': item.regrindStandard?.perGrindMm || '0.05 mm',
+    'TOTAL REGRIND (mm)': item.regrindStandard?.totalGrindMm || '0.50',
+    'MAX CYCLES (ครั้ง)': item.regrindStandard?.regrindCycles ?? 10,
+    'NOTE / REMARK': item.regrindStandard?.note || ''
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(data);
+  worksheet['!cols'] = [
+    { wch: 6 },  // NO.
+    { wch: 22 }, // STAGE
+    { wch: 16 }, // PART CODE
+    { wch: 28 }, // PART NAME
+    { wch: 18 }, // DRAWING CODE
+    { wch: 12 }, // E1
+    { wch: 12 }, // E2
+    { wch: 12 }, // E3-1
+    { wch: 12 }, // E3-2
+    { wch: 12 }, // E3-3
+    { wch: 12 }, // E4
+    { wch: 12 }, // E5
+    { wch: 18 }, // SCRAP LIMIT
+    { wch: 20 }, // REGRIND / TIME
+    { wch: 18 }, // TOTAL REGRIND
+    { wch: 14 }, // MAX CYCLES
+    { wch: 24 }  // NOTE
+  ];
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Parts Master');
+  const dateStr = new Date().toISOString().slice(0, 10);
+  saveWorkbookAsExcel(workbook, `FinDie_Parts_Master_${dateStr}.xlsx`);
+}
+
+/**
+ * Export Part Installation Matrix to Excel (.xlsx)
+ */
+export function exportInstallMatrixExcel(matrixRows: any[], lineColumns: any[]) {
+  const data = matrixRows.map(row => {
+    const rowObj: Record<string, any> = {
+      'NO.': row.no,
+      'STAGE (สเตจ)': row.stageName || '',
+      'PART CODE (รหัสพาร์ท)': row.partCode || '',
+      'PART NAME (ชื่อพาร์ท)': row.partName || '',
+      'DRAWING CODE (เลขที่แบบ)': row.drawingCode || ''
+    };
+
+    lineColumns.forEach(col => {
+      rowObj[`LINE ${col.id} (${col.subName})`] = row.quantities[col.id] || 0;
+    });
+
+    rowObj['TOTAL INSTALLED (EA)'] = row.total || 0;
+    return rowObj;
+  });
+
+  const worksheet = XLSX.utils.json_to_sheet(data);
+  const cols = [
+    { wch: 6 },  // NO.
+    { wch: 22 }, // STAGE
+    { wch: 16 }, // PART CODE
+    { wch: 28 }, // PART NAME
+    { wch: 18 }  // DRAWING
+  ];
+  lineColumns.forEach(() => {
+    cols.push({ wch: 16 });
+  });
+  cols.push({ wch: 20 }); // TOTAL
+  worksheet['!cols'] = cols;
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Past Install Matrix');
+  const dateStr = new Date().toISOString().slice(0, 10);
+  saveWorkbookAsExcel(workbook, `FinDie_Past_Install_Matrix_${dateStr}.xlsx`);
+}
+
+

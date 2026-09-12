@@ -11,11 +11,7 @@ import { ProductionLineId } from '../types';
 import { RegrindKpiCards } from './regrinding/RegrindKpiCards';
 import { RegrindQueueTable } from './regrinding/RegrindQueueTable';
 import { Excel31DayMatrixView } from './regrinding/Excel31DayMatrixView';
-import { ToolingMasterSpecsView } from './regrinding/ToolingMasterSpecsView';
-import { PurchasingRequisitionsView } from './regrinding/PurchasingRequisitionsView';
-import { ToolLengthValidationForm } from './regrinding/ToolLengthValidationForm';
 import { RegrindingAnalyticsView } from './regrinding/RegrindingAnalyticsView';
-import { HistoryCalendarView } from './regrinding/HistoryCalendarView';
 import { RegrindCompleteModal } from './regrinding/RegrindCompleteModal';
 import { RegrindScrapModal } from './regrinding/RegrindScrapModal';
 import { NewRegrindOrderModal } from './regrinding/NewRegrindOrderModal';
@@ -23,17 +19,15 @@ import { QrScannerModal } from './regrinding/QrScannerModal';
 import {
   Wrench,
   FileSpreadsheet,
-  Sliders,
-  ShoppingCart,
-  Layers,
   RefreshCw,
-  Sparkles,
   CheckCircle2,
   AlertOctagon,
   ArrowRight,
-  Ruler,
   BarChart3,
-  Calendar
+  Calendar,
+  Zap,
+  Filter,
+  Cpu
 } from 'lucide-react';
 
 interface RegrindingManagementViewProps {
@@ -48,15 +42,16 @@ export const RegrindingManagementView: React.FC<RegrindingManagementViewProps> =
   currentUserName = 'Kittisak Wongsuwan'
 }) => {
   const [activeTab, setActiveTab] = useState<
-    'QUEUE' | 'VALIDATE_LENGTH' | 'ANALYTICS' | 'CALENDAR' | 'EXCEL_31_DAYS' | 'MASTER_SPECS' | 'PURCHASING'
-  >('QUEUE');
+    'EXCEL_31_DAYS' | 'QUEUE' | 'ANALYTICS' | 'DEFECT_SCRAP_MATRIX'
+  >('EXCEL_31_DAYS');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [selectedGlobalPartFilter, setSelectedGlobalPartFilter] = useState<string>('ALL');
+
   const [tickets, setTickets] = useState<RegrindWorkTicket[]>([]);
   const [metrics, setMetrics] = useState(regrindService.getSummaryMetrics());
   const [matrix, setMatrix] = useState<MonthlyCalendarMatrix>(regrindService.getMonthlyMatrix(2026, 1));
   const [toolingMasters, setToolingMasters] = useState<ToolingPartMasterItem[]>([]);
   const [purchasingReqs, setPurchasingReqs] = useState<PurchasingRequisitionItem[]>([]);
-  const [validationTicket, setValidationTicket] = useState<RegrindWorkTicket | null>(null);
 
   // Modals state
   const [completeModalTicket, setCompleteModalTicket] = useState<RegrindWorkTicket | null>(null);
@@ -87,6 +82,17 @@ export const RegrindingManagementView: React.FC<RegrindingManagementViewProps> =
     });
     return () => unsubscribe();
   }, []);
+
+  // Midnight Auto-Rollover Task Trigger (Module 2 Requirement)
+  const handleTriggerAutoRollover = () => {
+    const res = regrindService.executeMidnightAutoRollover();
+    if (res.rolledOverCount > 0) {
+      showToast('warning', `⚡ ระบบ Auto-Rollover (เที่ยงคืน): ปรับวันและติดแท็ก [Delayed] ให้กับใบงานที่ค้าง ${res.rolledOverCount} รายการเรียบร้อยแล้ว`);
+    } else {
+      showToast('info', '⚡ ระบบ Auto-Rollover (เที่ยงคืน): ตรวจสอบแล้ว ไม่มีใบงานเจียรที่ค้างชำระ/เกินกำหนด');
+    }
+    reloadData();
+  };
 
   // --- Handlers ---
   const handleStartGrind = (ticket: RegrindWorkTicket) => {
@@ -217,12 +223,41 @@ export const RegrindingManagementView: React.FC<RegrindingManagementViewProps> =
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                ยกระดับจากระบบ Excel สู่ Web Application จัดการคิวงาน, มิติความยาว, ปฏิทิน 31 วัน, และแจ้งฝ่ายจัดซื้ออัตโนมัติ
+                ยกระดับจากระบบ Excel สู่ Web Application จัดการคิวงาน, มิติความยาว, ปฏิทิน 31 วัน, และบันทึกประวัติ
               </p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {/* Global Single-Select Filter: Part Name (Module 3 Requirement) */}
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+              <Filter className="w-3.5 h-3.5 text-cyan-500" />
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Part Name:</span>
+              <select
+                value={selectedGlobalPartFilter}
+                onChange={e => setSelectedGlobalPartFilter(e.target.value)}
+                className="bg-transparent text-xs font-extrabold text-cyan-600 dark:text-cyan-400 focus:outline-none cursor-pointer"
+              >
+                <option value="ALL">ทุกชิ้นส่วนแม่พิมพ์ (All Part Names)</option>
+                {toolingMasters.map(m => (
+                  <option key={m.id} value={m.partName}>
+                    {m.partName} ({m.partCode})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Trigger Midnight Auto-Rollover Task Button (Module 2 Requirement) */}
+            <button
+              type="button"
+              onClick={handleTriggerAutoRollover}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl bg-orange-500 hover:bg-orange-600 text-white shadow-sm transition-all animate-pulse"
+              title="ทดสอบรันกระบวนการ Auto-Rollover เมื่อถึงเวลาเที่ยงคืน"
+            >
+              <Zap className="w-3.5 h-3.5 fill-current" />
+              <span>⚡ รัน Auto-Rollover (เที่ยงคืน)</span>
+            </button>
+
             {onNavigateToDieLayout && (
               <button
                 type="button"
@@ -250,46 +285,27 @@ export const RegrindingManagementView: React.FC<RegrindingManagementViewProps> =
         <div className="flex items-center gap-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 overflow-x-auto">
           {[
             {
-              id: 'QUEUE',
-              label: 'คิวงานเจียร (Regrind Queue)',
-              icon: Wrench,
-              badge: metrics.pendingCount + metrics.inProcessCount
-            },
-            {
-              id: 'VALIDATE_LENGTH',
-              label: 'ตรวจสอบมิติ & มาตรฐาน Part Life (Validation Form)',
-              icon: Ruler,
-              badge: 'Real-time Matrix'
-            },
-            {
-              id: 'ANALYTICS',
-              label: 'กราฟวิเคราะห์งานเจียร & Defect (Analytics)',
-              icon: BarChart3,
-              badge: 'Recharts'
-            },
-            {
-              id: 'CALENDAR',
-              label: 'ปฏิทินประวัติ 31 วัน (History Calendar)',
-              icon: Calendar,
-              badge: 'รายวัน'
-            },
-            {
               id: 'EXCEL_31_DAYS',
-              label: 'ตารางบันทึก Excel Matrix',
+              label: '🗓️ ตารางวางแผน 31 วัน (Planning Board)',
               icon: FileSpreadsheet,
               badge: `${matrix.grandTotalRepair} ชิ้น`
             },
             {
-              id: 'MASTER_SPECS',
-              label: 'มาตรฐานขนาด & ลิมิต (Master Specs)',
-              icon: Sliders,
-              badge: '26 รายการ'
+              id: 'QUEUE',
+              label: '📋 คิวงานเจียร (Job Queue List)',
+              icon: Wrench,
+              badge: metrics.pendingCount + metrics.inProcessCount
             },
             {
-              id: 'PURCHASING',
-              label: 'ใบขอสั่งซื้อทดแทน (PR Orders)',
-              icon: ShoppingCart,
-              badge: purchasingReqs.length
+              id: 'ANALYTICS',
+              label: '📊 กราฟวิเคราะห์ผล (Analytics)',
+              icon: BarChart3
+            },
+            {
+              id: 'DEFECT_SCRAP_MATRIX',
+              label: '⚠️ ตารางงานซ่อมไม่ได้ / ทิ้ง (Defect/Scrap)',
+              icon: AlertOctagon,
+              badge: `${matrix.grandTotalDefect} ชิ้น`
             }
           ].map(tab => {
             const Icon = tab.icon;
@@ -324,7 +340,7 @@ export const RegrindingManagementView: React.FC<RegrindingManagementViewProps> =
       </div>
 
       {/* Top KPI Cards (Only on relevant tabs) */}
-      {(activeTab === 'QUEUE' || activeTab === 'VALIDATE_LENGTH' || activeTab === 'EXCEL_31_DAYS') && (
+      {(activeTab === 'QUEUE' || activeTab === 'EXCEL_31_DAYS' || activeTab === 'DEFECT_SCRAP_MATRIX') && (
         <RegrindKpiCards
           metrics={metrics}
           onFilterStatus={status => {
@@ -336,6 +352,17 @@ export const RegrindingManagementView: React.FC<RegrindingManagementViewProps> =
       )}
 
       {/* Tab Content Display */}
+      {activeTab === 'EXCEL_31_DAYS' && (
+        <Excel31DayMatrixView
+          matrix={matrix}
+          onUpdateCell={handleUpdateMatrixCell}
+          onMonthChange={handleMonthChange}
+          mode="REPAIR"
+          selectedGlobalPart={selectedGlobalPartFilter}
+          onRefreshData={reloadData}
+        />
+      )}
+
       {activeTab === 'QUEUE' && (
         <RegrindQueueTable
           tickets={tickets}
@@ -344,58 +371,26 @@ export const RegrindingManagementView: React.FC<RegrindingManagementViewProps> =
           onStartGrind={handleStartGrind}
           onCompleteGrind={ticket => setCompleteModalTicket(ticket)}
           onScrap={ticket => setScrapModalTicket(ticket)}
-          onValidateLength={ticket => {
-            setValidationTicket(ticket);
-            setActiveTab('VALIDATE_LENGTH');
-          }}
           onOpenNewOrderModal={() => setIsNewOrderModalOpen(true)}
           onOpenQrScanner={() => setIsQrScannerOpen(true)}
-          onViewPrDetails={() => setActiveTab('PURCHASING')}
-        />
-      )}
-
-      {activeTab === 'VALIDATE_LENGTH' && (
-        <ToolLengthValidationForm
-          initialTicket={validationTicket}
-          currentUserName={currentUserName}
-          onValidationComplete={result => {
-            if (result.status === 'SCRAP') {
-              showToast('warning', `⚠️ ตรวจพบขนาดต่ำกว่ามาตรฐาน: บันทึกตัดทิ้งและออกใบขอสั่งซื้อ (PR) ${result.prNumber || ''} เรียบร้อยแล้ว`);
-            } else {
-              showToast('success', `✅ ตรวจสอบมิติผ่านเกณฑ์: เพิ่ม ${result.partName} เข้าสต๊อกพร้อมใช้เรียบร้อยแล้ว`);
-            }
-            reloadData();
-          }}
+          selectedGlobalPart={selectedGlobalPartFilter}
         />
       )}
 
       {activeTab === 'ANALYTICS' && (
-        <RegrindingAnalyticsView />
-      )}
-
-      {activeTab === 'CALENDAR' && (
-        <HistoryCalendarView
-          onSelectTicket={ticket => {
-            setCompleteModalTicket(ticket);
-          }}
+        <RegrindingAnalyticsView
+          selectedGlobalPart={selectedGlobalPartFilter}
         />
       )}
 
-      {activeTab === 'EXCEL_31_DAYS' && (
+      {activeTab === 'DEFECT_SCRAP_MATRIX' && (
         <Excel31DayMatrixView
           matrix={matrix}
           onUpdateCell={handleUpdateMatrixCell}
           onMonthChange={handleMonthChange}
-        />
-      )}
-
-      {activeTab === 'MASTER_SPECS' && (
-        <ToolingMasterSpecsView masters={toolingMasters} />
-      )}
-
-      {activeTab === 'PURCHASING' && (
-        <PurchasingRequisitionsView
-          requisitions={purchasingReqs}
+          mode="DEFECT_SCRAP"
+          selectedGlobalPart={selectedGlobalPartFilter}
+          onRefreshData={reloadData}
         />
       )}
 

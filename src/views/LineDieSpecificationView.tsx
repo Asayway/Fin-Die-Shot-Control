@@ -49,9 +49,9 @@ interface LineOption {
 const ALL_LINE_OPTIONS: LineOption[] = [
   { id: 'E1', label: 'E1', tag: 'Ø7 Slit', defaultTube: 'Ø7', defaultFin: 'Slit Old', defaultPitch: '4P (Pitch)', defaultMaterial: 'PCM (0.1mm)', defaultDieCode: 'FD-E1-07', defaultSpm: 100 },
   { id: 'E2', label: 'E2', tag: 'Ø5 Slit', defaultTube: 'Ø5', defaultFin: 'Slit Old', defaultPitch: '4P (Pitch)', defaultMaterial: 'GOLD (0.1mm)', defaultDieCode: 'FD-E2-05', defaultSpm: 100 },
-  { id: 'E3-1', label: 'E3', tag: 'Slit 3P', defaultTube: 'Ø7', defaultFin: 'New Slit', defaultPitch: '3P (Pitch)', defaultMaterial: 'PCM (0.1mm)', defaultDieCode: 'FD-E31-07', defaultSpm: 100 },
-  { id: 'E3-2', label: 'E3', tag: 'WL+ 4P', defaultTube: 'Ø7', defaultFin: 'Wide Louver', defaultPitch: '4P (Pitch)', defaultMaterial: 'GOLD (0.1mm)', defaultDieCode: 'FD-E32-07', defaultSpm: 100 },
-  { id: 'E3-3', label: 'E3', tag: 'Corr 4P', defaultTube: 'Ø7', defaultFin: 'Corrugate', defaultPitch: '4P (Pitch)', defaultMaterial: 'GOLD (0.1mm)', defaultDieCode: 'FD-E33-07', defaultSpm: 100 },
+  { id: 'E3-1', label: 'E3-1', tag: 'Slit 3P', defaultTube: 'Ø7', defaultFin: 'New Slit', defaultPitch: '3P (Pitch)', defaultMaterial: 'PCM (0.1mm)', defaultDieCode: 'FD-E31-07', defaultSpm: 100 },
+  { id: 'E3-2', label: 'E3-2', tag: 'WL+ 4P', defaultTube: 'Ø7', defaultFin: 'Wide Louver', defaultPitch: '4P (Pitch)', defaultMaterial: 'GOLD (0.1mm)', defaultDieCode: 'FD-E32-07', defaultSpm: 100 },
+  { id: 'E3-3', label: 'E3-3', tag: 'Corr 4P', defaultTube: 'Ø7', defaultFin: 'Corrugate', defaultPitch: '4P (Pitch)', defaultMaterial: 'GOLD (0.1mm)', defaultDieCode: 'FD-E33-07', defaultSpm: 100 },
   { id: 'E4', label: 'E4', tag: 'Ø5 Slit', defaultTube: 'Ø5', defaultFin: 'Slit Old', defaultPitch: '3P (Pitch)', defaultMaterial: 'BARE (0.1mm)', defaultDieCode: 'FD-E4-05', defaultSpm: 100 },
   { id: 'E5', label: 'E5', tag: 'Ø5 Slit', defaultTube: 'Ø5', defaultFin: 'New Slit', defaultPitch: '3P (Pitch)', defaultMaterial: 'BARE (0.1mm)', defaultDieCode: 'FD-E5-05', defaultSpm: 100 },
 ];
@@ -62,6 +62,7 @@ export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> =
   const [selectedLineFilter, setSelectedLineFilter] = useState<string>('E1');
   const [lineConfigs, setLineConfigs] = useState<Record<string, LineActiveConfiguration>>({});
   const [lineStatuses, setLineStatuses] = useState<Record<string, MachineStatus>>({});
+  const [activeE3Die, setActiveE3Die] = useState<'E3-1' | 'E3-2' | 'E3-3'>(() => storageService.getActiveE3FinDie());
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Add Part Modal state
@@ -79,6 +80,7 @@ export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> =
   });
 
   const loadData = () => {
+    setActiveE3Die(storageService.getActiveE3FinDie());
     const rawConfigs = storageService.getLineConfigs();
     const configMap: Record<string, LineActiveConfiguration> = {};
     const statusMap: Record<string, MachineStatus> = {};
@@ -147,6 +149,11 @@ export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> =
   };
 
   const handleStatusChange = (lineId: ProductionLineId, status: MachineStatus) => {
+    // If setting an E3 line to RUNNING, automatically make it the active die
+    if (lineId.startsWith('E3-') && status === 'RUNNING') {
+      storageService.setActiveE3FinDie(lineId as "E3-1" | "E3-2" | "E3-3");
+    }
+
     setLineStatuses(prev => ({
       ...prev,
       [lineId]: status
@@ -177,20 +184,24 @@ export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> =
 
   const handleSaveNewPart = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newPartData.partCode.trim() || !newPartData.partName.trim()) {
-      alert('กรุณากรอกรหัสอะไหล่ (Part Code) และชื่ออะไหล่ (Part Name)');
+    if (!newPartData.partName.trim()) {
+      alert('กรุณากรอกชื่ออะไหล่ (Part Name)');
       return;
     }
 
+    const code = newPartData.partCode.trim()
+      ? newPartData.partCode.toUpperCase().trim()
+      : `P-${Date.now().toString().slice(-5)}`;
+
     const currentParts = storageService.getPartMasters();
-    if (currentParts.some(p => p.partCode.toUpperCase() === newPartData.partCode.toUpperCase())) {
-      alert(`รหัสชิ้นส่วน ${newPartData.partCode} มีอยู่ในระบบแล้ว`);
+    if (currentParts.some(p => p.partCode.toUpperCase() === code)) {
+      alert(`ชิ้นส่วน ${newPartData.partName} มีอยู่ในระบบแล้ว`);
       return;
     }
 
     const created: PartMaster = {
       ...newPartData,
-      partCode: newPartData.partCode.toUpperCase().trim(),
+      partCode: code,
       partName: newPartData.partName.trim(),
       partNameTh: newPartData.partNameTh?.trim() || newPartData.partName.trim(),
       drawingNumber: newPartData.drawingNumber?.trim() || '-',
@@ -200,7 +211,7 @@ export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> =
 
     storageService.savePartMaster(created);
     setShowAddPartModal(false);
-    showToast(`เพิ่มชิ้นส่วนใหม่ ${created.partCode} เข้าระบบแคตตาล็อกเรียบร้อยแล้ว`);
+    showToast(`เพิ่มชิ้นส่วนใหม่ ${created.partName} เข้าระบบแคตตาล็อกเรียบร้อยแล้ว`);
     
     // Reset form
     setNewPartData({
@@ -333,6 +344,71 @@ export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> =
         </div>
       </div>
 
+      {/* LINE E3 ACTIVE FIN DIE SELECTION WIDGET */}
+      {(selectedLineFilter === 'ALL' || selectedLineFilter.startsWith('E3')) && (
+        <div className="bg-[#0A1120] border border-cyan-500/50 rounded-2xl p-4 shadow-xl mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+            <div>
+              <h4 className="text-sm font-bold text-cyan-400 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-cyan-400 animate-pulse" />
+                ไลน์ E3: การสลับใช้งาน Fin Die (Active Fin Die Selector for Machine E3)
+              </h4>
+              <p className="text-xs text-slate-400 mt-0.5">
+                เครื่องปั๊ม E3 แชร์การผลิต 3 Fin Die (E3-1, E3-2, E3-3) ยอดช็อตเครื่องปั๊มจะถูกคำนวณสะสมเฉพาะ Fin Die ที่เลือกเปิดใช้งานอยู่เท่านั้น Fin Die อื่นจะถูกคงยอดช็อตเดิมไว้
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold text-slate-400">Fin Die ที่เปิดใช้งานขณะนี้:</span>
+              <span className="px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-400 font-extrabold text-xs border border-emerald-500/40 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                {activeE3Die === 'E3-1' ? 'E3-1 (Slit 3P)' : activeE3Die === 'E3-2' ? 'E3-2 (WL+ 4P)' : 'E3-3 (Corr 4P)'}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+            {[
+              { id: 'E3-1', label: 'E3-1 (Slit 3P)', tag: 'E3 Slit 3P', desc: 'Ø7 Slit, PCM (0.1mm)' },
+              { id: 'E3-2', label: 'E3-2 (WL+ 4P)', tag: 'E3 WL+ 4P', desc: 'Ø7 Wide Louver, GOLD (0.1mm)' },
+              { id: 'E3-3', label: 'E3-3 (Corr 4P)', tag: 'E3 New Cor 4P', desc: 'Ø7 New Corrugate, GOLD (0.1mm)' }
+            ].map(item => {
+              const isActive = activeE3Die === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    storageService.setActiveE3FinDie(item.id as any);
+                    showToast(`สลับใช้งาน Fin Die ไลน์ E3 เป็น [${item.label}] เรียบร้อยแล้ว`);
+                  }}
+                  className={`p-3.5 rounded-xl border transition-all text-left flex flex-col justify-between cursor-pointer ${
+                    isActive
+                      ? 'bg-cyan-950/80 border-cyan-400 shadow-lg shadow-cyan-950/50 ring-2 ring-cyan-500/30'
+                      : 'bg-slate-900/80 border-slate-800 hover:border-slate-700 opacity-75 hover:opacity-100'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className={`font-extrabold text-xs ${isActive ? 'text-cyan-300' : 'text-slate-200'}`}>
+                      {item.label}
+                    </span>
+                    {isActive ? (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500 text-slate-950">
+                        🟢 ACTIVE (คำนวณช็อต)
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-400">
+                        ⏸️ STANDBY (คงยอดช็อตเดิม)
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-400">{item.desc}</p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* LINE SPEC CARDS */}
       <div className="space-y-4">
         {displayedLines.map(line => {
@@ -359,11 +435,8 @@ export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> =
               <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
                 <div className="flex items-center gap-3">
                   {/* Line Circle Badge */}
-                  <div className="w-11 h-11 rounded-xl bg-cyan-950 border border-cyan-500 flex items-center justify-center font-mono font-extrabold text-cyan-300 text-sm shadow-inner">
+                  <div className="w-11 h-11 rounded-xl bg-cyan-950 border border-cyan-500 flex items-center justify-center font-mono font-extrabold text-cyan-300 text-xs sm:text-sm shadow-inner px-1 text-center">
                     {line.label}
-                    {line.id.includes('-') && (
-                      <span className="text-[9px] -ml-0.5">{line.id.substring(2)}</span>
-                    )}
                   </div>
 
                   <div>
@@ -620,21 +693,6 @@ export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> =
 
             <form onSubmit={handleSaveNewPart} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                {/* Part Code */}
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-300 font-mono">
-                    PART CODE (รหัสอะไหล่) *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={newPartData.partCode}
-                    onChange={(e) => setNewPartData({ ...newPartData, partCode: e.target.value })}
-                    placeholder="รหัสอะไหล่..."
-                    className="w-full bg-[#070d1a] border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-400"
-                  />
-                </div>
-
                 {/* Category */}
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-300 font-mono">

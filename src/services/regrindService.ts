@@ -138,26 +138,39 @@ class RegrindService {
   // --- Workflow Actions ---
 
   // 1. Start Grinding (Pending -> In-Process)
-  public startGrinding(ticketId: string, technicianName: string): { success: boolean; message: string } {
+  public startGrinding(
+    ticketId: string,
+    technicianName: string,
+    options?: { etaMinutes?: number; machineAssigned?: string }
+  ): { success: boolean; message: string } {
     const tickets = this.getQueueTickets();
     const idx = tickets.findIndex(t => t.id === ticketId);
     if (idx === -1) return { success: false, message: 'Ticket not found' };
 
+    const now = new Date();
+    const etaMins = options?.etaMinutes || 30;
+    const etaTarget = new Date(now.getTime() + etaMins * 60 * 1000).toISOString();
+
     tickets[idx].status = 'IN_PROCESS';
     tickets[idx].assignedTechnician = technicianName;
-    tickets[idx].inProcessDate = new Date().toISOString();
-    tickets[idx].updatedAt = new Date().toISOString();
+    tickets[idx].inProcessDate = now.toISOString();
+    tickets[idx].etaMinutes = etaMins;
+    tickets[idx].etaTargetTime = etaTarget;
+    if (options?.machineAssigned) {
+      tickets[idx].machineAssigned = options.machineAssigned;
+    }
+    tickets[idx].updatedAt = now.toISOString();
 
     this.saveQueueTickets(tickets);
 
     storageService.addAuditLog(
       'REGRIND',
-      `Started Regrinding for ${tickets[idx].partName} (${tickets[idx].jobCode}) by technician ${technicianName}`,
-      `เริ่มดำเนินการเจียรลับคมสำหรับ ${tickets[idx].partName} (${tickets[idx].jobCode}) โดยช่าง ${technicianName}`,
+      `Started Regrinding for ${tickets[idx].partName} (${tickets[idx].jobCode}) by technician ${technicianName} (ETA: ${etaMins}m)`,
+      `เริ่มดำเนินการเจียรลับคมสำหรับ ${tickets[idx].partName} (${tickets[idx].jobCode}) โดยช่าง ${technicianName} (ETA: ${etaMins} นาที)`,
       tickets[idx].lineId
     );
 
-    return { success: true, message: `เริ่มดำเนินการเจียรลับคม ${tickets[idx].partName} เรียบร้อยแล้ว` };
+    return { success: true, message: `เริ่มดำเนินการเจียรลับคม ${tickets[idx].partName} (ETA ${etaMins} นาที) เรียบร้อยแล้ว` };
   }
 
   // 2. Complete Grinding (In-Process -> Ready to Use / Auto-Scrap on Dimension Fail)
@@ -437,6 +450,9 @@ class RegrindService {
       maxRegrindAllowed: master?.maxRegrindCount || 4,
       isScrapped: false,
       remarks: data.remarks || 'Manual ticket created',
+      targetCompletionDate: data.targetCompletionDate || new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+      quantity: data.quantity || 1,
+      isDelayed: false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -452,6 +468,91 @@ class RegrindService {
     );
 
     return newTicket;
+  }
+
+  // --- Midnight Auto-Rollover Logic (Module 2 Requirement) ---
+  public executeMidnightAutoRollover(): { rolledOverCount: number; message: string } {
+    const tickets = this.getQueueTickets();
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const todayDay = now.getDate();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+
+    let rolledOverCount = 0;
+
+    const updatedTickets = tickets.map(ticket => {
+      // If job is not READY and not SCRAP
+      if (ticket.status !== 'READY' && ticket.status !== 'SCRAP') {
+        const targetDate = ticket.targetCompletionDate ? new Date(ticket.targetCompletionDate) : new Date(ticket.createdAt);
+        // If target date is before today or overdue
+        if (targetDate < now) {
+          rolledOverCount++;
+          const updatedRemarks = ticket.remarks ? (ticket.remarks.includes('[Delayed]') ? ticket.remarks : `[Delayed] ${ticket.remarks}`) : '[Delayed] Auto-Rolled Over';
+          
+          // Move quantity in matrix if matrix data exists
+          const oldDay = targetDate.getDate();
+          if (oldDay !== todayDay) {
+            this.updateMatrixCell(currentYear, currentMonth, 'REPAIR', ticket.partName, oldDay, 0);
+            this.incrementDailyMatrixCount(currentYear, currentMonth, 'REPAIR', ticket.partName, todayDay, ticket.quantity || 1);
+          }
+
+          return {
+            ...ticket,
+            targetCompletionDate: `${todayStr}T17:00:00.000Z`,
+            isDelayed: true,
+            remarks: updatedRemarks,
+            defectNotes: ticket.defectNotes ? (ticket.defectNotes.includes('[Delayed]') ? ticket.defectNotes : `[Delayed] ${ticket.defectNotes}`) : '[Delayed] Midnight Auto-Rollover',
+            updatedAt: new Date().toISOString()
+          };
+        }
+      }
+      return ticket;
+    });
+
+    if (rolledOverCount > 0) {
+      this.saveQueueTickets(updatedTickets);
+      storageService.addAuditLog(
+        'REGRIND',
+        `Midnight Auto-Rollover Executed: ${rolledOverCount} pending/in-process jobs updated to today with [Delayed] status tag`,
+        `ระบบทำงาน Auto-Rollover เที่ยงคืนสำเร็จ: ปรับปรุง ${rolledOverCount} ใบงานค้างเป็นวันที่ปัจจุบันพร้อมติดป้าย [Delayed]`,
+        'E1'
+      );
+    }
+
+    return {
+      rolledOverCount,
+      message: rolledOverCount > 0
+        ? `⚡ ระบบ Auto-Rollover เที่ยงคืนทำงานสำเร็จ: ย้ายใบงานค้าง (${rolledOverCount} รายการ) มาเป็นวันที่ปัจจุบัน (${todayStr}) พร้อมติดแท็ก [Delayed] เรียบร้อยแล้ว`
+        : `✅ ไม่พบใบงานค้างเกินกำหนด ข้อมูลคิวปัจจุบันอัปเดตตรงตามวันที่ปัจจุบันเรียบร้อยแล้ว`
+    };
+  }
+
+  // --- Create Ticket From Matrix Modal (Module 1 Requirement) ---
+  public createTicketFromMatrix(params: {
+    partName: string;
+    day: number;
+    month: number;
+    year: number;
+    quantity: number;
+    targetCompletionDate: string;
+    note: string;
+    technicianName?: string;
+  }): RegrindWorkTicket {
+    const master = this.findMasterByPartName(params.partName);
+    const ticket = this.createManualTicket({
+      partName: master?.partName || params.partName,
+      partCode: master?.partCode || 'TOOL-MTRX',
+      quantity: params.quantity || 1,
+      targetCompletionDate: params.targetCompletionDate || `${params.year}-${String(params.month).padStart(2, '0')}-${String(params.day).padStart(2, '0')}T17:00:00`,
+      remarks: params.note || 'Created from Planning Board Matrix',
+      defectNotes: params.note || 'งานเจียรลับคมประจำวัน',
+      receivedBy: params.technicianName || 'Planning Engineer'
+    });
+
+    // Update Matrix cell
+    this.incrementDailyMatrixCount(params.year, params.month, 'REPAIR', ticket.partName, params.day, params.quantity || 1);
+    return ticket;
   }
 
   // --- Spare Stock Auto Adjustment ---

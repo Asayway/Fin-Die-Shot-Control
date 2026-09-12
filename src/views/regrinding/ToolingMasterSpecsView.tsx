@@ -161,6 +161,7 @@ export const ToolingMasterSpecsView: React.FC<ToolingMasterSpecsViewProps> = () 
   const handleEditClick = () => {
     const currentVals: Record<string, Record<string, number | boolean | string>> = {};
     standards.forEach(std => {
+      if (!std) return;
       currentVals[std.id] = {
         material: std.configKey?.material || 'PCM',
         tubeSize: std.configKey?.tubeSize || 'Ø7',
@@ -183,6 +184,7 @@ export const ToolingMasterSpecsView: React.FC<ToolingMasterSpecsViewProps> = () 
 
   const handleSaveClick = () => {
     standards.forEach(std => {
+      if (!std) return;
       const updates = editValues[std.id];
       if (updates) {
         if (updates.material) {

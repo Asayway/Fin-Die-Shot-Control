@@ -1,41 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Play, 
-  Pause, 
-  Wifi, 
-  AlertTriangle, 
   Maximize2, 
   Minimize2, 
-  Volume2, 
-  VolumeX, 
-  RotateCw,
-  RotateCcw,
-  Check,
-  Clock,
-  Sparkles,
-  Info,
-  ChevronDown,
-  ShieldAlert,
-  Eye,
-  X
+  X,
+  Play,
+  Pause,
+  RotateCw
 } from 'lucide-react';
 import { 
   LineLiveMonitoringData, 
   ProductionLineId, 
-  MachineStatus, 
-  PartLiveTrackingItem,
-  LifeStatus,
-  StockStatus,
-  LINE_INFO_MAP
+  PartLiveTrackingItem
 } from '../../types';
 import { storageService } from '../../services/storageService';
 import { 
   formatShots, 
   calculatePartMetrics, 
   sortTrackingItems, 
-  TvSortMode,
-  calculateSummaryStats, 
-  generateDynamicAlertTicker 
+  TvSortMode
 } from '../../services/calculationService';
 import { getI18n, LanguageCode } from '../../i18n';
 import { TvTableRow } from './TvTableRow';
@@ -53,6 +35,11 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
 }) => {
   const [selectedLineId, setSelectedLineId] = useState<ProductionLineId>(initialLineId);
   const [lineData, setLineData] = useState<LineLiveMonitoringData | null>(null);
+
+  // Auto Cycle (Auto Rotate Lines) State
+  const [isAutoCycleActive, setIsAutoCycleActive] = useState<boolean>(false);
+  const [autoCycleInterval, setAutoCycleInterval] = useState<number>(10); // 5, 10, 15, 20 seconds
+  const [countdown, setCountdown] = useState<number>(10);
 
   // Active Display Language
   const [currentLang, setCurrentLang] = useState<LanguageCode>(() => {
@@ -76,46 +63,33 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
 
   const t = getI18n(currentLang);
   
-  // Sort Mode State (Default: INDUSTRIAL_PRIORITY)
+  // Sort Mode State
   const [tvSortMode, setTvSortMode] = useState<TvSortMode>(() => {
-    return (localStorage.getItem('findie_tv_sort_mode') as TvSortMode) || 'INDUSTRIAL_PRIORITY';
+    return (localStorage.getItem('findie_tv_sort_mode') as TvSortMode) || 'STAGE_ORDER';
   });
   
-  // Auto Cycle Options: 0 = OFF, 5, 10, 15, 30 seconds (Default: 5s Auto Cycle)
-  const [autoCycleSeconds, setAutoCycleSeconds] = useState<number>(5);
-  const [highContrast, setHighContrast] = useState<boolean>(false);
-  const [isSimulatingPulse, setIsSimulatingPulse] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<string>('');
   const [selectedModalItem, setSelectedModalItem] = useState<PartLiveTrackingItem | null>(null);
-  const [tvResetModalOpen, setTvResetModalOpen] = useState<boolean>(false);
-  const [tvResetTargetScope, setTvResetTargetScope] = useState<'ALL' | ProductionLineId>('ALL');
-  const [tvResetNewMeter, setTvResetNewMeter] = useState<string>('0');
-  const [tvResetPartWear, setTvResetPartWear] = useState<boolean>(true);
-  const [tvResetShiftCounters, setTvResetShiftCounters] = useState<boolean>(true);
-  const [tvResetToast, setTvResetToast] = useState<string | null>(null);
 
-  // Default standard proportional column widths matching the verified TV layout (sum = 100%)
+  // Exact 8-column layout matching the LG Monitor dashboard aesthetic (sum = 100%)
   const DEFAULT_TV_COL_WIDTHS: Record<string, number> = {
-    no: 3.5,
-    stage: 18.5,
-    lifeLimit: 9.5,
-    currentShot: 11.0,
-    usage: 6.5,
-    remaining: 11.0,
-    progress: 10.5,
-    lastChange: 11.0,
-    installQty: 5.0,
-    spareQty: 5.0,
-    status: 8.5
+    stage: 19.0,
+    replacement: 14.0,
+    shot: 14.0,
+    progress: 18.0,
+    lifetime: 11.0,
+    installQty: 7.0,
+    stockQty: 7.0,
+    orderRequire: 10.0
   };
 
-  // Proportional Column Resizing State (% width out of the box so it fits 100% screen width seamlessly)
+  // Proportional Column Resizing State
   const [colWidths, setColWidths] = useState<Record<string, number>>(() => {
     try {
-      const saved = localStorage.getItem('findie_tv_col_widths_v3');
+      const saved = localStorage.getItem('findie_tv_col_widths_v7_lg');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed === 'object' && parsed.stage && parsed.currentShot) {
+        if (parsed && typeof parsed === 'object' && parsed.stage && parsed.shot && parsed.progress >= 12) {
           return parsed;
         }
       }
@@ -139,7 +113,7 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
       setColWidths(prev => {
         const updated = { ...prev, [colKey]: parseFloat(newPercent.toFixed(2)) };
         try {
-          localStorage.setItem('findie_tv_col_widths_v3', JSON.stringify(updated));
+          localStorage.setItem('findie_tv_col_widths_v7_lg', JSON.stringify(updated));
         } catch {
           // ignore
         }
@@ -165,27 +139,56 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
       return;
     }
 
-    // Recalculate all tracking items through the centralized Part Life Calculation Service
     const standards = storageService.getLifeStandards();
     const stocks = storageService.getSpareStocks();
-    const activeConfig = rawData.activeConfig;
+    const partMasters = storageService.getPartMasters();
+    const lineConfigs = storageService.getLineConfigs();
+    
+    // Find active configuration from lineConfigs or rawData
+    const activeConfig = lineConfigs.find(c => c.lineId === selectedLineId && c.isActive) || rawData.activeConfig;
 
     const recalculatedItems = (rawData.items || []).map((item, idx) => {
+      // Match with Part Master
+      const matchedPart = partMasters.find(p => 
+        p.partCode === item.partCode || 
+        p.stageName === item.stagePunchDie || 
+        p.partName === item.partName
+      );
+      
+      // Match with Life Standards
+      const matchedStd = standards.find(s => 
+        (s as any).partCode === item.partCode ||
+        s.configKey?.partCode === item.partCode || 
+        s.stagePunchDie === item.stagePunchDie ||
+        s.partName === item.partName
+      );
+
+      // Match with Spare Stock
+      const matchedStock = stocks.find(s => 
+        s.partCode === item.partCode || 
+        s.partName === item.partName
+      );
+
+      const lifeLimitVal = item.lifeLimit > 0 ? item.lifeLimit : (matchedStd?.lifeLimitShots || 18000000);
+      const installQtyVal = item.installQty > 0 ? item.installQty : (matchedStock?.requiredQuantityPerFullReplacement || 168);
+      const stockQtyVal = item.availableSpare !== undefined ? item.availableSpare : (matchedStock?.availableQuantity !== undefined ? matchedStock.availableQuantity : item.backupQty);
+
       return calculatePartMetrics(
         {
           slotId: item.slotId || `SLOT-${selectedLineId}-${idx + 1}`,
-          partCode: item.partCode,
-          partName: item.partName,
-          stagePunchDie: item.stagePunchDie,
-          position: item.position,
-          installQty: item.installQty,
-          backupQty: item.backupQty,
+          partCode: item.partCode || matchedPart?.partCode || `P-${idx + 1}`,
+          partName: matchedPart?.partName || item.partName || item.stagePunchDie,
+          stagePunchDie: item.stagePunchDie || matchedPart?.stageName || matchedPart?.partName || item.partName,
+          position: item.position || `${item.stagePunchDie} Stage 1`,
+          installQty: installQtyVal,
+          backupQty: stockQtyVal,
           usedShot: item.usedShot !== undefined ? item.usedShot : item.currentShot,
           currentShot: item.usedShot !== undefined ? item.usedShot : item.currentShot,
           shotAtLastChange: item.shotAtLastChange !== undefined ? item.shotAtLastChange : item.lastChangeShot,
           lastChangeShot: item.shotAtLastChange !== undefined ? item.shotAtLastChange : item.lastChangeShot,
           regrindCount: item.regrindCount,
-          totalMmGround: item.totalMmGround
+          totalMmGround: item.totalMmGround,
+          lifeLimit: lifeLimitVal
         },
         activeConfig,
         standards,
@@ -193,12 +196,12 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
       );
     });
 
-    // Sort items according to active TV Sort Mode (default: INDUSTRIAL_PRIORITY)
     const sortedItems = sortTrackingItems(recalculatedItems, tvSortMode);
 
     setLineData({
       ...rawData,
-      lineName: selectedLineId,
+      activeConfig,
+      lineName: `LINE ${selectedLineId}`,
       items: sortedItems
     });
   };
@@ -211,353 +214,331 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
     return () => unsub();
   }, [selectedLineId, tvSortMode]);
 
-  // Live Clock for TV
+  // Exact timestamp format matching the LG Monitor: YYYY.MM.DD HH:mm:ss
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
-      const dateStr = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-      const timeStr = now.toLocaleTimeString('en-GB', { hour12: false });
-      setCurrentTime(`${dateStr} ${timeStr}`);
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      const hh = String(now.getHours()).padStart(2, '0');
+      const min = String(now.getMinutes()).padStart(2, '0');
+      const ss = String(now.getSeconds()).padStart(2, '0');
+      setCurrentTime(`${yyyy}.${mm}.${dd} ${hh}:${min}:${ss}`);
     };
     updateTime();
     const timer = setInterval(updateTime, 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // TV Auto-Cycle lines with custom configurable intervals: OFF, 5s, 10s, 15s, 30s
-  const cycleIntervals = [0, 5, 10, 15, 30];
-  const handleToggleAutoCycle = () => {
-    const currentIdx = cycleIntervals.indexOf(autoCycleSeconds);
-    const nextIdx = (currentIdx + 1) % cycleIntervals.length;
-    setAutoCycleSeconds(cycleIntervals[nextIdx]);
-  };
-
+  // Auto Cycle (Auto Switch Line) Effect
   useEffect(() => {
-    if (autoCycleSeconds <= 0) return;
-    const interval = setInterval(() => {
-      setSelectedLineId(prev => {
-        const nextIdx = (linesList.indexOf(prev) + 1) % linesList.length;
-        return linesList[nextIdx];
+    if (!isAutoCycleActive) {
+      setCountdown(autoCycleInterval);
+      return;
+    }
+
+    setCountdown(autoCycleInterval);
+
+    const timer = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          setSelectedLineId(currentLine => {
+            const idx = linesList.indexOf(currentLine);
+            const nextIdx = (idx + 1) % linesList.length;
+            return linesList[nextIdx];
+          });
+          return autoCycleInterval;
+        }
+        return prev - 1;
       });
-    }, autoCycleSeconds * 1000);
-    return () => clearInterval(interval);
-  }, [autoCycleSeconds]);
+    }, 1000);
 
-  // Simulated live shot pulse counter (PLC heartbeat)
-  useEffect(() => {
-    if (!isSimulatingPulse) return;
-    const pulseInterval = setInterval(() => {
-      // Add small batch of 25-50 shots every 4 seconds to active running line
-      if (lineData && lineData.machineStatus === 'RUNNING') {
-        const increment = Math.floor(Math.random() * 30) + 20;
-        storageService.addShotEntry(selectedLineId, increment, 'AUTOMATIC_PLC', 'Shift 1 (Day)', 'Real-time PLC optical pulse');
-      }
-    }, 4000);
-    return () => clearInterval(pulseInterval);
-  }, [isSimulatingPulse, selectedLineId, lineData?.machineStatus]);
+    return () => clearInterval(timer);
+  }, [isAutoCycleActive, autoCycleInterval]);
 
   if (!lineData) {
     return (
-      <div className="flex items-center justify-center h-full p-12 text-slate-400 font-mono">
-        LOADING LINE MONITORING DATA...
+      <div className="flex-1 flex items-center justify-center p-8 bg-[#000000] text-white font-mono">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <p className="font-bold">LOADING LG MONITOR DASHBOARD...</p>
+        </div>
       </div>
     );
   }
 
-  // Dynamic summary stats derived from currently displayed items
-  const items = lineData.items || [];
-  const {
-    normalCount,
-    warningCount,
-    prepareCount,
-    criticalCount,
-    overLifeCount,
-    lowStockCount,
-    deliveryRiskCount
-  } = calculateSummaryStats(items);
+  const rawItems = lineData.items || [];
+  // Filter out any blank or empty rows
+  const items = rawItems.filter(item => item && (item.stagePunchDie || item.partName || item.partCode));
+  
+  // Format line display title
+  const getLineLabel = (id: ProductionLineId) => {
+    if (id === 'E1') return 'HE1';
+    if (id === 'E2') return 'HE2';
+    if (id === 'E3-1') return 'E3 Slit 3P';
+    if (id === 'E3-2') return 'E3 WL+ 4P';
+    if (id === 'E3-3') return 'E3 New Cor 4P';
+    if (id === 'E4') return 'HE4';
+    if (id === 'E5') return 'HE5';
+    return id;
+  };
 
-  // Dynamic alert ticker matching the exact calculated table items
-  const dynamicTickerMessage = generateDynamicAlertTicker(items, selectedLineId);
+  const lineLabel = getLineLabel(selectedLineId);
+  const lineDisplayName = selectedLineId === 'E3-1' ? 'LINE E3 Slit 3P' :
+                          selectedLineId === 'E3-2' ? 'LINE E3 WL+ 4P' :
+                          selectedLineId === 'E3-3' ? 'LINE E3 New Cor 4P' :
+                          `LINE ${selectedLineId}`;
+  const totalMachineShots = lineData.machineShotTotal || 153538938;
+  const todayMachineShots = lineData.dailyShot || 5485112;
+
+  // Active Die Info from configuration / Die Parts Master
+  const activeCfg = lineData.activeConfig;
+  const dieNameDisplay = activeCfg?.dieName || 
+    (selectedLineId === 'E1' ? 'Fin Die E1 (Ø7 PCM Slit)' :
+     selectedLineId === 'E2' ? 'Fin Die E2 (Ø5 GOLD Slit)' :
+     selectedLineId === 'E3-1' ? 'Fin Die E3-1 (Ø7 Slit 3P, PCM)' :
+     selectedLineId === 'E3-2' ? 'Fin Die E3-2 (Ø7 WL+ 4P, GOLD)' :
+     selectedLineId === 'E3-3' ? 'Fin Die E3-3 (Ø7 New Cor 4P, GOLD)' :
+     selectedLineId === 'E4' ? 'Fin Die E4 (Ø5 BARE Slit)' :
+     selectedLineId === 'E5' ? 'Fin Die E5 (Ø5 BARE Slit)' :
+     `Fin Die ${selectedLineId}`);
 
   return (
-    <div className={`w-full bg-[#070F1E] text-slate-100 flex flex-col justify-between font-sans select-none border border-slate-800/80 shadow-2xl overflow-hidden transition-all ${
-      isFullscreenMode
-        ? 'fixed inset-0 z-50 h-screen w-screen max-h-screen max-w-screen pt-9 sm:pt-10 px-2 sm:px-3 pb-2 rounded-none border-none bg-[#070F1E]'
-        : 'h-[calc(100vh-84px)] min-h-[560px] p-2 sm:p-3 md:p-3.5 rounded-xl'
-    }`}>
+    <div className="flex-1 flex flex-col min-h-0 bg-[#000000] text-white select-none overflow-hidden font-sans">
       
-      {/* Top TV Controls Bar (Line Switcher, Auto Cycle, High Contrast, Fullscreen) - flex-none */}
-      <div className={`flex-none flex flex-wrap items-center justify-between gap-2 pb-1.5 mb-1.5 border-b z-30 relative ${
-        highContrast ? 'border-yellow-400 border-b-2' : 'border-slate-800/80'
-      }`}>
-        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-          <span className={`text-sm sm:text-base font-mono font-black uppercase tracking-wider mr-1 ${
-            highContrast ? 'text-yellow-300' : 'text-cyan-400'
-          }`}>{t.controls.line}:</span>
-          {linesList.map(line => {
-            const info = LINE_INFO_MAP[line];
-            const isSelected = selectedLineId === line;
-            const lineStatus = storageService.getLineMonitoring(line)?.machineStatus || 'RUNNING';
-            const displayLine = line.startsWith('E3-') ? 'E3' : line;
-            return (
-              <button
-                key={line}
-                onClick={() => setSelectedLineId(line)}
-                className={`px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg text-sm sm:text-base font-mono font-black transition-all flex items-center gap-1.5 border whitespace-nowrap active:scale-95 shadow-sm ${
-                  isSelected
-                    ? highContrast
-                      ? 'bg-yellow-400 text-black border-2 border-white shadow-md font-black ring-2 ring-yellow-400'
-                      : 'bg-cyan-400 text-slate-950 shadow-md ring-2 ring-cyan-300 font-black'
-                    : highContrast
-                      ? 'bg-zinc-900 text-white border border-zinc-600 hover:bg-zinc-800'
-                      : 'bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/90'
-                }`}
-              >
-                <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-                  lineStatus === 'RUNNING' ? 'bg-emerald-400 animate-pulse' :
-                  lineStatus === 'IDLE' ? 'bg-amber-400' :
-                  lineStatus === 'MAINTENANCE' ? 'bg-cyan-400' : 'bg-rose-500'
-                }`} />
-                <span>{displayLine}</span>
-                <span className={`text-[11px] sm:text-xs px-1.5 py-0.5 rounded font-bold ${
-                  isSelected ? 'bg-slate-950 text-cyan-300' : 'bg-slate-800 text-slate-300'
-                }`}>
-                  {info?.shortTag || line}
-                </span>
-              </button>
-            );
-          })}
+      {/* ========================================================= */}
+      {/* 1. TOP HEADER: LG ELECTRONICS BRANDED HEADER BAR */}
+      {/* ========================================================= */}
+      <div className="flex-none bg-[#000000] border-b border-[#222222] px-3 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between gap-3">
+        {/* Left: LG Electronics Text */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          <span className="font-black text-xl sm:text-2xl md:text-3xl tracking-tight text-white font-sans">
+            LG Electronics
+          </span>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* AUTO-CYCLE TIMER SELECTOR BUTTON */}
-          <button
-            onClick={handleToggleAutoCycle}
-            className={`flex items-center gap-1.5 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-lg text-xs sm:text-sm font-mono font-bold border transition-all active:scale-95 ${
-              autoCycleSeconds > 0
-                ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-md font-black'
-                : 'bg-slate-900 text-slate-300 border-slate-700 hover:text-white'
-            }`}
-            title="Click to cycle Auto-Switch timer: OFF -> 5s -> 10s -> 15s -> 30s -> OFF"
-          >
-            <RotateCw className={`w-3.5 h-3.5 ${autoCycleSeconds > 0 ? 'animate-spin text-slate-950' : ''}`} />
-            <span className="hidden sm:inline">{t.controls.autoCycle}</span>
-            <span className="font-bold px-1.5 py-0.5 bg-black/40 text-white rounded text-xs">
-              {autoCycleSeconds > 0 ? `${autoCycleSeconds}s` : t.controls.off}
-            </span>
-          </button>
+        {/* Center: {Line Title} Fin Die Shot Count */}
+        <div className="text-center flex-1 mx-2">
+          <h1 className="text-xl sm:text-3xl md:text-4xl lg:text-5xl font-black tracking-wide text-white font-sans uppercase">
+            {lineDisplayName} Fin Die Shot Count
+          </h1>
+        </div>
 
+        {/* Right: Fullscreen Controls + Live Clock */}
+        <div className="flex items-center gap-2 sm:gap-3">
           {onToggleFullscreen && (
             <button
+              type="button"
               onClick={onToggleFullscreen}
-              className="p-1.5 rounded-lg bg-slate-800 text-cyan-300 border border-slate-700 hover:bg-slate-700 transition-colors shadow-sm"
-              title={isFullscreenMode ? "Exit Fullscreen TV" : "Expand Fullscreen TV"}
+              className="p-2 bg-[#181818] hover:bg-[#282828] border border-[#444444] rounded text-white font-bold transition-colors cursor-pointer"
+              title="Toggle Fullscreen"
             >
-              {isFullscreenMode ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              {isFullscreenMode ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
             </button>
           )}
-        </div>
-      </div>
 
-      {/* TOP HEADER: CLEAN INDUSTRIAL DISPLAY - flex-none */}
-      <div className={`flex-none grid grid-cols-12 items-center gap-2 px-3 py-1.5 bg-[#0E172A] border border-slate-800/90 rounded-lg mb-1.5 shadow-md ${
-        isFullscreenMode ? 'lg:py-2.5 lg:px-4' : ''
-      }`}>
-        {/* Center Title & Line Specs */}
-        <div className="col-span-9 text-left pl-0.5">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className={`px-2 py-0.5 bg-cyan-950 text-cyan-300 border border-cyan-500/80 rounded-md font-mono font-black ${
-              isFullscreenMode ? 'text-sm sm:text-base lg:text-lg' : 'text-xs sm:text-sm'
-            }`}>
-              LINE {selectedLineId}
-            </span>
-            <h2 className={`font-black tracking-wide text-white uppercase font-['Plus_Jakarta_Sans'] leading-tight ${
-              isFullscreenMode ? 'text-base sm:text-lg md:text-xl lg:text-2xl' : 'text-sm sm:text-base md:text-lg'
-            }`}>
-              FIN DIE SPARE PARTS SHOT COUNT ({LINE_INFO_MAP[selectedLineId]?.nameTh || selectedLineId})
-            </h2>
-          </div>
-          <div className={`font-mono text-cyan-300 flex flex-wrap items-center justify-start gap-2 mt-1 ${
-            isFullscreenMode ? 'text-xs sm:text-sm lg:text-base' : 'text-xs sm:text-sm'
-          }`}>
-            <span className="bg-slate-900/95 px-2 py-0.5 rounded border border-slate-800 text-slate-300">
-              DIE: <strong className="text-white font-bold">{lineData.activeConfig?.dieCode || `FD-${selectedLineId}-07`}</strong>
-            </span>
-            <span className="bg-slate-900/95 px-2 py-0.5 rounded border border-slate-800 text-slate-300">
-              TUBE: <strong className="text-white font-bold">{lineData.activeConfig?.tubeSize || 'Ø7'}</strong>
-            </span>
-            <span className="bg-slate-900/95 px-2 py-0.5 rounded border border-slate-800 text-slate-300">
-              MAT: <strong className="text-white font-bold">{lineData.activeConfig?.material || 'PCM'} ({lineData.activeConfig?.thicknessMm || 0.10}mm)</strong>
-            </span>
-            <span className="bg-slate-900/95 px-2 py-0.5 rounded border border-slate-800 text-slate-300 hidden sm:inline">
-              TYPE: <strong className="text-white font-bold">{lineData.activeConfig?.finType || 'Slit (half)'}</strong>
-            </span>
-          </div>
-        </div>
-
-        {/* Right Timestamp Box */}
-        <div className="col-span-3 text-right">
-          <div className="inline-block px-3 py-1 bg-slate-900/95 border border-slate-800 rounded-lg text-right shadow-inner">
-            <div className={`font-mono tracking-wider text-slate-400 font-bold uppercase ${
-              isFullscreenMode ? 'text-xs sm:text-sm' : 'text-[10px] sm:text-xs'
-            }`}>LAST UPDATE</div>
-            <div className={`font-mono font-black text-cyan-300 ${
-              isFullscreenMode ? 'text-sm sm:text-base lg:text-lg xl:text-xl' : 'text-xs sm:text-sm md:text-base'
-            }`}>
-              {currentTime || lineData.lastUpdate}
-            </div>
+          {/* Live Clock: YYYY.MM.DD HH:mm:ss */}
+          <div className="font-mono font-black text-base sm:text-lg md:text-xl text-white px-3 sm:px-4 py-1.5 bg-[#111111] border border-[#333333] rounded tabular-nums">
+            {currentTime || '2026.09.12 10:36:57'}
           </div>
         </div>
       </div>
 
-      {/* KPI METRIC CARDS ROW - flex-none */}
-      <div className="flex-none grid grid-cols-2 sm:grid-cols-5 gap-1.5 mb-1.5">
-        {/* Machine Status */}
-        <div className={`border rounded-lg py-1.5 px-2 text-center flex flex-col justify-center shadow-md transition-all ${
-          lineData.machineStatus === 'MAINTENANCE'
-            ? 'bg-amber-950/80 border-amber-500 animate-pulse ring-1 ring-amber-400/40'
-            : lineData.machineStatus === 'STOPPED'
-            ? 'bg-rose-950/90 border-rose-500 animate-pulse ring-1 ring-rose-500/50'
-            : 'bg-[#0E172A] border-slate-800/90'
-        }`}>
-          <div className={`font-sans font-bold tracking-wider text-slate-400 uppercase mb-0.5 ${
-            isFullscreenMode ? 'text-xs sm:text-sm' : 'text-[10px] sm:text-xs'
-          }`}>
-            {t.table.status}
+      {/* ========================================================= */}
+      {/* 2. SUB-HEADER: UNIFIED DARK THEME CONTROL BAR */}
+      {/* ========================================================= */}
+      <div className="flex-none bg-[#0a0a0a] text-white border-y border-[#262626] px-3 sm:px-4 py-1.5 sm:py-2 flex items-center justify-between gap-2 overflow-x-auto">
+        {/* Left Stats: Main Fin Die | Total | Today */}
+        <div className="flex items-center gap-3 sm:gap-6 flex-wrap min-w-0">
+          
+          {/* Box 1: Main Fin Die */}
+          <div className="flex items-center gap-2 border-r border-[#333333] pr-3 sm:pr-6 flex-shrink-0">
+            <span className="font-black text-[#facc15] text-sm sm:text-base md:text-lg uppercase tracking-wide">
+              MAIN FIN DIE
+            </span>
+            <span className="font-black text-white text-sm sm:text-base md:text-lg">
+              {dieNameDisplay}
+            </span>
           </div>
-          <div className={`flex items-center justify-center gap-1.5 font-black font-mono ${
-            isFullscreenMode ? 'text-base sm:text-lg md:text-xl lg:text-2xl' : 'text-sm sm:text-base md:text-lg'
-          }`}>
-            {lineData.machineStatus === 'RUNNING' && <span className="text-emerald-400 flex items-center gap-1">🟢 {t.controls.running}</span>}
-            {lineData.machineStatus === 'IDLE' && <span className="text-yellow-300 flex items-center gap-1">🟡 {t.controls.idle}</span>}
-            {lineData.machineStatus === 'MAINTENANCE' && <span className="text-amber-300 font-black flex items-center gap-1">🔧 {t.controls.maintenance}</span>}
-            {lineData.machineStatus === 'STOPPED' && <span className="text-rose-200 font-black flex items-center gap-1">🔴 {t.controls.stopped}</span>}
-            {(!lineData.machineStatus) && <span className="text-emerald-400 flex items-center gap-1">🟢 {t.controls.running}</span>}
+
+          {/* Box 2: Total */}
+          <div className="flex items-center gap-2 border-r border-[#333333] pr-3 sm:pr-6 flex-shrink-0">
+            <span className="text-xs sm:text-sm text-[#aaaaaa] font-bold">
+              Total
+            </span>
+            <span className="font-mono font-black text-white text-base sm:text-lg md:text-xl tabular-nums">
+              {formatShots(totalMachineShots)}
+            </span>
+          </div>
+
+          {/* Box 3: Today */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className="text-xs sm:text-sm text-[#aaaaaa] font-bold">
+              Today
+            </span>
+            <span className="font-mono font-black text-white text-base sm:text-lg md:text-xl tabular-nums">
+              {formatShots(todayMachineShots)}
+            </span>
           </div>
         </div>
 
-        {/* Machine Shot Total */}
-        <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg py-1.5 px-2 text-center shadow-md">
-          <div className={`font-sans font-bold tracking-wider text-slate-400 uppercase mb-0.5 ${
-            isFullscreenMode ? 'text-xs sm:text-sm' : 'text-[10px] sm:text-xs'
-          }`}>
-            {t.controls.totalShot}
+        {/* Right: Compact Shot Count Signal Standard & Auto Width (Right Aligned to Table Edge) */}
+        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 ml-auto">
+          <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-bold">
+            <span className="text-[#888888] font-bold uppercase hidden md:inline mr-0.5 text-[10px] sm:text-xs">
+              SIGNAL STANDARD:
+            </span>
+            <span className="px-2 py-0.5 bg-[#00ff00] text-black rounded font-black text-[10px] sm:text-xs whitespace-nowrap">
+              Normal
+            </span>
+            <span className="px-2 py-0.5 bg-[#ffff00] text-black rounded font-black text-[10px] sm:text-xs whitespace-nowrap">
+              Warning Replace Count
+            </span>
+            <span className="px-2 py-0.5 bg-[#f97316] text-white rounded font-black text-[10px] sm:text-xs whitespace-nowrap">
+              Prepare Replace Count
+            </span>
+            <span className="px-2 py-0.5 bg-[#ff0000] text-white rounded font-black text-[10px] sm:text-xs whitespace-nowrap">
+              Over Life Replace Count
+            </span>
           </div>
-          <div className={`text-emerald-400 font-black font-mono tracking-tight tabular-nums ${
-            isFullscreenMode ? 'text-base sm:text-xl md:text-2xl lg:text-3xl' : 'text-sm sm:text-base md:text-xl'
-          }`}>
-            {formatShots(lineData.machineShotTotal)} <span className="text-xs sm:text-sm font-bold text-emerald-500/80">Shot</span>
-          </div>
-        </div>
 
-        {/* Shift Shot */}
-        <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg py-1.5 px-2 text-center shadow-md">
-          <div className={`font-sans font-bold tracking-wider text-slate-400 uppercase mb-0.5 ${
-            isFullscreenMode ? 'text-xs sm:text-sm' : 'text-[10px] sm:text-xs'
-          }`}>
-            {t.controls.shiftShot}
-          </div>
-          <div className={`text-white font-black font-mono tabular-nums ${
-            isFullscreenMode ? 'text-base sm:text-xl md:text-2xl lg:text-3xl' : 'text-sm sm:text-base md:text-xl'
-          }`}>
-            {formatShots(lineData.shiftShot)} <span className="text-xs sm:text-sm font-bold text-slate-400">Shot</span>
-          </div>
-        </div>
-
-        {/* Daily Shot */}
-        <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg py-1.5 px-2 text-center shadow-md">
-          <div className={`font-sans font-bold tracking-wider text-slate-400 uppercase mb-0.5 ${
-            isFullscreenMode ? 'text-xs sm:text-sm' : 'text-[10px] sm:text-xs'
-          }`}>
-            {t.controls.dailyShot}
-          </div>
-          <div className={`text-white font-black font-mono tabular-nums ${
-            isFullscreenMode ? 'text-base sm:text-xl md:text-2xl lg:text-3xl' : 'text-sm sm:text-base md:text-xl'
-          }`}>
-            {formatShots(lineData.dailyShot)} <span className="text-xs sm:text-sm font-bold text-slate-400">Shot</span>
-          </div>
-        </div>
-
-        {/* Monthly Shot */}
-        <div className="bg-[#0E172A] border border-slate-800/90 rounded-lg py-1.5 px-2 text-center shadow-md">
-          <div className={`font-sans font-bold tracking-wider text-slate-400 uppercase mb-0.5 ${
-            isFullscreenMode ? 'text-xs sm:text-sm' : 'text-[10px] sm:text-xs'
-          }`}>
-            {t.controls.monthlyShot}
-          </div>
-          <div className={`text-cyan-300 font-black font-mono tabular-nums ${
-            isFullscreenMode ? 'text-base sm:text-xl md:text-2xl lg:text-3xl' : 'text-sm sm:text-base md:text-xl'
-          }`}>
-            {formatShots(lineData.monthlyShot)} <span className="text-xs sm:text-sm font-bold text-slate-400">Shot</span>
+          {/* Auto Width Button */}
+          <div className="flex items-center gap-2">
+            {/* Reset / Auto Width button */}
+            <button
+              type="button"
+              onClick={() => {
+                setColWidths(DEFAULT_TV_COL_WIDTHS);
+                localStorage.setItem('findie_tv_col_widths_v7_lg', JSON.stringify(DEFAULT_TV_COL_WIDTHS));
+              }}
+              className="px-2 sm:px-2.5 py-1 text-[10px] sm:text-xs font-bold text-slate-300 hover:text-white border border-[#444444] rounded bg-[#181818] hover:bg-[#252525] transition-colors cursor-pointer whitespace-nowrap"
+              title="Reset Columns"
+            >
+              Auto Width
+            </button>
           </div>
         </div>
       </div>
 
-      {/* TABLE SECTION TITLE - flex-none */}
-      <div className={`flex-none bg-[#0C1A33] border border-slate-800 text-center py-1 rounded-t-lg font-black tracking-wider text-cyan-200 uppercase font-sans flex items-center justify-between px-3 ${
-        isFullscreenMode ? 'text-sm sm:text-base lg:text-lg py-1.5' : 'text-xs sm:text-sm md:text-base'
-      }`}>
-        <span>FIN DIE PART LIFE MONITORING - LINE {selectedLineId}</span>
-        <span className="text-xs lg:text-sm font-mono text-slate-400 font-medium hidden sm:inline">{t.controls.clickStatusHint}</span>
-      </div>
-
-      {/* TV MAIN MONITORING CONTAINER (FLEX-1 AUTO-STRETCH TO FILL 100% SCREEN HEIGHT) */}
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-[#070F1E] border-x border-b border-slate-800/90 mb-1.5 rounded-b-lg shadow-inner table-container">
-        {/* Horizontal Scroll Wrapper to ensure crisp formatting without squishing or header overlap */}
+      {/* ========================================================= */}
+      {/* 3. MAIN TABLE: EXACT 8-COLUMN INDUSTRIAL MONITOR GRID */}
+      {/* ========================================================= */}
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-[#000000] table-container">
         <div className="w-full flex-1 flex flex-col min-h-0 overflow-x-auto custom-scrollbar">
-          <div className="min-w-[960px] w-full flex-1 flex flex-col min-h-0">
-            {/* Table Header Row (flex-none) */}
-            <div className={`flex-none bg-[#0B172E] border-b-2 border-slate-700 text-cyan-300 font-black uppercase flex items-center px-1.5 py-2 select-none relative tracking-wider font-mono ${
-              isFullscreenMode ? 'min-h-[44px] lg:min-h-[52px] text-xs sm:text-sm md:text-base lg:text-lg' : 'min-h-[38px] text-xs sm:text-sm md:text-base'
-            }`}>
-              <div className="h-full flex items-center justify-center flex-shrink-0 border-r border-slate-800/70 relative text-center leading-tight min-w-[40px] p-0.5" style={{ width: `${colWidths.no}%` }}>
-                <span className="break-words drop-shadow-sm">{t.table.no}</span>
-                <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'no')} />
+          <div className="min-w-[1000px] w-full flex-1 flex flex-col min-h-0">
+            
+            {/* Table Header: Pure Dark Theme matching top bar, bold white text, clear border (ALL HEADERS CENTERED) */}
+            <div className="flex-none bg-[#14161a] text-white font-black flex items-center select-none relative text-xs sm:text-sm md:text-base lg:text-lg border-b-2 border-[#282828] min-h-[46px] sm:min-h-[52px] md:min-h-[58px]">
+              
+              {/* Col 1: Stage Punch / Die (centered) */}
+              <div 
+                className="h-full flex items-center justify-center text-center px-1.5 sm:px-2 border-r border-[#282828] flex-shrink-0 relative"
+                style={{ width: `${colWidths.stage}%` }}
+              >
+                <span className="truncate">Stage Punch / Die</span>
+                <div 
+                  className="absolute right-0 top-0 bottom-0 w-3 cursor-col-resize hover:bg-white/50 z-20" 
+                  onMouseDown={(e) => handleResizeStart(e, 'stage')} 
+                  title="Drag to resize column"
+                />
               </div>
-              <div className="h-full flex items-center justify-start px-2 sm:px-3 font-sans border-r border-slate-800/70 flex-shrink-0 relative leading-tight min-w-[140px] p-0.5" style={{ width: `${colWidths.stage}%` }}>
-                <span className="break-words drop-shadow-sm">{t.table.partName}</span>
-                <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'stage')} />
+
+              {/* Col 2: Replacement Count (centered) */}
+              <div 
+                className="h-full flex items-center justify-center text-center px-1.5 sm:px-2 border-r border-[#282828] flex-shrink-0 relative"
+                style={{ width: `${colWidths.replacement}%` }}
+              >
+                <span className="truncate">Replacement Count</span>
+                <div 
+                  className="absolute right-0 top-0 bottom-0 w-3 cursor-col-resize hover:bg-white/50 z-20" 
+                  onMouseDown={(e) => handleResizeStart(e, 'replacement')} 
+                  title="Drag to resize column"
+                />
               </div>
-              <div className="h-full flex items-center justify-end px-2 sm:px-3 border-r border-slate-800/70 flex-shrink-0 relative text-right leading-tight min-w-[85px] p-0.5" style={{ width: `${colWidths.lifeLimit}%` }}>
-                <span className="break-words drop-shadow-sm">{t.table.limit}</span>
-                <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'lifeLimit')} />
+
+              {/* Col 3: Shot Count (centered) */}
+              <div 
+                className="h-full flex items-center justify-center text-center px-1.5 sm:px-2 border-r border-[#282828] flex-shrink-0 relative"
+                style={{ width: `${colWidths.shot}%` }}
+              >
+                <span className="truncate">Shot Count</span>
+                <div 
+                  className="absolute right-0 top-0 bottom-0 w-3 cursor-col-resize hover:bg-white/50 z-20" 
+                  onMouseDown={(e) => handleResizeStart(e, 'shot')} 
+                  title="Drag to resize column"
+                />
               </div>
-              <div className="h-full flex items-center justify-end px-2 sm:px-3 border-r border-slate-800/70 flex-shrink-0 relative text-right leading-tight min-w-[90px] p-0.5" style={{ width: `${colWidths.currentShot}%` }}>
-                <span className="break-words drop-shadow-sm">{t.table.current}</span>
-                <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'currentShot')} />
+
+              {/* Col 4: Progress (centered) */}
+              <div 
+                className="h-full flex items-center justify-center text-center px-1 sm:px-2 border-r border-[#282828] flex-shrink-0 relative"
+                style={{ width: `${colWidths.progress}%` }}
+              >
+                <span className="truncate">Progress</span>
+                <div 
+                  className="absolute right-0 top-0 bottom-0 w-3 cursor-col-resize hover:bg-white/50 z-20" 
+                  onMouseDown={(e) => handleResizeStart(e, 'progress')} 
+                  title="Drag to resize column"
+                />
               </div>
-              <div className="h-full flex items-center justify-center px-1.5 sm:px-2 border-r border-slate-800/70 flex-shrink-0 relative text-center leading-tight min-w-[70px] p-0.5" style={{ width: `${colWidths.usage}%` }}>
-                <span className="break-words drop-shadow-sm">{t.table.usage}</span>
-                <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'usage')} />
+
+              {/* Col 5: Life Time (Days) (centered) */}
+              <div 
+                className="h-full flex items-center justify-center text-center px-1.5 sm:px-2 border-r border-[#282828] flex-shrink-0 relative"
+                style={{ width: `${colWidths.lifetime}%` }}
+              >
+                <span className="truncate">Life Time (Days)</span>
+                <div 
+                  className="absolute right-0 top-0 bottom-0 w-3 cursor-col-resize hover:bg-white/50 z-20" 
+                  onMouseDown={(e) => handleResizeStart(e, 'lifetime')} 
+                  title="Drag to resize column"
+                />
               </div>
-              <div className="h-full flex items-center justify-end px-2 sm:px-3 border-r border-slate-800/70 flex-shrink-0 relative text-right leading-tight min-w-[90px] p-0.5" style={{ width: `${colWidths.remaining}%` }}>
-                <span className="break-words drop-shadow-sm">{t.table.remain}</span>
-                <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'remaining')} />
+
+              {/* Col 6: Install Qty. (centered) */}
+              <div 
+                className="h-full flex items-center justify-center text-center px-1 sm:px-2 border-r border-[#282828] flex-shrink-0 relative"
+                style={{ width: `${colWidths.installQty}%` }}
+              >
+                <span className="truncate">Install Qty.</span>
+                <div 
+                  className="absolute right-0 top-0 bottom-0 w-3 cursor-col-resize hover:bg-white/50 z-20" 
+                  onMouseDown={(e) => handleResizeStart(e, 'installQty')} 
+                  title="Drag to resize column"
+                />
               </div>
-              <div className="h-full flex items-center justify-center px-1.5 sm:px-2 border-r border-slate-800/70 flex-shrink-0 relative text-center leading-tight min-w-[90px] p-0.5" style={{ width: `${colWidths.progress}%` }}>
-                <span className="break-words drop-shadow-sm">{t.table.progress}</span>
-                <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'progress')} />
+
+              {/* Col 7: Stock Qty. (centered) */}
+              <div 
+                className="h-full flex items-center justify-center text-center px-1 sm:px-2 border-r border-[#282828] flex-shrink-0 relative"
+                style={{ width: `${colWidths.stockQty}%` }}
+              >
+                <span className="truncate">Stock Qty.</span>
+                <div 
+                  className="absolute right-0 top-0 bottom-0 w-3 cursor-col-resize hover:bg-white/50 z-20" 
+                  onMouseDown={(e) => handleResizeStart(e, 'stockQty')} 
+                  title="Drag to resize column"
+                />
               </div>
-              <div className="h-full flex items-center justify-end px-2 sm:px-3 border-r border-slate-800/70 flex-shrink-0 relative text-right leading-tight min-w-[90px] p-0.5" style={{ width: `${colWidths.lastChange}%` }}>
-                <span className="break-words drop-shadow-sm">{t.table.lastChange}</span>
-                <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'lastChange')} />
+
+              {/* Col 8: Order Require (centered) */}
+              <div 
+                className="h-full flex items-center justify-center text-center px-1 sm:px-2 flex-shrink-0 relative"
+                style={{ width: `${colWidths.orderRequire}%` }}
+              >
+                <span className="truncate">Order Require</span>
+                <div 
+                  className="absolute right-0 top-0 bottom-0 w-3 cursor-col-resize hover:bg-white/50 z-20" 
+                  onMouseDown={(e) => handleResizeStart(e, 'orderRequire')} 
+                  title="Drag to resize column"
+                />
               </div>
-              <div className="h-full flex items-center justify-center px-1.5 sm:px-2 border-r border-slate-800/70 flex-shrink-0 relative text-center leading-tight min-w-[60px] p-0.5" style={{ width: `${colWidths.installQty}%` }}>
-                <span className="break-words drop-shadow-sm">{t.table.installed}</span>
-                <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'installQty')} />
-              </div>
-              <div className="h-full flex items-center justify-center px-1.5 sm:px-2 border-r border-slate-800/70 flex-shrink-0 relative text-center leading-tight min-w-[60px] p-0.5" style={{ width: `${colWidths.spareQty}%` }}>
-                <span className="break-words drop-shadow-sm">{t.table.spare}</span>
-                <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'spareQty')} />
-              </div>
-              <div className="h-full flex items-center justify-center px-1.5 sm:px-2 flex-shrink-0 relative text-center leading-tight min-w-[80px] p-0.5" style={{ width: `${colWidths.status}%` }}>
-                <span className="break-words drop-shadow-sm">{t.table.status}</span>
-                <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 z-10" onMouseDown={(e) => handleResizeStart(e, 'status')} />
-              </div>
+
             </div>
 
-            {/* Table Rows Body (Flex-1 Evenly Distributed Fill Vertical Height) */}
-            <div className="flex-1 flex flex-col justify-between min-h-0 divide-y divide-slate-800/80 overflow-y-auto custom-scrollbar">
+            {/* Table Rows Body: solid background, dynamic flex distribution */}
+            <div className="flex-1 flex flex-col justify-between min-h-0 overflow-hidden bg-[#000000]">
               {items.map((item, idx) => (
                 <TvTableRow
                   key={item.slotId || item.partCode || idx}
@@ -570,129 +551,177 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
                 />
               ))}
             </div>
+
           </div>
         </div>
       </div>
 
-      {/* BOTTOM MARQUEE / ALERT BANNER - flex-none */}
-      <div className={`flex-none bg-[#2E0909] border border-red-700/80 rounded-lg flex items-center overflow-hidden font-mono shadow-md ${
-        isFullscreenMode ? 'py-1 lg:py-1.5' : ''
-      }`}>
-        <div className={`bg-red-600 text-white font-black px-3 py-1.5 flex items-center gap-1.5 uppercase flex-shrink-0 tracking-wider ${
-          isFullscreenMode ? 'text-xs sm:text-sm lg:text-base' : 'text-xs sm:text-sm'
-        }`}>
-          <AlertTriangle className="w-4 h-4 fill-white text-red-600" />
-          <span>ALERT</span>
+      {/* ========================================================= */}
+      {/* 4. BOTTOM BAR: LINE SELECTOR BAR (HE1 - HE5) */}
+      {/* ========================================================= */}
+      <div className="flex-none bg-[#000000] border-t border-[#222222] px-3 py-1.5 flex items-center justify-between gap-2 overflow-x-auto">
+        {/* Left: Line Selection Buttons (E1 - E5) with Subtag matching Part Master */}
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+          {linesList.map((lineId) => {
+            const isSelected = selectedLineId === lineId;
+            const label = getLineLabel(lineId);
+            const subTag = lineId === 'E1' ? 'Ø7 Slit' :
+                           lineId === 'E2' ? 'Ø5 Slit' :
+                           lineId === 'E4' ? 'Ø5 Slit' :
+                           lineId === 'E5' ? 'Ø5 Slit' : '';
+            return (
+              <button
+                key={lineId}
+                type="button"
+                onClick={() => {
+                  setSelectedLineId(lineId);
+                  setCountdown(autoCycleInterval);
+                }}
+                className={`px-2.5 py-1 text-xs font-mono font-bold rounded transition-all cursor-pointer flex items-center gap-1.5 ${
+                  isSelected
+                    ? 'bg-[#00ff00] text-black border border-[#00dd00] shadow-[0_0_10px_rgba(0,255,0,0.85)] font-black'
+                    : 'bg-[#181818] text-white hover:bg-[#282828] border border-[#444444]'
+                }`}
+              >
+                <span>{label}</span>
+                {subTag && (
+                  <span className={`text-[10px] px-1 py-0.2 rounded font-sans font-bold ${
+                    isSelected ? 'bg-black text-[#00ff00]' : 'bg-[#2a2a2a] text-slate-300'
+                  }`}>
+                    {subTag}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
-        <div className={`px-3 py-1.5 text-red-100 font-black truncate flex-1 tracking-wide ${
-          isFullscreenMode ? 'text-xs sm:text-sm md:text-base lg:text-lg' : 'text-xs sm:text-sm md:text-base'
-        }`}>
-          {dynamicTickerMessage}
+
+        {/* Right side Bottom-Right Auto Cycle Controls (Single unified location) */}
+        <div className="flex items-center gap-2">
+          {/* Timer Interval selector buttons */}
+          <div className="flex items-center gap-0.5 bg-[#141414] border border-[#444444] rounded p-0.5">
+            {[5, 10, 15, 20].map((sec) => (
+              <button
+                key={sec}
+                type="button"
+                onClick={() => {
+                  setAutoCycleInterval(sec);
+                  setCountdown(sec);
+                }}
+                className={`px-1.5 py-1 text-[10px] sm:text-xs font-bold font-mono rounded transition-colors cursor-pointer ${
+                  autoCycleInterval === sec
+                    ? 'bg-[#ffcc00] text-black font-black'
+                    : 'text-slate-400 hover:text-white hover:bg-[#252525]'
+                }`}
+              >
+                {sec}s
+              </button>
+            ))}
+          </div>
+
+          {/* Single Auto Cycle Toggle & Status Button */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsAutoCycleActive(prev => !prev);
+              setCountdown(autoCycleInterval);
+            }}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono font-bold rounded transition-all cursor-pointer ${
+              isAutoCycleActive
+                ? 'bg-[#182818] border-2 border-[#00ff00] text-[#00ff00] shadow-[0_0_12px_rgba(0,255,0,0.6)] animate-pulse'
+                : 'bg-[#181818] hover:bg-[#252525] border border-[#555555] text-slate-300 hover:text-white'
+            }`}
+            title="Toggle Auto Cycle lines"
+          >
+            {isAutoCycleActive ? (
+              <>
+                <RotateCw className="w-4 h-4 animate-spin text-[#00ff00]" />
+                <span className="font-black">AUTO CYCLING LINES ({countdown}s)</span>
+              </>
+            ) : (
+              <>
+                <Play className="w-3.5 h-3.5 text-[#00ff00] fill-current" />
+                <span>AUTO CYCLE: OFF</span>
+              </>
+            )}
+          </button>
         </div>
       </div>
 
-      {/* ITEM STATUS & WARNING DETAIL MODAL */}
+      {/* ========================================================= */}
+      {/* 5. PART DETAILS MODAL */}
+      {/* ========================================================= */}
       {selectedModalItem && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0B172E] border-2 border-cyan-500/80 rounded-xl shadow-2xl max-w-xl w-full p-5 text-slate-100 font-sans space-y-4 relative">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#181818] border-2 border-[#555555] text-white rounded-lg p-5 max-w-xl w-full space-y-4 shadow-2xl relative font-mono">
             <button
+              type="button"
               onClick={() => setSelectedModalItem(null)}
-              className="absolute top-3 right-3 text-slate-400 hover:text-white bg-slate-800 p-1.5 rounded-full"
+              className="absolute top-3 right-3 text-gray-400 hover:text-white bg-[#282828] p-1.5 rounded-full"
             >
               <X className="w-5 h-5" />
             </button>
 
-            <div className="flex items-center gap-3 border-b border-slate-800 pb-3">
-              <div className="p-3 rounded-lg bg-cyan-950 border border-cyan-500/40 text-cyan-400">
-                <AlertTriangle className="w-6 h-6" />
-              </div>
-              <div>
-                <span className="text-xs font-mono font-bold text-cyan-400 uppercase tracking-widest">
-                  LINE {selectedLineId} • PART STATUS DETAILS
-                </span>
-                <h3 className="text-lg sm:text-xl font-bold text-white leading-tight">
-                  {selectedModalItem.stagePunchDie || selectedModalItem.partName}
-                </h3>
-              </div>
+            <div className="border-b border-[#333333] pb-2">
+              <span className="text-xs text-[#00ff00] font-bold tracking-widest uppercase">
+                {lineDisplayName} • STAGE SPECIFICATIONS
+              </span>
+              <h3 className="text-xl font-black text-white mt-1">
+                {selectedModalItem.stagePunchDie || selectedModalItem.partName}
+              </h3>
             </div>
 
-            {/* Metrics Breakdown Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 font-mono text-xs">
-              <div className="bg-slate-900/90 p-2.5 rounded border border-slate-800">
-                <div className="text-slate-400 text-[10px]">CURRENT SHOT</div>
-                <div className="text-base font-bold text-cyan-300 mt-0.5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
+              <div className="bg-[#242424] p-2.5 rounded border border-[#444444]">
+                <div className="text-gray-400 text-[10px]">REPLACEMENT COUNT</div>
+                <div className="text-base font-bold text-white mt-0.5">
+                  {selectedModalItem.lifeLimit > 0 ? formatShots(selectedModalItem.lifeLimit) : '-'}
+                </div>
+              </div>
+
+              <div className="bg-[#242424] p-2.5 rounded border border-[#444444]">
+                <div className="text-gray-400 text-[10px]">SHOT COUNT</div>
+                <div className="text-base font-bold text-[#00ff00] mt-0.5">
                   {formatShots(selectedModalItem.usedShot !== undefined ? selectedModalItem.usedShot : selectedModalItem.currentShot)}
                 </div>
               </div>
 
-              <div className="bg-slate-900/90 p-2.5 rounded border border-slate-800">
-                <div className="text-slate-400 text-[10px]">LIFE LIMIT</div>
-                <div className="text-base font-bold text-slate-200 mt-0.5">
-                  {selectedModalItem.lifeLimit > 0 ? formatShots(selectedModalItem.lifeLimit) : 'NO STD'}
-                </div>
-              </div>
-
-              <div className="bg-slate-900/90 p-2.5 rounded border border-slate-800">
-                <div className="text-slate-400 text-[10px]">REMAINING SHOT</div>
-                <div className={`text-base font-bold mt-0.5 ${selectedModalItem.remainingShot < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                  {formatShots(selectedModalItem.remainingShot)}
-                </div>
-              </div>
-
-              <div className="bg-slate-900/90 p-2.5 rounded border border-slate-800">
-                <div className="text-slate-400 text-[10px]">USAGE RATE</div>
-                <div className="text-base font-bold text-amber-300 mt-0.5">
+              <div className="bg-[#242424] p-2.5 rounded border border-[#444444]">
+                <div className="text-gray-400 text-[10px]">PROGRESS</div>
+                <div className="text-base font-bold text-yellow-300 mt-0.5">
                   {selectedModalItem.usagePercent}%
                 </div>
               </div>
 
-              <div className="bg-slate-900/90 p-2.5 rounded border border-slate-800">
-                <div className="text-slate-400 text-[10px]">INSTALL QTY</div>
-                <div className="text-base font-bold text-slate-200 mt-0.5">
+              <div className="bg-[#242424] p-2.5 rounded border border-[#444444]">
+                <div className="text-gray-400 text-[10px]">LIFE TIME (DAYS)</div>
+                <div className="text-base font-bold text-white mt-0.5">
+                  {selectedModalItem.daysRemainingForecast || 31} Days
+                </div>
+              </div>
+
+              <div className="bg-[#242424] p-2.5 rounded border border-[#444444]">
+                <div className="text-gray-400 text-[10px]">INSTALL QTY.</div>
+                <div className="text-base font-bold text-white mt-0.5">
                   {selectedModalItem.installQty} Pcs
                 </div>
               </div>
 
-              <div className="bg-slate-900/90 p-2.5 rounded border border-slate-800">
-                <div className="text-slate-400 text-[10px]">SPARE STOCK</div>
-                <div className="text-base font-bold text-emerald-300 mt-0.5">
+              <div className="bg-[#242424] p-2.5 rounded border border-[#444444]">
+                <div className="text-gray-400 text-[10px]">STOCK QTY.</div>
+                <div className="text-base font-bold text-white mt-0.5">
                   {selectedModalItem.availableSpare !== undefined ? selectedModalItem.availableSpare : selectedModalItem.backupQty} Pcs
                 </div>
               </div>
-            </div>
-
-            {/* Status Recommendation Box */}
-            <div className={`p-3.5 rounded-lg border text-xs leading-relaxed ${
-              selectedModalItem.usagePercent >= 100
-                ? 'bg-red-950/60 border-red-600 text-red-200'
-                : selectedModalItem.usagePercent >= 90
-                ? 'bg-rose-950/60 border-rose-600 text-rose-200'
-                : selectedModalItem.usagePercent >= 80
-                ? 'bg-amber-950/60 border-amber-600 text-amber-200'
-                : 'bg-emerald-950/60 border-emerald-600 text-emerald-200'
-            }`}>
-              <div className="font-bold font-mono text-sm uppercase mb-1 flex items-center gap-1.5">
-                <Info className="w-4 h-4" />
-                <span>คำแนะนำการบำรุงรักษาและการเปลี่ยนชิ้นส่วน (RECOMMENDED ACTION)</span>
-              </div>
-              {selectedModalItem.usagePercent >= 100 ? (
-                <p>⚠️ **เกินกำหนดอายุมาตรฐาน (OVER LIFE)**: ชิ้นส่วนนี้ใช้งานครบกำหนดแล้ว ควรดำเนินการเปลี่ยนชิ้นส่วนใหม่ทันที เพื่อป้องกันครีบฟินไม่ได้มาตรฐาน (Fin Defect) หรือ Die เสียหาย</p>
-              ) : selectedModalItem.usagePercent >= 90 ? (
-                <p>🚨 **วิกฤต (CRITICAL ≥ 90%)**: ชิ้นส่วนอยู่ในช่วงวิกฤตใกล้หมดอายุ โปรดเตรียมอะไหล่สำรองและวางแผนเปลี่ยนชิ้นส่วนในรอบ Maintenance ถัดไป</p>
-              ) : selectedModalItem.usagePercent >= 80 ? (
-                <p>⚠️ **เตรียมตัว (PREPARE ≥ 80%)**: ชิ้นส่วนเริ่มมีความเสื่อมสภาพ ตรวจสอบสต็อกอะไหล่สำรองเพื่อความพร้อมในการผลิต</p>
-              ) : (
-                <p>✅ **ปกติ (NORMAL)**: ชิ้นส่วนทำงานอยู่ในเกณฑ์มาตรฐาน ไม่พบความผิดปกติ</p>
-              )}
             </div>
 
             <div className="flex justify-end pt-2">
               <button
                 type="button"
                 onClick={() => setSelectedModalItem(null)}
-                className="px-5 py-2 rounded bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold font-mono text-xs transition-colors"
+                className="px-5 py-2 rounded bg-[#00dd00] hover:bg-[#00ee00] text-black font-bold font-mono text-xs transition-colors"
               >
-                ปิดหน้าต่าง (CLOSE)
+                CLOSE
               </button>
             </div>
           </div>
@@ -702,3 +731,4 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
     </div>
   );
 };
+

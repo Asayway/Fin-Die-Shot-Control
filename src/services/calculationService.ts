@@ -1,3 +1,4 @@
+import { storageService } from "./storageService";
 import {
   AlertSeverity,
   LifeStatus,
@@ -45,12 +46,14 @@ export function findMatchingLifeStandard(
     return null;
   }
 
+  const validStandards = standards.filter((s): s is PartLifeStandard => !!s && !!s.configKey);
+
   // 1. Exact Match
-  const exact = standards.find(
+  const exact = validStandards.find(
     s =>
       s.configKey.lineId === activeConfig.lineId &&
       s.configKey.dieCode === activeConfig.dieCode &&
-      s.configKey.material.toUpperCase() === activeConfig.material.toUpperCase() &&
+      s.configKey.material?.toUpperCase() === activeConfig.material?.toUpperCase() &&
       s.configKey.tubeSize === activeConfig.tubeSize &&
       s.configKey.partCode === partCode &&
       (s.configKey.position === position || s.configKey.position === 'ALL')
@@ -58,25 +61,25 @@ export function findMatchingLifeStandard(
   if (exact) return exact;
 
   // 2. Generic line match
-  const genericLine = standards.find(
+  const genericLine = validStandards.find(
     s =>
       (s.configKey.lineId === 'ALL' || s.configKey.lineId === activeConfig.lineId) &&
-      s.configKey.material.toUpperCase() === activeConfig.material.toUpperCase() &&
+      s.configKey.material?.toUpperCase() === activeConfig.material?.toUpperCase() &&
       s.configKey.tubeSize === activeConfig.tubeSize &&
       s.configKey.partCode === partCode
   );
   if (genericLine) return genericLine;
 
   // 3. Fallback on partCode + material
-  const partMaterialMatch = standards.find(
+  const partMaterialMatch = validStandards.find(
     s =>
       s.configKey.partCode === partCode &&
-      s.configKey.material.toUpperCase() === activeConfig.material.toUpperCase()
+      s.configKey.material?.toUpperCase() === activeConfig.material?.toUpperCase()
   );
   if (partMaterialMatch) return partMaterialMatch;
 
   // 4. Any standard for this part
-  return standards.find(s => s.configKey.partCode === partCode) || null;
+  return validStandards.find(s => s.configKey.partCode === partCode) || null;
 }
 
 /**
@@ -95,13 +98,21 @@ export function determineLifeStatus(
   isDataError: boolean = false
 ): LifeStatus {
   if (isDataError) return 'DATA_ERROR';
+  
   if (isStandardMissing || usagePercent === null || usagePercent === undefined || isNaN(usagePercent)) {
     return 'STANDARD_MISSING';
   }
+
+  const settings = storageService.getSettings();
+  const warningTh = settings?.warningThresholdPercent ?? 70;
+  const prepareTh = settings?.prepareThresholdPercent ?? 85;
+  const criticalTh = settings?.criticalThresholdPercent ?? 95;
+
   if (usagePercent >= 100) return 'OVER_LIFE';
-  if (usagePercent >= 95) return 'CRITICAL';
-  if (usagePercent >= 85) return 'PREPARE';
-  if (usagePercent >= 70) return 'WARNING';
+  if (usagePercent >= criticalTh) return 'CRITICAL';
+  if (usagePercent >= prepareTh) return 'PREPARE';
+  if (usagePercent >= warningTh) return 'WARNING';
+  
   return 'NORMAL';
 }
 
@@ -260,6 +271,7 @@ export function calculatePartMetrics(
     shotAtLastChange?: number;
     regrindCount?: number;
     totalMmGround?: number;
+    lifeLimit?: number;
   },
   activeConfig: LineActiveConfiguration | null,
   standards: PartLifeStandard[],
@@ -272,45 +284,16 @@ export function calculatePartMetrics(
   // Baseline data validation (negative shots or corrupted integers)
   const isDataError = isNaN(usedShotVal) || usedShotVal < 0 || isNaN(shotAtLastChangeVal);
 
-  if (!activeConfig) {
-    return {
-      slotId: part.slotId,
-      partCode: part.partCode,
-      partName: part.partName,
-      stagePunchDie: part.stagePunchDie,
-      position: part.position,
-      installQty: part.installQty,
-      backupQty: part.backupQty || 0,
-      availableSpare: part.backupQty || 0,
-      lifeLimit: 0,
-      currentShot: usedShotVal,
-      usedShot: usedShotVal,
-      lastChangeShot: shotAtLastChangeVal,
-      shotAtLastChange: shotAtLastChangeVal,
-      usagePercent: 0,
-      remainingShot: 0,
-      regrindCount: part.regrindCount || 0,
-      totalMmGround: part.totalMmGround || 0,
-      maxRegrindCount: 0,
-      regrindSpec: 'CONFIGURATION MISSING',
-      lifeStatus: 'STANDARD_MISSING',
-      stockStatus: 'STOCK_DATA_MISSING',
-      orderStatus: 'NOT REQUIRED',
-      alertStatus: 'STANDARD_MISSING',
-      configKeyString: 'CONFIGURATION MISSING',
-      isConfigMissing: true,
-      isDataError
-    };
-  }
-
-  const standard = findMatchingLifeStandard(standards, activeConfig, part.partCode, part.position);
+  const standard = activeConfig ? findMatchingLifeStandard(standards, activeConfig, part.partCode, part.position) : null;
   const stock = stockItems.find(s => s.partCode === part.partCode);
   const availableSpare = stock ? stock.currentStockQty : (part.backupQty || 0);
   const stockStatus = determineStockStatus(stock, part.installQty);
   const orderStatus = stock ? stock.orderStatus : 'NOT REQUIRED';
   const etaDeliveryDate = stock?.poEtaDate;
 
-  if (!standard || standard.lifeLimitShots <= 0) {
+  const resolvedLifeLimit = standard?.lifeLimitShots || part.lifeLimit || 0;
+
+  if (resolvedLifeLimit <= 0) {
     return {
       slotId: part.slotId,
       partCode: part.partCode,
@@ -330,12 +313,12 @@ export function calculatePartMetrics(
       regrindCount: part.regrindCount || 0,
       totalMmGround: part.totalMmGround || 0,
       maxRegrindCount: 0,
-      regrindSpec: 'STANDARD MISSING',
+      regrindSpec: !activeConfig ? 'CONFIGURATION MISSING' : 'STANDARD MISSING',
       lifeStatus: isDataError ? 'DATA_ERROR' : 'STANDARD_MISSING',
       stockStatus,
       orderStatus,
       alertStatus: isDataError ? 'DATA_ERROR' : 'STANDARD_MISSING',
-      configKeyString: generateCompositeKey({
+      configKeyString: activeConfig ? generateCompositeKey({
         lineId: activeConfig.lineId,
         configurationId: activeConfig.id,
         dieCode: activeConfig.dieCode,
@@ -346,19 +329,16 @@ export function calculatePartMetrics(
         partCode: part.partCode,
         position: part.position,
         effectiveDate: activeConfig.effectiveFrom
-      }),
+      }) : 'CONFIGURATION MISSING',
       isStandardMissing: true,
+      isConfigMissing: !activeConfig,
       isDataError
     };
   }
 
-  const lifeLimit = standard.lifeLimitShots;
-  // Central Part Life Calculations:
-  // usedShot = accumulated shot during active installation
-  // remainingShot = lifeLimit - usedShot
-  // usagePercent = (usedShot / lifeLimit) * 100
-  const remainingShot = lifeLimit - usedShotVal;
-  const usagePercent = Math.round((usedShotVal / lifeLimit) * 100);
+  const lifeLimit = resolvedLifeLimit;
+  const remainingShot = Math.max(0, lifeLimit - usedShotVal);
+  const usagePercent = Math.min(100, Math.round((usedShotVal / lifeLimit) * 100));
   const lifeStatus = determineLifeStatus(usagePercent, false, isDataError);
   const alertStatus = lifeStatus;
 
@@ -379,15 +359,17 @@ export function calculatePartMetrics(
     }
   }
 
-  const regrindSpec = standard.regrindStandard?.disposeAfterUse
+  const regrindSpec = standard?.regrindStandard?.disposeAfterUse
     ? 'Dispose after 1 use'
-    : `${standard.regrindStandard?.oneTimeRegrindMm || '0.10'} mm (Max ${(Number(standard.regrindStandard?.totalRegrindMm) || 1.5).toFixed(2)} mm)`;
+    : standard?.regrindStandard
+      ? `${standard.regrindStandard?.oneTimeRegrindMm || '0.10'} mm (Max ${(Number(standard.regrindStandard?.totalRegrindMm) || 1.5).toFixed(2)} mm)`
+      : 'Standard specification';
 
   return {
     slotId: part.slotId,
     partCode: part.partCode,
-    partName: standard.partName || part.partName,
-    stagePunchDie: standard.stagePunchDie || part.stagePunchDie,
+    partName: standard?.partName || part.partName,
+    stagePunchDie: standard?.stagePunchDie || part.stagePunchDie,
     position: part.position,
     installQty: part.installQty,
     backupQty: availableSpare,
@@ -401,7 +383,7 @@ export function calculatePartMetrics(
     remainingShot,
     regrindCount: part.regrindCount || 0,
     totalMmGround: part.totalMmGround || 0,
-    maxRegrindCount: standard.regrindStandard?.maxRegrindCount || 0,
+    maxRegrindCount: standard?.regrindStandard?.maxRegrindCount || 0,
     regrindSpec,
     lifeStatus,
     stockStatus,
@@ -410,7 +392,18 @@ export function calculatePartMetrics(
     etaDeliveryDate,
     deliveryRiskDays,
     daysRemainingForecast,
-    configKeyString: standard.compositeKeyString,
+    configKeyString: standard?.compositeKeyString || (activeConfig ? generateCompositeKey({
+      lineId: activeConfig.lineId,
+      configurationId: activeConfig.id,
+      dieCode: activeConfig.dieCode,
+      finType: activeConfig.finType,
+      material: activeConfig.material,
+      thicknessMm: activeConfig.thicknessMm,
+      tubeSize: activeConfig.tubeSize,
+      partCode: part.partCode,
+      position: part.position,
+      effectiveDate: activeConfig.effectiveFrom
+    }) : 'STANDARD_DEFAULT'),
     isDataError
   };
 }

@@ -1,4 +1,5 @@
 import { getMoldTypeForLine, getStagesForMoldType } from "../utils/moldMatrixUtils";
+import { deriveLogicalStage } from "../utils/stageUtils";
 import {
   LineLiveMonitoringData,
   LineActiveConfiguration,
@@ -85,7 +86,8 @@ const STORAGE_KEYS = {
   OFFLINE_BUFFER: 'fin_press_offline_buffer',
   POSITION_LOCKS: 'fin_press_position_locks',
   DOWNTIME_LOGS: 'fin_press_downtime_logs',
-  SEED_INITIALIZED: 'fin_press_seed_init_v7'
+  ACTIVE_E3_FIN_DIE: 'fin_press_active_e3_fin_die',
+  SEED_INITIALIZED: 'fin_press_seed_init_v9'
 };
 
 type Listener = () => void;
@@ -105,12 +107,14 @@ class StorageService {
   }
 
   private notify() {
-    this.listeners.forEach(fn => {
-      try {
-        fn();
-      } catch (err) {
-        console.error('Storage listener error:', err);
-      }
+    queueMicrotask(() => {
+      this.listeners.forEach(fn => {
+        try {
+          fn();
+        } catch (err) {
+          console.error('Storage listener error:', err);
+        }
+      });
     });
   }
 
@@ -283,7 +287,11 @@ class StorageService {
   }
 
   public getPartMasters(): PartMaster[] {
-    return JSON.parse(localStorage.getItem(STORAGE_KEYS.PART_MASTERS) || '[]');
+    const raw: PartMaster[] = JSON.parse(localStorage.getItem(STORAGE_KEYS.PART_MASTERS) || '[]');
+    return raw.map(pm => ({
+      ...pm,
+      stageName: deriveLogicalStage(pm.partName, pm.stageName)
+    }));
   }
 
   public savePartMaster(part: PartMaster): void {
@@ -360,6 +368,41 @@ class StorageService {
     this.notify();
   }
 
+  public renameStageGroup(oldStageName: string, newStageName: string): void {
+    const list = this.getPartMasters();
+    let updatedCount = 0;
+    list.forEach(p => {
+      if (p.stageName === oldStageName) {
+        p.stageName = newStageName;
+        updatedCount++;
+      }
+    });
+    if (updatedCount > 0) {
+      localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(list));
+      
+      // Also update Life Standards
+      const lifeStds = this.getLifeStandards();
+      lifeStds.forEach(std => {
+        if (std.stagePunchDie === oldStageName) {
+          std.stagePunchDie = newStageName;
+        }
+      });
+      localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(lifeStds));
+
+      // Also update Regrind Standards
+      const regrindStds = this.getRegrindMasterStandards();
+      regrindStds.forEach(std => {
+        if (std.stagePunchDie === oldStageName) {
+          std.stagePunchDie = newStageName;
+        }
+      });
+      localStorage.setItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(regrindStds));
+
+      this.addAuditLog('SYSTEM', `Renamed Stage Group from "${oldStageName}" to "${newStageName}" across ${updatedCount} parts`);
+      this.notify();
+    }
+  }
+
   public deletePartMaster(partCode: string): void {
     const list = this.getPartMasters();
     const idx = list.findIndex(p => p.partCode === partCode);
@@ -397,6 +440,12 @@ class StorageService {
     return JSON.parse(localStorage.getItem(STORAGE_KEYS.LINE_CONFIGS) || '[]');
   }
 
+  public saveLineConfigs(configs: LineActiveConfiguration[]): void {
+    localStorage.setItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
+    this.addAuditLog('CONFIGURATION', `Updated ${configs.length} Line Active Configurations & Install Quantities`);
+    this.notify();
+  }
+
   public getLifeStandards(): PartLifeStandard[] {
     const raw = localStorage.getItem(STORAGE_KEYS.LIFE_STANDARDS);
     if (!raw) {
@@ -406,7 +455,15 @@ class StorageService {
     try {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        return parsed.filter(Boolean).map(std => ({
+          ...std,
+          regrindStandard: std.regrindStandard || {
+            oneTimeRegrindMm: '0.20',
+            totalRegrindMm: 3.0,
+            maxRegrindCount: 7,
+            disposeAfterUse: false
+          }
+        }));
       }
       return INITIAL_PART_LIFE_STANDARDS;
     } catch {
@@ -435,6 +492,53 @@ class StorageService {
       return defaultData;
     }
     return all[lineId];
+  }
+
+  public getActiveE3FinDie(): 'E3-1' | 'E3-2' | 'E3-3' {
+    const stored = localStorage.getItem(STORAGE_KEYS.ACTIVE_E3_FIN_DIE);
+    if (stored === 'E3-1' || stored === 'E3-2' || stored === 'E3-3') {
+      return stored;
+    }
+    return 'E3-2'; // Default active Fin Die for Machine E3 is E3-2 (WL+ 4P)
+  }
+
+  public setActiveE3FinDie(dieId: 'E3-1' | 'E3-2' | 'E3-3', operatorName?: string): void {
+    const prev = this.getActiveE3FinDie();
+    if (prev === dieId) return;
+
+    localStorage.setItem(STORAGE_KEYS.ACTIVE_E3_FIN_DIE, dieId);
+
+    // Also update line operational statuses in monitoring
+    const all = this.getLinesMonitoring();
+    const e3Lines: ProductionLineId[] = ['E3-1', 'E3-2', 'E3-3'];
+    e3Lines.forEach(eId => {
+      if (all[eId]) {
+        if (eId === dieId) {
+          all[eId].machineStatus = 'RUNNING';
+          if (all[eId].activeConfig) {
+            all[eId].activeConfig!.status = 'ACTIVE';
+            all[eId].activeConfig!.isActive = true;
+          }
+        } else {
+          all[eId].machineStatus = 'IDLE';
+          if (all[eId].activeConfig) {
+            all[eId].activeConfig!.status = 'INACTIVE';
+            all[eId].activeConfig!.isActive = false;
+          }
+        }
+      }
+    });
+    localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(all));
+
+    const user = this.getCurrentUser();
+    const by = operatorName || user.name;
+    this.addAuditLog(
+      'CONFIGURATION',
+      `Line E3 switched Active Fin Die from ${prev} to ${dieId} by ${by}. Total machine shots will now accumulate on ${dieId} parts while ${prev} parts shot count stays frozen.`,
+      `ไลน์ E3 สลับการใช้งาน Fin Die จาก ${prev} เป็น ${dieId} โดย ${by}`
+    );
+
+    this.notify();
   }
 
   public getSpareStocks(): SpareStockItem[] {
@@ -1000,43 +1104,107 @@ class StorageService {
     const line = all[lineId];
     if (!line) return;
 
-    const previousTotal = line.machineShotTotal || 0;
-    const newTotal = previousTotal + inc;
     const standards = this.getLifeStandards();
     const stocks = this.getSpareStocks();
+    const activeE3Die = this.getActiveE3FinDie();
+    const isE3Line = lineId === 'E3-1' || lineId === 'E3-2' || lineId === 'E3-3';
 
-    const updatedItems = line.items.map(item => {
-      const isNotControlled = item.controlType === 'NOT_CONTROLLED_BY_SHOT' || (item as any).isNotControlledByShot;
-      const isPaused = item.isPaused === true || item.installationStatus === 'PAUSED';
-      const isRemoved = item.isRemoved === true || item.installationStatus === 'REMOVED';
-      const isInactive = item.isActive === false;
-      const isZeroInstall = (item.installQty || 0) <= 0;
+    if (isE3Line) {
+      const e3Lines: ProductionLineId[] = ['E3-1', 'E3-2', 'E3-3'];
+      e3Lines.forEach(eId => {
+        const eLine = all[eId];
+        if (!eLine) return;
 
-      if (isNotControlled || isPaused || isRemoved || isInactive || isZeroInstall) {
-        return item;
-      }
+        const prevMachineTotal = eLine.machineShotTotal || 0;
+        const newMachineTotal = prevMachineTotal + inc;
 
-      const curUsed = item.usedShot !== undefined ? item.usedShot : (item.currentShot || 0);
-      const newUsed = curUsed + inc;
+        if (eId === activeE3Die) {
+          // Active E3 Fin Die: Accumulate shots on parts
+          const updatedItems = eLine.items.map(item => {
+            const isNotControlled = item.controlType === 'NOT_CONTROLLED_BY_SHOT' || (item as any).isNotControlledByShot;
+            const isPaused = item.isPaused === true || item.installationStatus === 'PAUSED';
+            const isRemoved = item.isRemoved === true || item.installationStatus === 'REMOVED';
+            const isInactive = item.isActive === false;
+            const isZeroInstall = (item.installQty || 0) <= 0;
 
-      return calculatePartMetrics(
-        {
-          ...item,
-          currentShot: newUsed,
-          usedShot: newUsed
-        },
-        line.activeConfig,
-        standards,
-        stocks
-      );
-    });
+            if (isNotControlled || isPaused || isRemoved || isInactive || isZeroInstall) {
+              return item;
+            }
 
-    all[lineId] = {
-      ...line,
-      machineShotTotal: newTotal,
-      lastUpdate: new Date().toISOString(),
-      items: updatedItems
-    };
+            const curUsed = item.usedShot !== undefined ? item.usedShot : (item.currentShot || 0);
+            const newUsed = curUsed + inc;
+
+            return calculatePartMetrics(
+              {
+                ...item,
+                currentShot: newUsed,
+                usedShot: newUsed
+              },
+              eLine.activeConfig,
+              standards,
+              stocks
+            );
+          });
+
+          all[eId] = {
+            ...eLine,
+            machineShotTotal: newMachineTotal,
+            shiftShot: (eLine.shiftShot || 0) + inc,
+            dailyShot: (eLine.dailyShot || 0) + inc,
+            monthlyShot: (eLine.monthlyShot || 0) + inc,
+            lastUpdate: new Date().toISOString(),
+            items: updatedItems
+          };
+        } else {
+          // Inactive E3 Fin Die: Update Machine Shot Total only, KEEP parts shot count (items) frozen!
+          all[eId] = {
+            ...eLine,
+            machineShotTotal: newMachineTotal,
+            lastUpdate: new Date().toISOString()
+          };
+        }
+      });
+    } else {
+      // Lines E1, E2, E4, E5: Normal single die logic
+      const previousTotal = line.machineShotTotal || 0;
+      const newTotal = previousTotal + inc;
+
+      const updatedItems = line.items.map(item => {
+        const isNotControlled = item.controlType === 'NOT_CONTROLLED_BY_SHOT' || (item as any).isNotControlledByShot;
+        const isPaused = item.isPaused === true || item.installationStatus === 'PAUSED';
+        const isRemoved = item.isRemoved === true || item.installationStatus === 'REMOVED';
+        const isInactive = item.isActive === false;
+        const isZeroInstall = (item.installQty || 0) <= 0;
+
+        if (isNotControlled || isPaused || isRemoved || isInactive || isZeroInstall) {
+          return item;
+        }
+
+        const curUsed = item.usedShot !== undefined ? item.usedShot : (item.currentShot || 0);
+        const newUsed = curUsed + inc;
+
+        return calculatePartMetrics(
+          {
+            ...item,
+            currentShot: newUsed,
+            usedShot: newUsed
+          },
+          line.activeConfig,
+          standards,
+          stocks
+        );
+      });
+
+      all[lineId] = {
+        ...line,
+        machineShotTotal: newTotal,
+        shiftShot: (line.shiftShot || 0) + inc,
+        dailyShot: (line.dailyShot || 0) + inc,
+        monthlyShot: (line.monthlyShot || 0) + inc,
+        lastUpdate: new Date().toISOString(),
+        items: updatedItems
+      };
+    }
 
     localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(all));
     this.notify();
@@ -2082,9 +2250,9 @@ class StorageService {
     category?: DowntimeCategory
   ): { success: boolean; message: string } {
     const all = this.getLinesMonitoring();
-    const line = all[lineId];
+    let line = all[lineId];
     if (!line) {
-      return { success: false, message: `Line ${lineId} not found` };
+      line = this.getLineMonitoring(lineId); // Auto-initialize default data
     }
 
     const previousStatus = line.machineStatus || 'RUNNING';
@@ -3138,11 +3306,8 @@ class StorageService {
     }
     try {
       const parsed = JSON.parse(raw);
-      // Ensure theme is never 'hmi'
-      if (parsed.theme === 'hmi') {
-        parsed.theme = 'dark';
-      }
-      return { ...DEFAULT_SYSTEM_SETTINGS, ...parsed };
+      parsed.theme = 'dark';
+      return { ...DEFAULT_SYSTEM_SETTINGS, ...parsed, theme: 'dark' };
     } catch {
       return DEFAULT_SYSTEM_SETTINGS;
     }
@@ -3150,10 +3315,7 @@ class StorageService {
 
   public saveSettings(settings: Partial<SystemSettings>): void {
     const current = this.getSettings();
-    const updated: SystemSettings = { ...current, ...settings };
-    if (updated.theme === ('hmi' as any)) {
-      updated.theme = 'dark';
-    }
+    const updated: SystemSettings = { ...current, ...settings, theme: 'dark' };
     localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(updated));
     this.addAuditLog('SYSTEM', 'Updated system preferences & operational thresholds');
     this.notify();

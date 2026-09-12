@@ -94,6 +94,7 @@ export const PartLifeStandardSetupView: React.FC = () => {
   const handleEditClick = () => {
     const currentVals: Record<string, Record<string, number | boolean | string>> = {};
     standards.forEach(std => {
+      if (!std) return;
       currentVals[std.id] = {
         material: std.configKey?.material || 'PCM',
         tubeSize: std.configKey?.tubeSize || 'Ø7',
@@ -1008,14 +1009,31 @@ export const PartLifeStandardSetupView: React.FC = () => {
 export const InstallQuantitySetupView: React.FC = () => {
   const [lines, setLines] = useState<any[]>([]);
   const [partMasters, setPartMasters] = useState<any[]>([]);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editValues, setEditValues] = useState<Record<string, number>>({});
+  const [standards, setStandards] = useState<PartLifeStandard[]>([]);
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [filterType, setFilterType] = useState<'ALL' | 'REGRINDABLE' | 'DISPOSABLE'>('ALL');
   
+  const [isEditing, setIsEditing] = useState(false);
+  const [editQtyValues, setEditQtyValues] = useState<Record<string, number>>({});
+  const [editSpecValues, setEditSpecValues] = useState<Record<string, {
+    lifeLimitShots: number;
+    regrindDepthPerTime: number;
+    maxTotalGrindingLimit: number;
+    standardShimThickness: number;
+    disposeAfterUse: boolean;
+    notes: string;
+  }>>({});
+  
+  const [editingRowItem, setEditingRowItem] = useState<any | null>(null);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+  
+  const loadAll = () => {
+    setLines(storageService.getLineConfigs());
+    setPartMasters(storageService.getPartMasters());
+    setStandards(storageService.getLifeStandards());
+  };
+
   useEffect(() => {
-    const loadAll = () => {
-      setLines(storageService.getLineConfigs());
-      setPartMasters(storageService.getPartMasters());
-    };
     loadAll();
     const unsub = storageService.subscribe(loadAll);
     return () => unsub();
@@ -1023,35 +1041,70 @@ export const InstallQuantitySetupView: React.FC = () => {
 
   const lineIds = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
 
-  interface InstallMatrixRow {
+  interface UnifiedMatrixRow {
     no: number;
     part: string;
     code: string;
+    stage: string;
+    category: string;
     total: number;
-    [key: string]: string | number;
+    lifeLimitShots: number;
+    regrindDepthPerTime: number;
+    maxTotalGrindingLimit: number;
+    standardShimThickness: number;
+    disposeAfterUse: boolean;
+    notes: string;
+    matchedStandardId?: string;
+    [key: string]: any;
   }
-
-  // Dynamically build matrix from part masters
-  const matrixParts = partMasters.map((pm, index) => ({
-    no: index + 1,
-    part: pm.partName,
-    code: pm.partCode
-  }));
 
   const getCellKey = (partCode: string, lineId: string) => `${partCode}_${lineId}`;
 
-  const installMatrix: InstallMatrixRow[] = matrixParts.map(mp => {
-    const row: InstallMatrixRow = { ...mp, total: 0 };
+  // Dynamically build unified matrix from part masters & life standards
+  const unifiedMatrix: UnifiedMatrixRow[] = partMasters.map((pm, index) => {
+    // Find matching Life Standard
+    const matchedStd = standards.find(s => 
+      s.configKey?.partCode === pm.partCode || 
+      s.partName === pm.partName ||
+      s.stagePunchDie === pm.stageName ||
+      s.stagePunchDie === pm.partName
+    );
+
+    // Default or current specs
+    const defaultLifeLimit = matchedStd?.lifeLimitShots || 18000000;
+    const defaultRegrindDepth = matchedStd?.regrindDepthPerTime ?? (parseFloat(matchedStd?.regrindStandard?.oneTimeRegrindMm || '0.20') || 0.20);
+    const defaultMaxRegrind = matchedStd?.maxTotalGrindingLimit ?? (typeof matchedStd?.regrindStandard?.totalRegrindMm === 'number' ? matchedStd.regrindStandard.totalRegrindMm : 1.50);
+    const defaultShim = matchedStd?.standardShimThickness ?? 0.20;
+    const defaultDispose = !!(matchedStd?.regrindStandard?.disposeAfterUse);
+    const defaultNotes = matchedStd?.notes || matchedStd?.regrindStandard?.regrindIntervalNote || matchedStd?.changeIntervalNotes || '';
+
+    const specEdit = editSpecValues[pm.partCode];
+
+    const row: UnifiedMatrixRow = {
+      no: index + 1,
+      part: pm.partName,
+      code: pm.partCode,
+      stage: pm.stageName || '-',
+      category: pm.category || 'OTHER',
+      total: 0,
+      matchedStandardId: matchedStd?.id,
+      lifeLimitShots: isEditing && specEdit ? specEdit.lifeLimitShots : defaultLifeLimit,
+      regrindDepthPerTime: isEditing && specEdit ? specEdit.regrindDepthPerTime : defaultRegrindDepth,
+      maxTotalGrindingLimit: isEditing && specEdit ? specEdit.maxTotalGrindingLimit : defaultMaxRegrind,
+      standardShimThickness: isEditing && specEdit ? specEdit.standardShimThickness : defaultShim,
+      disposeAfterUse: isEditing && specEdit ? specEdit.disposeAfterUse : defaultDispose,
+      notes: isEditing && specEdit ? specEdit.notes : defaultNotes
+    };
+
     let total = 0;
     lineIds.forEach(lId => {
       let qty = 0;
       const lineConfig = lines.find(l => l.lineId === lId);
       if (lineConfig && lineConfig.installedPartQuantities) {
-        qty = lineConfig.installedPartQuantities[mp.code] || 0;
+        qty = lineConfig.installedPartQuantities[pm.partCode] || 0;
       }
-      // If we are editing, use editValues if it exists
       if (isEditing) {
-        qty = editValues[getCellKey(mp.code, lId)] !== undefined ? editValues[getCellKey(mp.code, lId)] : qty;
+        qty = editQtyValues[getCellKey(pm.partCode, lId)] !== undefined ? editQtyValues[getCellKey(pm.partCode, lId)] : qty;
       }
       row[lId] = qty;
       total += qty;
@@ -1060,144 +1113,811 @@ export const InstallQuantitySetupView: React.FC = () => {
     return row;
   });
 
-  const grandTotal = installMatrix.reduce((sum, item) => sum + item.total, 0);
+  // Filtered rows
+  const filteredMatrix = unifiedMatrix.filter(row => {
+    const matchesSearch = 
+      row.part.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      row.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      row.stage.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      row.notes.toLowerCase().includes(searchTerm.toLowerCase());
+
+    if (!matchesSearch) return false;
+
+    if (filterType === 'REGRINDABLE') {
+      return !row.disposeAfterUse && row.maxTotalGrindingLimit > 0;
+    }
+    if (filterType === 'DISPOSABLE') {
+      return row.disposeAfterUse || row.maxTotalGrindingLimit === 0;
+    }
+    return true;
+  });
+
+  const grandTotalTooling = unifiedMatrix.reduce((sum, item) => sum + item.total, 0);
+  const totalDisposableCount = unifiedMatrix.filter(i => i.disposeAfterUse || i.maxTotalGrindingLimit === 0).length;
+  const totalRegrindableCount = unifiedMatrix.length - totalDisposableCount;
 
   const handleEditClick = () => {
-    // Populate edit state
-    const currentValues: Record<string, number> = {};
-    matrixParts.forEach(mp => {
+    // Populate quantity edit values
+    const currentQty: Record<string, number> = {};
+    const currentSpecs: Record<string, any> = {};
+
+    unifiedMatrix.forEach(row => {
       lineIds.forEach(lId => {
-        const lineConfig = lines.find(l => l.lineId === lId);
-        if (lineConfig && lineConfig.installedPartQuantities) {
-          currentValues[getCellKey(mp.code, lId)] = lineConfig.installedPartQuantities[mp.code] || 0;
-        }
+        currentQty[getCellKey(row.code, lId)] = row[lId] || 0;
       });
+      currentSpecs[row.code] = {
+        lifeLimitShots: row.lifeLimitShots,
+        regrindDepthPerTime: row.regrindDepthPerTime,
+        maxTotalGrindingLimit: row.maxTotalGrindingLimit,
+        standardShimThickness: row.standardShimThickness,
+        disposeAfterUse: row.disposeAfterUse,
+        notes: row.notes
+      };
     });
-    setEditValues(currentValues);
+
+    setEditQtyValues(currentQty);
+    setEditSpecValues(currentSpecs);
     setIsEditing(true);
   };
 
   const handleSaveClick = () => {
-    // Build updates array
-    const updates = Object.keys(editValues).map(key => {
+    // 1. Save Line Installed Quantities
+    const qtyUpdates = Object.keys(editQtyValues).map(key => {
       const [partCode, lineId] = key.split('_');
-      return { lineId, partCode, installQty: editValues[key] };
+      return { lineId, partCode, installQty: editQtyValues[key] };
     });
-    
-    // Save via storage service
-    storageService.updateInstallQuantities(updates);
-    
-    // Reload local state
-    setLines(storageService.getLineConfigs());
+    storageService.updateInstallQuantities(qtyUpdates);
+
+    // 2. Save Life Standards
+    const allStds = storageService.getLifeStandards();
+    const updatedStds = [...allStds];
+
+    Object.keys(editSpecValues).forEach(partCode => {
+      const spec = editSpecValues[partCode];
+      const targetPart = partMasters.find(p => p.partCode === partCode);
+      const existingIdx = updatedStds.findIndex(s => s.configKey?.partCode === partCode || s.partName === targetPart?.partName);
+
+      if (existingIdx >= 0) {
+        const std = { ...updatedStds[existingIdx] };
+        std.lifeLimitShots = spec.lifeLimitShots;
+        std.regrindDepthPerTime = spec.regrindDepthPerTime;
+        std.maxTotalGrindingLimit = spec.maxTotalGrindingLimit;
+        std.standardShimThickness = spec.standardShimThickness;
+        std.notes = spec.notes;
+        if (std.regrindStandard) {
+          std.regrindStandard.disposeAfterUse = spec.disposeAfterUse;
+          std.regrindStandard.oneTimeRegrindMm = (spec.regrindDepthPerTime || 0.20).toFixed(2);
+          std.regrindStandard.totalRegrindMm = spec.maxTotalGrindingLimit;
+          std.regrindStandard.maxTotalGrindingLimit = spec.maxTotalGrindingLimit;
+          std.regrindStandard.regrindDepthPerTime = spec.regrindDepthPerTime;
+          std.regrindStandard.standardShimThickness = spec.standardShimThickness;
+          std.regrindStandard.regrindIntervalNote = spec.notes;
+        }
+        std.updatedAt = new Date().toISOString();
+        updatedStds[existingIdx] = std;
+      } else if (targetPart) {
+        // Create new standard entry
+        const newStd: PartLifeStandard = {
+          id: `STD-ALL-${partCode.replace(/[^A-Z0-9]/gi, '')}-${Date.now().toString().slice(-4)}`,
+          configKey: {
+            lineId: 'ALL',
+            configurationId: 'CFG-ALL',
+            dieCode: 'FD-ALL',
+            finType: 'Slit (half)',
+            material: 'PCM',
+            thicknessMm: 0.10,
+            tubeSize: targetPart.tubeSizeCompat === 'Ø5' ? 'Ø5' : 'Ø7',
+            partCode: partCode,
+            position: 'ALL',
+            effectiveDate: new Date().toISOString().substring(0, 10)
+          },
+          compositeKeyString: `ALL|PCM|0.10mm|Ø7|${partCode}`,
+          partName: targetPart.partName,
+          stagePunchDie: targetPart.stageName || targetPart.partName,
+          lifeLimitShots: spec.lifeLimitShots,
+          regrindDepthPerTime: spec.regrindDepthPerTime,
+          maxTotalGrindingLimit: spec.maxTotalGrindingLimit,
+          standardShimThickness: spec.standardShimThickness,
+          notes: spec.notes,
+          regrindStandard: {
+            oneTimeRegrindMm: (spec.regrindDepthPerTime || 0.20).toFixed(2),
+            totalRegrindMm: spec.maxTotalGrindingLimit,
+            maxRegrindCount: 7,
+            disposeAfterUse: spec.disposeAfterUse,
+            regrindIntervalNote: spec.notes
+          },
+          createdBy: 'Unified Matrix Admin',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        updatedStds.push(newStd);
+      }
+    });
+
+    storageService.saveLifeStandards(updatedStds);
     setIsEditing(false);
+    setSaveSuccessMsg('บันทึกการแก้ไขจำนวนติดตั้งและเกณฑ์อายุการใช้งาน (Matrix Saved Successfully)');
+    setTimeout(() => setSaveSuccessMsg(null), 3500);
+    loadAll();
   };
 
   const handleCancelClick = () => {
-    setEditValues({});
+    setEditQtyValues({});
+    setEditSpecValues({});
     setIsEditing(false);
   };
 
-  const handleCellValueChange = (partCode: string, lineId: string, value: string) => {
+  const handleQtyChange = (partCode: string, lineId: string, value: string) => {
     const num = parseInt(value, 10);
-    setEditValues(prev => ({
+    setEditQtyValues(prev => ({
       ...prev,
       [getCellKey(partCode, lineId)]: isNaN(num) ? 0 : num
     }));
   };
 
+  const handleSpecChange = (partCode: string, field: string, value: any) => {
+    setEditSpecValues(prev => {
+      const current = prev[partCode] || {
+        lifeLimitShots: 18000000,
+        regrindDepthPerTime: 0.20,
+        maxTotalGrindingLimit: 1.50,
+        standardShimThickness: 0.20,
+        disposeAfterUse: false,
+        notes: ''
+      };
+      return {
+        ...prev,
+        [partCode]: {
+          ...current,
+          [field]: value
+        }
+      };
+    });
+  };
+
+  const handleSaveSingleRowModal = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRowItem) return;
+
+    // 1. Update quantities
+    const updates = lineIds.map(lId => ({
+      lineId: lId,
+      partCode: editingRowItem.code,
+      installQty: editingRowItem[lId] || 0
+    }));
+    storageService.updateInstallQuantities(updates);
+
+    // 2. Update Life Standard
+    const allStds = storageService.getLifeStandards();
+    const existingIdx = allStds.findIndex(s => s.configKey?.partCode === editingRowItem.code || s.partName === editingRowItem.part);
+    
+    if (existingIdx >= 0) {
+      const std = { ...allStds[existingIdx] };
+      std.lifeLimitShots = Number(editingRowItem.lifeLimitShots) || 18000000;
+      std.regrindDepthPerTime = Number(editingRowItem.regrindDepthPerTime) || 0.20;
+      std.maxTotalGrindingLimit = Number(editingRowItem.maxTotalGrindingLimit) || 1.50;
+      std.standardShimThickness = Number(editingRowItem.standardShimThickness) || 0.20;
+      std.notes = editingRowItem.notes || '';
+      if (std.regrindStandard) {
+        std.regrindStandard.disposeAfterUse = !!editingRowItem.disposeAfterUse;
+        std.regrindStandard.oneTimeRegrindMm = (Number(editingRowItem.regrindDepthPerTime) || 0.20).toFixed(2);
+        std.regrindStandard.totalRegrindMm = Number(editingRowItem.maxTotalGrindingLimit) || 1.50;
+        std.regrindStandard.maxTotalGrindingLimit = Number(editingRowItem.maxTotalGrindingLimit) || 1.50;
+        std.regrindStandard.regrindDepthPerTime = Number(editingRowItem.regrindDepthPerTime) || 0.20;
+        std.regrindStandard.standardShimThickness = Number(editingRowItem.standardShimThickness) || 0.20;
+        std.regrindStandard.regrindIntervalNote = editingRowItem.notes || '';
+      }
+      std.updatedAt = new Date().toISOString();
+      storageService.saveLifeStandard(std);
+    } else {
+      const newStd: PartLifeStandard = {
+        id: `STD-ALL-${editingRowItem.code.replace(/[^A-Z0-9]/gi, '')}-${Date.now().toString().slice(-4)}`,
+        configKey: {
+          lineId: 'ALL',
+          configurationId: 'CFG-ALL',
+          dieCode: 'FD-ALL',
+          finType: 'Slit (half)',
+          material: 'PCM',
+          thicknessMm: 0.10,
+          tubeSize: 'Ø7',
+          partCode: editingRowItem.code,
+          position: 'ALL',
+          effectiveDate: new Date().toISOString().substring(0, 10)
+        },
+        compositeKeyString: `ALL|PCM|0.10mm|Ø7|${editingRowItem.code}`,
+        partName: editingRowItem.part,
+        stagePunchDie: editingRowItem.stage || editingRowItem.part,
+        lifeLimitShots: Number(editingRowItem.lifeLimitShots) || 18000000,
+        regrindDepthPerTime: Number(editingRowItem.regrindDepthPerTime) || 0.20,
+        maxTotalGrindingLimit: Number(editingRowItem.maxTotalGrindingLimit) || 1.50,
+        standardShimThickness: Number(editingRowItem.standardShimThickness) || 0.20,
+        notes: editingRowItem.notes || '',
+        regrindStandard: {
+          oneTimeRegrindMm: (Number(editingRowItem.regrindDepthPerTime) || 0.20).toFixed(2),
+          totalRegrindMm: Number(editingRowItem.maxTotalGrindingLimit) || 1.50,
+          maxRegrindCount: 7,
+          disposeAfterUse: !!editingRowItem.disposeAfterUse,
+          regrindIntervalNote: editingRowItem.notes || ''
+        },
+        createdBy: 'Unified Matrix Admin',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      storageService.saveLifeStandard(newStd);
+    }
+
+    setEditingRowItem(null);
+    setSaveSuccessMsg(`บันทึกข้อมูลและสเปก ${editingRowItem.part} เรียบร้อยแล้ว`);
+    setTimeout(() => setSaveSuccessMsg(null), 3500);
+    loadAll();
+  };
+
+  const handleExportCsv = () => {
+    const headers = [
+      'NO',
+      'STAGE / PART NAME',
+      'PART CODE',
+      'E1',
+      'E2',
+      'E3_1',
+      'E3_2',
+      'E3_3',
+      'E4',
+      'E5',
+      'TOTAL_EA',
+      'LIFE_LIMIT_SHOTS',
+      'ONE_TIME_REGRIND_MM',
+      'MAX_REGRIND_MM',
+      'SHIM_MM',
+      'DISPOSE_1_USE',
+      'NOTES'
+    ];
+
+    const csvRows = [headers.join(',')];
+    unifiedMatrix.forEach(r => {
+      const values = [
+        r.no,
+        `"${r.part.replace(/"/g, '""')}"`,
+        `"${r.code}"`,
+        r['E1'] || 0,
+        r['E2'] || 0,
+        r['E3-1'] || 0,
+        r['E3-2'] || 0,
+        r['E3-3'] || 0,
+        r['E4'] || 0,
+        r['E5'] || 0,
+        r.total,
+        r.lifeLimitShots,
+        r.regrindDepthPerTime,
+        r.maxTotalGrindingLimit,
+        r.standardShimThickness,
+        r.disposeAfterUse ? 'YES' : 'NO',
+        `"${(r.notes || '').replace(/"/g, '""')}"`
+      ];
+      csvRows.push(values.join(','));
+    });
+
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `FinDie_Installed_and_Life_Matrix_${new Date().toISOString().substring(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
-    <div className="space-y-6">
-      {/* Sticky Header Container */}
-      <div className="sticky top-[130px] sm:top-[115px] z-20 pb-2 bg-slate-900/95 backdrop-blur-sm -mx-2 px-2">
-        <div className="bg-[#0F172A] border border-slate-700 rounded-lg p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-md">
+    <div className="space-y-4 font-sans text-slate-100">
+      
+      {/* Toast Alert */}
+      {saveSuccessMsg && (
+        <div className="fixed bottom-6 right-6 z-50 bg-emerald-600 text-white px-4 py-3 rounded-lg shadow-2xl flex items-center gap-3 border border-emerald-400 animate-slideUp font-mono text-xs">
+          <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-white" />
+          <span className="font-semibold">{saveSuccessMsg}</span>
+        </div>
+      )}
+
+      {/* Header & KPI Summary Cards */}
+      <div className="bg-[#0F172A] border border-slate-700 rounded-lg p-4 shadow-md space-y-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div>
-            <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+            <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight flex items-center gap-2">
               <Layers className="w-5 h-5 text-cyan-400" />
-              Fin Die Installed Part Quantity Matrix
+              <span>Fin Die Installed Quantity & Tool Life Matrix</span>
             </h2>
-            <p className="text-sm text-slate-400 mt-1 font-thai">
-              ตารางจำนวนชิ้นส่วนที่ติดตั้งในแม่พิมพ์แต่ละสายการผลิต (สามารถแก้ไขจำนวนติดตั้งต่อไลน์ได้)
+            <p className="text-xs text-slate-400 mt-0.5 font-thai">
+              ตารางรวมจำนวนติดตั้งในแม่พิมพ์แยกตามสายการผลิต (E1-E5) พร้อมสเปกอายุการใช้งาน (Life Limit, Max Regrind, Shim, 1-Use) จบในหน้าเดียว
             </p>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="bg-[#1E293B] px-4 py-2 rounded border border-slate-700 font-mono text-right">
-              <div className="text-[10px] text-slate-400 font-bold">TOTAL ACTIVE TOOLING</div>
-              <div className="text-base font-bold text-cyan-300">{grandTotal.toLocaleString()} EA (All Lines)</div>
-            </div>
-            
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={handleExportCsv}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 rounded text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export CSV</span>
+            </button>
+
             {isEditing ? (
               <div className="flex items-center gap-2">
-                <button onClick={handleCancelClick} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded text-sm font-bold transition-colors">
+                <button
+                  onClick={handleCancelClick}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 rounded text-xs font-bold transition-colors cursor-pointer"
+                >
                   Cancel
                 </button>
-                <button onClick={handleSaveClick} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-sm font-bold transition-colors">
-                  Save Matrix
+                <button
+                  onClick={handleSaveClick}
+                  className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold transition-colors flex items-center gap-1.5 shadow-md cursor-pointer"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Save Matrix</span>
                 </button>
               </div>
             ) : (
-              <button onClick={handleEditClick} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-sm font-bold transition-colors">
-                Edit Matrix
+              <button
+                onClick={handleEditClick}
+                className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-bold transition-colors flex items-center gap-1.5 shadow-md cursor-pointer"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>Edit Matrix</span>
               </button>
             )}
           </div>
         </div>
+
+        {/* Quick KPI Badges */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-800">
+          <div className="bg-[#1E293B] px-3 py-2 rounded border border-slate-700 font-mono">
+            <div className="text-[10px] text-slate-400 font-bold uppercase">TOTAL ACTIVE TOOLING</div>
+            <div className="text-base font-black text-cyan-300">{grandTotalTooling.toLocaleString()} EA</div>
+          </div>
+
+          <div className="bg-[#1E293B] px-3 py-2 rounded border border-slate-700 font-mono">
+            <div className="text-[10px] text-slate-400 font-bold uppercase">TOTAL MASTER PARTS</div>
+            <div className="text-base font-black text-white">{unifiedMatrix.length} Parts</div>
+          </div>
+
+          <div className="bg-[#1E293B] px-3 py-2 rounded border border-slate-700 font-mono">
+            <div className="text-[10px] text-slate-400 font-bold uppercase">RE-GRINDABLE PARTS</div>
+            <div className="text-base font-black text-emerald-400">{totalRegrindableCount} Parts</div>
+          </div>
+
+          <div className="bg-[#1E293B] px-3 py-2 rounded border border-slate-700 font-mono">
+            <div className="text-[10px] text-slate-400 font-bold uppercase">DISPOSABLE (1-USE)</div>
+            <div className="text-base font-black text-rose-400">{totalDisposableCount} Parts</div>
+          </div>
+        </div>
+
+        {/* Search & Filter Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+          <div className="relative flex-1 min-w-[200px] max-w-md">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="ค้นหาชื่อชิ้นส่วน, รหัส Part Code, Stage หรือหมายเหตุ..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-8 pr-7 py-1.5 bg-slate-950 border border-slate-700 rounded text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-sans"
+            />
+            {searchTerm && (
+              <button 
+                onClick={() => setSearchTerm('')} 
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5 text-xs">
+            <span className="text-slate-400 font-medium">Filter:</span>
+            <button
+              onClick={() => setFilterType('ALL')}
+              className={`px-2.5 py-1 rounded text-xs font-bold transition-colors ${
+                filterType === 'ALL'
+                  ? 'bg-cyan-500 text-slate-950 font-bold'
+                  : 'bg-slate-800 text-slate-300 hover:text-white border border-slate-700'
+              }`}
+            >
+              ทั้งหมด ({unifiedMatrix.length})
+            </button>
+            <button
+              onClick={() => setFilterType('REGRINDABLE')}
+              className={`px-2.5 py-1 rounded text-xs font-bold transition-colors ${
+                filterType === 'REGRINDABLE'
+                  ? 'bg-emerald-500 text-slate-950 font-bold'
+                  : 'bg-slate-800 text-slate-300 hover:text-white border border-slate-700'
+              }`}
+            >
+              สลับคมได้ ({totalRegrindableCount})
+            </button>
+            <button
+              onClick={() => setFilterType('DISPOSABLE')}
+              className={`px-2.5 py-1 rounded text-xs font-bold transition-colors ${
+                filterType === 'DISPOSABLE'
+                  ? 'bg-rose-500 text-slate-950 font-bold'
+                  : 'bg-slate-800 text-slate-300 hover:text-white border border-slate-700'
+              }`}
+            >
+              ใช้ครั้งเดียวทิ้ง ({totalDisposableCount})
+            </button>
+          </div>
+        </div>
       </div>
 
-      <div className="bg-[#1E293B] border border-slate-700 rounded-lg p-5 shadow-lg">
+      {/* Main Unified Table */}
+      <div className="bg-[#1E293B] border border-slate-700 rounded-lg p-3 sm:p-4 shadow-lg overflow-hidden">
         <ResizableReorderableTable
-          data={installMatrix}
-          keyExtractor={(row) => row.no.toString()}
-          emptyMessage="ไม่พบข้อมูล Install Matrix"
+          data={filteredMatrix}
+          keyExtractor={(row) => row.code}
+          emptyMessage="ไม่พบข้อมูลในเงื่อนไขการค้นหา"
           columns={[
             {
               id: 'no',
               label: 'NO.',
-              width: 55,
-              minWidth: 45,
+              width: 50,
+              minWidth: 40,
               align: 'center',
-              render: (row) => <span className="text-cyan-400/80 font-mono font-bold text-xs">{row.no}</span>
+              render: (row) => <span className="text-cyan-400/90 font-mono font-bold text-xs">{row.no}</span>
             },
             {
               id: 'part',
               label: 'STAGE PUNCH / DIE',
-              width: 180,
-              render: (row) => <span className="font-semibold text-slate-100">{row.part}</span>
+              width: 170,
+              render: (row) => (
+                <div className="flex flex-col">
+                  <span className="font-bold text-slate-100 text-xs">{row.part}</span>
+                  <span className="text-[10px] text-slate-400">{row.stage}</span>
+                </div>
+              )
             },
             {
               id: 'code',
               label: 'PART CODE',
               width: 110,
-              render: (row) => <span className="text-slate-400 font-mono">{row.code}</span>
+              render: (row) => <span className="text-cyan-300 font-mono text-xs">{row.code}</span>
             },
+            // Line Installed Quantity Columns
             ...lineIds.map(lId => ({
               id: lId,
               label: lId.startsWith('E3-') ? `E3 (${LINE_INFO_MAP[lId]?.shortTag || lId})` : lId,
-              width: 85,
+              width: 75,
               align: 'center' as const,
               render: (row: any) => (
                 isEditing ? (
                   <DebouncedNumericInput
                     min={0}
                     value={row[lId]}
-                    onChange={(val) => handleCellValueChange(row.code, lId, val)}
-                    className="w-14 sm:w-16 bg-slate-900 border border-slate-600 rounded px-1 py-1 text-center text-white focus:outline-none focus:border-cyan-400 font-mono"
+                    onChange={(val) => handleQtyChange(row.code, lId, val)}
+                    className="w-13 bg-slate-900 border border-slate-600 rounded px-1 py-1 text-center text-white focus:outline-none focus:border-cyan-400 font-mono text-xs"
                   />
                 ) : (
-                  <span className="text-slate-300 font-mono">{row[lId]}</span>
+                  <span className={`font-mono text-xs ${row[lId] > 0 ? 'text-slate-200 font-semibold' : 'text-slate-600'}`}>
+                    {row[lId] > 0 ? row[lId] : '-'}
+                  </span>
                 )
               )
             })),
             {
               id: 'total',
               label: 'TOTAL (EA)',
-              width: 110,
+              width: 90,
               align: 'right',
-              render: (row) => <span className="font-black text-emerald-400 font-mono">{row.total.toLocaleString()}</span>
+              render: (row) => <span className="font-black text-emerald-400 font-mono text-xs">{row.total.toLocaleString()}</span>
+            },
+            // Merged Tool Life & Regrind Specification Columns
+            {
+              id: 'lifeLimitShots',
+              label: 'LIFE LIMIT (SHOTS)',
+              width: 130,
+              align: 'right',
+              render: (row) => (
+                isEditing ? (
+                  <DebouncedNumericInput
+                    min={1000}
+                    step={100000}
+                    value={row.lifeLimitShots}
+                    onChange={(val) => handleSpecChange(row.code, 'lifeLimitShots', parseInt(val, 10) || 0)}
+                    className="w-24 bg-slate-900 border border-slate-600 rounded px-1 py-1 text-right text-emerald-400 focus:outline-none focus:border-cyan-400 font-mono text-xs"
+                  />
+                ) : (
+                  <span className="text-emerald-400 font-mono font-bold text-xs">
+                    {formatShots(row.lifeLimitShots)}
+                  </span>
+                )
+              )
+            },
+            {
+              id: 'regrindDepthPerTime',
+              label: '1 TIME / REGRIND',
+              width: 110,
+              align: 'center',
+              render: (row) => (
+                isEditing ? (
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={row.regrindDepthPerTime}
+                    onChange={(e) => handleSpecChange(row.code, 'regrindDepthPerTime', parseFloat(e.target.value) || 0)}
+                    className="w-16 bg-slate-900 border border-slate-600 rounded px-1 py-1 text-center text-white focus:outline-none focus:border-cyan-400 font-mono text-xs"
+                  />
+                ) : (
+                  <span className="font-mono text-xs text-slate-300">
+                    {row.regrindDepthPerTime > 0 ? `${row.regrindDepthPerTime.toFixed(2)} mm` : '-'}
+                  </span>
+                )
+              )
+            },
+            {
+              id: 'maxTotalGrindingLimit',
+              label: 'MAX REGRIND',
+              width: 110,
+              align: 'center',
+              render: (row) => (
+                isEditing ? (
+                  <input
+                    type="number"
+                    step="0.05"
+                    min="0"
+                    value={row.maxTotalGrindingLimit}
+                    onChange={(e) => handleSpecChange(row.code, 'maxTotalGrindingLimit', parseFloat(e.target.value) || 0)}
+                    className="w-16 bg-slate-900 border border-slate-600 rounded px-1 py-1 text-center text-white focus:outline-none focus:border-cyan-400 font-mono text-xs"
+                  />
+                ) : (
+                  <span className="font-mono text-xs text-slate-300">
+                    {row.maxTotalGrindingLimit > 0 ? `${row.maxTotalGrindingLimit.toFixed(2)} mm` : '-'}
+                  </span>
+                )
+              )
+            },
+            {
+              id: 'standardShimThickness',
+              label: 'SHIM (MM)',
+              width: 90,
+              align: 'center',
+              render: (row) => (
+                isEditing ? (
+                  <input
+                    type="number"
+                    step="0.05"
+                    min="0"
+                    value={row.standardShimThickness}
+                    onChange={(e) => handleSpecChange(row.code, 'standardShimThickness', parseFloat(e.target.value) || 0)}
+                    className="w-14 bg-slate-900 border border-slate-600 rounded px-1 py-1 text-center text-white focus:outline-none focus:border-cyan-400 font-mono text-xs"
+                  />
+                ) : (
+                  <span className="font-mono text-xs text-slate-300">
+                    {row.standardShimThickness > 0 ? `${row.standardShimThickness.toFixed(2)} mm` : '-'}
+                  </span>
+                )
+              )
+            },
+            {
+              id: 'disposeAfterUse',
+              label: '1-USE / DISPOSE',
+              width: 110,
+              align: 'center',
+              render: (row) => (
+                isEditing ? (
+                  <button
+                    type="button"
+                    onClick={() => handleSpecChange(row.code, 'disposeAfterUse', !row.disposeAfterUse)}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono transition-colors ${
+                      row.disposeAfterUse 
+                        ? 'bg-rose-600 text-white' 
+                        : 'bg-slate-800 text-slate-300 border border-slate-600'
+                    }`}
+                  >
+                    {row.disposeAfterUse ? 'YES (1-USE)' : 'NO (REGRIND)'}
+                  </button>
+                ) : (
+                  row.disposeAfterUse || row.maxTotalGrindingLimit === 0 ? (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-rose-950 text-rose-300 border border-rose-700/60">
+                      YES (1-USE)
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-slate-800 text-slate-400 border border-slate-700">
+                      NO
+                    </span>
+                  )
+                )
+              )
+            },
+            {
+              id: 'notes',
+              label: 'NOTE / REMARK',
+              width: 160,
+              render: (row) => (
+                isEditing ? (
+                  <input
+                    type="text"
+                    value={row.notes}
+                    onChange={(e) => handleSpecChange(row.code, 'notes', e.target.value)}
+                    placeholder="หมายเหตุ..."
+                    className="w-full bg-slate-900 border border-slate-600 rounded px-1.5 py-1 text-white focus:outline-none focus:border-cyan-400 text-xs font-sans"
+                  />
+                ) : (
+                  <span className="text-slate-400 text-xs truncate block" title={row.notes}>
+                    {row.notes || '-'}
+                  </span>
+                )
+              )
+            },
+            {
+              id: 'actions',
+              label: 'ACTIONS',
+              width: 75,
+              align: 'center',
+              render: (row) => (
+                <button
+                  type="button"
+                  onClick={() => setEditingRowItem({ ...row })}
+                  className="p-1.5 text-slate-400 hover:text-cyan-300 hover:bg-slate-800 rounded transition-colors"
+                  title="แก้ไขสเปกชิ้นส่วนนี้"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                </button>
+              )
             }
           ]}
         />
       </div>
+
+      {/* Row Edit Modal Dialog */}
+      {editingRowItem && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#1E293B] border border-slate-600 text-white rounded-lg p-5 max-w-2xl w-full shadow-2xl relative font-sans space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-700">
+              <div className="flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-cyan-400" />
+                <div>
+                  <h3 className="text-base font-bold text-white">แก้ไขข้อมูลและสเปกชิ้นส่วนแม่พิมพ์</h3>
+                  <p className="text-xs text-slate-400 font-mono">{editingRowItem.part} ({editingRowItem.code})</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingRowItem(null)}
+                className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveSingleRowModal} className="space-y-4 text-xs">
+              
+              {/* Section 1: Line Installed Quantities */}
+              <div className="space-y-1.5">
+                <h4 className="text-xs font-bold text-cyan-300 uppercase tracking-wide">
+                  1. จำนวนติดตั้งแยกตามสายการผลิต (Installed Quantities per Line)
+                </h4>
+                <div className="grid grid-cols-4 sm:grid-cols-7 gap-2 bg-slate-900 p-2.5 rounded border border-slate-800">
+                  {lineIds.map(lId => (
+                    <div key={lId} className="space-y-1">
+                      <label className="text-[10px] text-slate-400 font-bold block text-center">
+                        {lId.startsWith('E3-') ? `E3 (${LINE_INFO_MAP[lId]?.shortTag || lId})` : lId}
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={editingRowItem[lId] !== undefined ? editingRowItem[lId] : 0}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value, 10) || 0;
+                          setEditingRowItem((prev: any) => ({ ...prev, [lId]: val }));
+                        }}
+                        className="w-full bg-slate-950 border border-slate-700 rounded px-1.5 py-1 text-center text-white focus:outline-none focus:border-cyan-400 font-mono"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Section 2: Tool Life & Regrinding Standards */}
+              <div className="space-y-1.5">
+                <h4 className="text-xs font-bold text-cyan-300 uppercase tracking-wide">
+                  2. มาตรฐานอายุการใช้งานและการเจียรคม (Tool Life & Regrind Specifications)
+                </h4>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-900 p-3 rounded border border-slate-800">
+                  <div className="space-y-1">
+                    <label className="text-slate-300 font-medium">Life Limit (มาตรฐานอายุช็อต)</label>
+                    <input
+                      type="number"
+                      step="100000"
+                      min="1000"
+                      value={editingRowItem.lifeLimitShots || 18000000}
+                      onChange={(e) => setEditingRowItem((prev: any) => ({ ...prev, lifeLimitShots: parseInt(e.target.value, 10) || 0 }))}
+                      className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-cyan-400 font-mono"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-slate-300 font-medium">1 Time Regrind (ระยะเจียรต่อครั้ง - mm)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={editingRowItem.regrindDepthPerTime || 0.20}
+                      onChange={(e) => setEditingRowItem((prev: any) => ({ ...prev, regrindDepthPerTime: parseFloat(e.target.value) || 0 }))}
+                      className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-cyan-400 font-mono"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-slate-300 font-medium">Max Regrind (ระยะเจียรรวมสูงสุด - mm)</label>
+                    <input
+                      type="number"
+                      step="0.05"
+                      min="0"
+                      value={editingRowItem.maxTotalGrindingLimit || 1.50}
+                      onChange={(e) => setEditingRowItem((prev: any) => ({ ...prev, maxTotalGrindingLimit: parseFloat(e.target.value) || 0 }))}
+                      className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-cyan-400 font-mono"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-slate-300 font-medium">Standard Shim (ความหนาชิมมาตรฐาน - mm)</label>
+                    <input
+                      type="number"
+                      step="0.05"
+                      min="0"
+                      value={editingRowItem.standardShimThickness || 0.20}
+                      onChange={(e) => setEditingRowItem((prev: any) => ({ ...prev, standardShimThickness: parseFloat(e.target.value) || 0 }))}
+                      className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-cyan-400 font-mono"
+                    />
+                  </div>
+
+                  <div className="space-y-1 sm:col-span-2">
+                    <label className="flex items-center gap-2 cursor-pointer pt-1">
+                      <input
+                        type="checkbox"
+                        checked={!!editingRowItem.disposeAfterUse}
+                        onChange={(e) => setEditingRowItem((prev: any) => ({ ...prev, disposeAfterUse: e.target.checked }))}
+                        className="w-4 h-4 rounded text-rose-500 bg-slate-950 border-slate-700"
+                      />
+                      <span className="text-slate-200 font-bold">ใช้ครั้งเดียวทิ้ง (Dispose of after 1 use - ไม่สามารถเจียรคมซ้ำได้)</span>
+                    </label>
+                  </div>
+
+                  <div className="space-y-1 sm:col-span-2">
+                    <label className="text-slate-300 font-medium">หมายเหตุรอบการเปลี่ยน / การบำรุงรักษา</label>
+                    <input
+                      type="text"
+                      value={editingRowItem.notes || ''}
+                      onChange={(e) => setEditingRowItem((prev: any) => ({ ...prev, notes: e.target.value }))}
+                      placeholder="เช่น Change every 10-15 Day (เปลี่ยนทุกๆ 10-15 วัน)"
+                      className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-cyan-400"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Form Buttons */}
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setEditingRowItem(null)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded font-bold transition-colors"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-bold transition-colors shadow-md flex items-center gap-1.5"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>บันทึกการแก้ไข</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

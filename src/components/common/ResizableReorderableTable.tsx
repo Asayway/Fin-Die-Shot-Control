@@ -41,7 +41,7 @@ const MemoizedTableRow = React.memo(function TableRowItem<T>({
   colWidths: Record<string, number>;
 }) {
   return (
-    <tr className="hover:bg-slate-900/60 transition-colors">
+    <tr className="hover:bg-[#3c3c3c] transition-colors border-b border-[#666666]">
       {orderedColumns.map(col => {
         const width = colWidths[col.id] || col.width || 140;
         const alignClass = col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : 'text-left';
@@ -50,7 +50,7 @@ const MemoizedTableRow = React.memo(function TableRowItem<T>({
           <td
             key={col.id}
             style={{ width: `${width}px`, minWidth: `${col.minWidth || 45}px`, maxWidth: `${width}px` }}
-            className={`px-3 py-2.5 border-r border-slate-800/60 ${alignClass} truncate`}
+            className={`px-2 py-1.5 border-r border-[#666666] bg-[#333333] text-white ${alignClass} truncate text-[13px] font-sans`}
           >
             {col.render(row, rowIndex)}
           </td>
@@ -301,15 +301,15 @@ export function ResizableReorderableTable<T>({
       <div 
         ref={tableContainerRef} 
         onScroll={handleTableScroll} 
-        className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] min-h-[350px] border border-slate-800 rounded-xl bg-[#070F1E] shadow-inner custom-scrollbar relative"
+        className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] min-h-[350px] border border-[#666666] bg-[#111111] custom-scrollbar relative"
       >
         <table 
           style={{ width: `${Math.max(totalTableWidth, 100)}px`, minWidth: '100%' }} 
-          className="table-fixed text-left border-collapse font-sans text-sm sm:text-base relative"
+          className="table-fixed text-left border-collapse font-sans text-xs sm:text-sm relative"
         >
           {/* Table Header (Sticky Locked at Top of Container) */}
-          <thead className="sticky top-0 z-20 bg-[#0B172E] shadow-[0_4px_12px_rgba(0,0,0,0.6)]">
-            <tr className="bg-[#0B172E] border-b-2 border-slate-700 text-cyan-300 font-mono font-black uppercase select-none text-xs sm:text-sm">
+          <thead className="sticky top-0 z-20 bg-[#555566]">
+            <tr className="bg-[#555566] border-b border-[#666666] text-white font-sans font-bold uppercase select-none text-xs sm:text-sm">
               {orderedColumns.map((col, idx) => {
                 const width = colWidths[col.id] || col.width || 140;
                 const alignClass = col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : 'text-left';
@@ -318,10 +318,10 @@ export function ResizableReorderableTable<T>({
                   <th
                     key={col.id}
                     style={{ width: `${width}px`, minWidth: `${col.minWidth || 45}px`, maxWidth: `${width}px` }}
-                    className={`sticky top-0 bg-[#0B172E] px-3 py-3 font-extrabold tracking-wider border-r border-slate-800/90 ${alignClass} group z-20`}
+                    className={`sticky top-0 bg-[#555566] px-2 py-1.5 font-bold tracking-wider border-r border-[#666666] text-white ${alignClass} group z-20`}
                   >
                     <div className="flex items-center justify-between gap-1">
-                      <span className="truncate drop-shadow-sm" title={col.label}>{col.label}</span>
+                      <span className="truncate" title={col.label}>{col.label}</span>
                       
                       {/* Reorder arrows in header on hover */}
                       <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
@@ -329,7 +329,7 @@ export function ResizableReorderableTable<T>({
                           <button
                             type="button"
                             onClick={() => moveColumn(idx, 'left')}
-                            className="p-0.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white"
+                            className="p-0.5 hover:bg-[#333333] text-slate-300 hover:text-white"
                             title="ย้ายไปซ้าย"
                           >
                             <ArrowLeft className="w-3 h-3" />
@@ -339,7 +339,7 @@ export function ResizableReorderableTable<T>({
                           <button
                             type="button"
                             onClick={() => moveColumn(idx, 'right')}
-                            className="p-0.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white"
+                            className="p-0.5 hover:bg-[#333333] text-slate-300 hover:text-white"
                             title="ย้ายไปขวา"
                           >
                             <ArrowRight className="w-3 h-3" />
@@ -351,10 +351,10 @@ export function ResizableReorderableTable<T>({
                     {/* Resizer Handle */}
                     <div
                       onMouseDown={e => handleResizeStart(e, col.id)}
-                      className="absolute right-0 top-0 bottom-0 w-3 -mr-1.5 cursor-col-resize hover:bg-cyan-400 active:bg-cyan-300 transition-colors z-30 flex items-center justify-center opacity-0 group-hover:opacity-100"
+                      className="absolute right-0 top-0 bottom-0 w-3 -mr-1.5 cursor-col-resize hover:bg-[#00ff00] active:bg-[#00ff00] transition-colors z-30 flex items-center justify-center opacity-0 group-hover:opacity-100"
                       title="คลิกลากเพื่อปรับขนาดคอลัมน์ได้อย่างอิสระ"
                     >
-                      <div className="w-0.5 h-4 bg-cyan-400 rounded-full" />
+                      <div className="w-0.5 h-4 bg-[#00ff00]" />
                     </div>
                   </th>
                 );

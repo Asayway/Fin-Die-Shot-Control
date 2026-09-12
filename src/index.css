@@ -1,13 +1,51 @@
 @import "tailwindcss";
+@import "./global-theme.css";
+@import "./theme.css";
 
 @layer base {
   body {
-    background-color: #070D18;
-    color: #e2e8f0;
+    background-color: #000000;
+    color: #ffffff;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+}
+
+/* LG Monitor Industrial Dashboard Overrides */
+.lg-monitor-body {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+}
+
+.lg-header-th {
+  background-color: #666677 !important;
+  color: #ffffff !important;
+  border: 1px solid #666666 !important;
+  font-weight: 800 !important;
+}
+
+.lg-table-row-dark {
+  background-color: #333333 !important;
+  color: #ffffff !important;
+  border-bottom: 1px solid #666666 !important;
+}
+
+.lg-table-row-dark:hover {
+  background-color: #3c3c3c !important;
+}
+
+.lg-shot-cell {
+  background-color: #00ff00 !important;
+  color: #000000 !important;
+  font-weight: 900 !important;
+  text-align: right !important;
+}
+
+.lg-subhead-panel {
+  background-color: #cfd3d8 !important;
+  color: #000000 !important;
+  border: 1px solid #777777 !important;
 }
 
 /* Industrial HMI (Matrix Green & Solid Black) Theme Override */

@@ -241,6 +241,44 @@ export const MOLD_DIE_MASTER_ITEMS_2025: MoldDieMasterItem[] = [
     regrindStandard: { perGrindMm: '0.25-0.35', totalGrindMm: '1.00', regrindCycles: '3-4 time', note: '-' }
   },
 
+  // CORRUGATE STAGE
+  {
+    no: 158,
+    stage: 'CORRUGATE',
+    partName: 'CORRUGATE PUNCH 4P (Ø7)',
+    drawingNo: 'DWG-CR-001',
+    installQty: { e3_3: 180, totalQty: 180 },
+    shotLifeCycle: { e1_pcm: 20, e2_gold: 50, e3_1_pcm: 20, e3_2_gold: 60, e3_3_gold: 60, e4_bare: 50, e5_bare: 50, e6_pcm: 20 },
+    regrindStandard: { perGrindMm: '0.25', totalGrindMm: '1.20', regrindCycles: '4-5 time', note: '-' }
+  },
+  {
+    no: 159,
+    stage: 'CORRUGATE',
+    partName: 'CORRUGATE DIE 4P (Ø7)',
+    drawingNo: 'DWG-CR-002',
+    installQty: { e3_3: 180, totalQty: 180 },
+    shotLifeCycle: { e1_pcm: 20, e2_gold: 50, e3_1_pcm: 20, e3_2_gold: 60, e3_3_gold: 60, e4_bare: 50, e5_bare: 50, e6_pcm: 20 },
+    regrindStandard: { perGrindMm: '0.25', totalGrindMm: '1.20', regrindCycles: '4-5 time', note: '-' }
+  },
+  {
+    no: 160,
+    stage: 'CORRUGATE',
+    partName: 'NEW CORRUGATE PUNCH (Ø7)',
+    drawingNo: 'DWG-CR-003',
+    installQty: { e3_3: 168, totalQty: 168 },
+    shotLifeCycle: { e1_pcm: 20, e2_gold: 50, e3_1_pcm: 20, e3_2_gold: 60, e3_3_gold: 60, e4_bare: 50, e5_bare: 50, e6_pcm: 20 },
+    regrindStandard: { perGrindMm: '0.25', totalGrindMm: '1.20', regrindCycles: '4-5 time', note: '-' }
+  },
+  {
+    no: 161,
+    stage: 'CORRUGATE',
+    partName: 'NEW CORRUGATE DIE (Ø7)',
+    drawingNo: 'DWG-CR-004',
+    installQty: { e3_3: 168, totalQty: 168 },
+    shotLifeCycle: { e1_pcm: 20, e2_gold: 50, e3_1_pcm: 20, e3_2_gold: 60, e3_3_gold: 60, e4_bare: 50, e5_bare: 50, e6_pcm: 20 },
+    regrindStandard: { perGrindMm: '0.25', totalGrindMm: '1.20', regrindCycles: '4-5 time', note: '-' }
+  },
+
   // 26-27: WIDE LOWER
   {
     no: 26,

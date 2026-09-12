@@ -1,0 +1,60 @@
+{
+  "header": {
+    "title": "FIN DIE SHOT CONTROL",
+    "subtitle": "FIN DIE SHOT & LIFETIME MONITOR",
+    "liveStatus": "LIVE ONLINE",
+    "hmiStatus": "HMI ACTIVE"
+  },
+  "sidebar": {
+    "operations": "OPERATIONS",
+    "toolingSetup": "TOOLING SETUP",
+    "settings": "SETTINGS",
+    "shotEntry": "Shot Entry",
+    "tvDashboard": "TV Dashboard",
+    "partReplacement": "Part Replacement",
+    "regrindingHub": "Regrinding Hub",
+    "dieAndPartMaster": "Die & Part Master",
+    "systemSettings": "System Settings"
+  },
+  "table": {
+    "no": "NO.",
+    "partName": "PART NAME",
+    "limit": "LIMIT",
+    "current": "CURRENT",
+    "usage": "USAGE",
+    "remain": "REMAIN",
+    "progress": "PROGRESS",
+    "lastChange": "LAST CHANGE",
+    "installed": "INSTALLED",
+    "spare": "SPARE",
+    "status": "STATUS",
+    "stage": "STAGE"
+  },
+  "kpi": {
+    "totalShots": "TOTAL SHOTS",
+    "activeParts": "ACTIVE PARTS",
+    "criticalAlerts": "CRITICAL ALERTS",
+    "regrindQueue": "REGRIND QUEUE",
+    "scrapCount": "SCRAP COUNT"
+  },
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "delete": "Delete",
+    "search": "Search...",
+    "filter": "Filter",
+    "export": "Export CSV",
+    "done": "Done",
+    "confirm": "Confirm",
+    "add": "Add New"
+  },
+  "status": {
+    "normal": "NORMAL",
+    "warning": "WARNING",
+    "prepare": "PREPARE",
+    "critical": "CRITICAL",
+    "overLife": "OVER LIFE",
+    "missing": "MISSING"
+  }
+}

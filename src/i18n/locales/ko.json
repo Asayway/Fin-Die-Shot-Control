@@ -1,0 +1,60 @@
+{
+  "header": {
+    "title": "FIN DIE SHOT CONTROL",
+    "subtitle": "핀 다이 타수 및 수명 모니터링 시스템",
+    "liveStatus": "실시간 온라인",
+    "hmiStatus": "HMI 활성"
+  },
+  "sidebar": {
+    "operations": "운영",
+    "toolingSetup": "금형 설정",
+    "settings": "시스템 설정",
+    "shotEntry": "타수 입력",
+    "tvDashboard": "TV 대시보드",
+    "partReplacement": "부품 교체 및 2D 도면",
+    "regrindingHub": "연마 관리 시스템",
+    "dieAndPartMaster": "금형 및 부품 마스터",
+    "systemSettings": "시스템 설정"
+  },
+  "table": {
+    "no": "번호",
+    "partName": "부품명",
+    "limit": "한계 타수",
+    "current": "현재 타수",
+    "usage": "사용률",
+    "remain": "잔여 타수",
+    "progress": "진행률",
+    "lastChange": "최종 교체",
+    "installed": "장착 수량",
+    "spare": "재고 수량",
+    "status": "상태",
+    "stage": "공정 스테이지"
+  },
+  "kpi": {
+    "totalShots": "총 타수",
+    "activeParts": "가동 부품",
+    "criticalAlerts": "위험 경고",
+    "regrindQueue": "연마 대기",
+    "scrapCount": "폐기 수량"
+  },
+  "actions": {
+    "save": "저장",
+    "cancel": "취소",
+    "edit": "편집",
+    "delete": "삭제",
+    "search": "검색...",
+    "filter": "필터",
+    "export": "CSV 내보내기",
+    "done": "완료",
+    "confirm": "확인",
+    "add": "새로 추가"
+  },
+  "status": {
+    "normal": "정상",
+    "warning": "주의",
+    "prepare": "준비",
+    "critical": "위험",
+    "overLife": "수명 초과",
+    "missing": "기준 없음"
+  }
+}

@@ -114,11 +114,19 @@ export interface RegrindWorkTicket {
   
   // Dates & Ownership
   receivedDate: string; // ISO
+  targetCompletionDate?: string; // ISO or YYYY-MM-DD THH:mm for overdue & planning board
   inProcessDate?: string;
   completedDate?: string;
   receivedBy: string;
   assignedTechnician?: string;
   verifiedBy?: string;
+  quantity?: number;
+  isDelayed?: boolean;
+
+  // ETA & Machine Tracking
+  etaMinutes?: number;
+  etaTargetTime?: string;
+  machineAssigned?: string;
   
   // Defect & Inspection Info
   defectReason: DefectReasonCode;

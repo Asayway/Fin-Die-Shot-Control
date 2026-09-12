@@ -100,15 +100,13 @@ export default function App() {
           />
         );
       case 'line-configuration':
-        return <UnifiedToolingMasterView initialTab="install" />;
+        return <UnifiedToolingMasterView initialTab="specs" />;
       case 'unified-tooling-setup':
         return <UnifiedToolingMasterView initialTab="install" />;
       case 'part-master':
         return <UnifiedToolingMasterView initialTab="master" />;
       case 'life-standard-setup':
-        return <UnifiedToolingMasterView initialTab="standards" />;
       case 'install-quantity-setup':
-        return <UnifiedToolingMasterView initialTab="install" />;
       case 'spare-stock':
         return <UnifiedToolingMasterView initialTab="install" />;
       case 'system-settings':
@@ -133,14 +131,9 @@ export default function App() {
     }
   };
 
-  // Theme state: Industrial Dark Theme (default) or Clean Light Theme
-  const isLight = settings.theme === 'light';
-
   if (isTvFullscreen && activeRoute === 'tv-monitoring') {
     return (
-      <div className={`fixed inset-0 z-50 overflow-hidden flex flex-col h-screen w-screen max-h-screen max-w-screen p-0 m-0 ${
-        isLight ? 'theme-light bg-slate-100 text-slate-900 font-sans' : 'theme-dark bg-[#070D18] text-slate-100 font-sans'
-      }`}>
+      <div className="fixed inset-0 z-50 overflow-hidden flex flex-col h-screen w-screen max-h-screen max-w-screen p-0 m-0 theme-dark bg-[#000000] text-slate-100 font-sans">
         <Suspense fallback={<ViewSkeleton />}>
           <TvDashboardView
             initialLineId={targetLineId}
@@ -153,13 +146,7 @@ export default function App() {
   }
 
   return (
-    <div 
-      className={`h-screen max-h-screen overflow-hidden flex flex-col transition-colors duration-200 ${
-        isLight
-          ? 'theme-light bg-slate-100 text-slate-900 font-sans selection:bg-cyan-600 selection:text-white'
-          : 'theme-dark bg-[#070D18] text-slate-100 font-sans selection:bg-cyan-500 selection:text-slate-950'
-      }`}
-    >
+    <div className="h-screen max-h-screen overflow-hidden flex flex-col transition-colors duration-200 theme-dark bg-[#000000] text-slate-100 font-sans selection:bg-cyan-500 selection:text-slate-950">
       {/* Top Header */}
       <Header
         currentUser={currentUser}
@@ -176,7 +163,7 @@ export default function App() {
       />
 
       {/* Main Shell: Sidebar + Content */}
-      <div className="flex-1 flex overflow-hidden min-h-0 relative">
+      <div className="flex-1 flex overflow-hidden min-h-0 relative bg-[#000000]">
         {/* Sidebar - Locked firmly in place */}
         <Sidebar
           activeRoute={activeRoute}
@@ -184,15 +171,12 @@ export default function App() {
           userRole={currentUser.role}
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-          theme={settings.theme}
           language={settings.language}
         />
 
         {/* Content Body - Independent scrollable view container */}
-        <main className={`flex-1 min-h-0 overflow-y-auto p-2 sm:p-2.5 lg:p-3 custom-scrollbar transition-all duration-300 w-full ${
-          settings.theme === 'light' ? 'bg-[#F7F8FA] text-slate-900' : 'bg-[#080E1B] text-slate-100'
-        }`}>
-          <div className="w-full pb-4">
+        <main className={`flex-1 min-h-0 ${activeRoute === 'tv-monitoring' ? 'overflow-hidden p-0 bg-[#000000] flex flex-col' : 'overflow-y-auto p-2 sm:p-2.5 lg:p-3 custom-scrollbar'} transition-all duration-300 w-full bg-[#000000] text-slate-100`}>
+          <div className={`w-full ${activeRoute === 'tv-monitoring' ? 'h-full flex-1 flex flex-col overflow-hidden' : 'pb-4'}`}>
             <ErrorBoundary>
               <Suspense fallback={<ViewSkeleton />}>
                 {renderActiveView()}
