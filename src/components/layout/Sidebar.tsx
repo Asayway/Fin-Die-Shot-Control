@@ -2,8 +2,8 @@ import React from 'react';
 import {
   Tv,
   Wrench,
-  RotateCcw,
-  SlidersHorizontal,
+  Database,
+  Settings,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
@@ -59,14 +59,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           icon: Wrench,
           badge: '2D Die',
           badgeColor: 'bg-cyan-950 text-cyan-300 border-cyan-500'
-        },
-        {
-          id: 'regrinding-management',
-          label: t('sidebar.regrindingHub', { defaultValue: 'Regrinding Hub' }),
-          icon: RotateCcw,
-          badge: 'Grind',
-          badgeColor: 'bg-emerald-950 text-emerald-300 border-emerald-500'
-        },
+        }
       ]
     },
     {
@@ -75,7 +68,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {
           id: 'unified-tooling-setup',
           label: t('sidebar.dieAndPartMaster', { defaultValue: 'Die & Part Master' }),
-          icon: SlidersHorizontal,
+          icon: Database,
           badge: 'HUB',
           badgeColor: 'bg-cyan-950 text-cyan-300 border-cyan-500'
         }
@@ -87,7 +80,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {
           id: 'system-settings',
           label: t('sidebar.systemSettings', { defaultValue: 'System Settings' }),
-          icon: SlidersHorizontal
+          icon: Settings
         }
       ]
     }

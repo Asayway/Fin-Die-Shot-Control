@@ -11,7 +11,6 @@ import { ViewSkeleton } from './components/common/ViewSkeleton';
 const TvDashboardView = React.lazy(() => import('./components/tv/TvDashboardView').then(m => ({ default: m.TvDashboardView })));
 const ShotEntryView = React.lazy(() => import('./views/ShotEntryView').then(m => ({ default: m.ShotEntryView })));
 const ReplacementEntryView = React.lazy(() => import('./views/ReplacementEntryView').then(m => ({ default: m.ReplacementEntryView })));
-const RegrindingManagementView = React.lazy(() => import('./views/RegrindingManagementView').then(m => ({ default: m.RegrindingManagementView })));
 const UnifiedToolingMasterView = React.lazy(() => import('./views/UnifiedToolingMasterView').then(m => ({ default: m.UnifiedToolingMasterView })));
 const SystemSettingsView = React.lazy(() => import('./views/SystemSettingsView').then(m => ({ default: m.SystemSettingsView })));
 const LoginView = React.lazy(() => import('./views/SystemSettingsView').then(m => ({ default: m.LoginView })));
@@ -89,16 +88,6 @@ export default function App() {
       case 'lock-position':
       case 'die-layout':
         return <ReplacementEntryView initialLineId={targetLineId} />;
-      case 'regrinding-management':
-      case 'regrinding-entry':
-      case 'regrinding':
-        return (
-          <RegrindingManagementView
-            selectedLine={targetLineId}
-            onNavigateToDieLayout={() => setActiveRoute('replacement-entry')}
-            currentUserName={currentUser.name}
-          />
-        );
       case 'line-configuration':
         return <UnifiedToolingMasterView initialTab="specs" />;
       case 'unified-tooling-setup':
