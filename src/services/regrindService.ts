@@ -73,10 +73,41 @@ class RegrindService {
   // --- Tooling Masters ---
   public getToolingMasters(): ToolingPartMasterItem[] {
     try {
+      const partMasters = storageService.getPartMasters();
+      const regrindStds = storageService.getRegrindMasterStandards();
+      const spareStocks = storageService.getSpareStocks();
+
+      // Merge data
+      return partMasters.map(pm => {
+        const std = regrindStds.find(s => s.partCode === pm.partCode);
+        const stock = spareStocks.find(s => s.partCode === pm.partCode);
+        
+        return {
+          id: pm.partCode,
+          partName: pm.partName,
+          partCode: pm.partCode,
+          category: (pm.category as any) || 'MISC',
+          tubeSize: pm.tubeSizeCompat === 'Ø5' ? 'Ø5' : pm.tubeSizeCompat === 'Ø7' ? 'Ø7' : 'COMMON',
+          nominalLengthMm: std?.nominalLengthMm || 70.00,
+          minAllowedLengthMm: std?.minAllowedLengthMm || 65.00,
+          grindingAmountPerTimeMm: std?.grindingAmountPerTimeMm || 0.25,
+          totalGrindingAllowanceMm: std?.totalGrindingAllowanceMm || 5.00,
+          maxRegrindCount: std?.maxRegrindCount || 5,
+          regrindAllowed: std?.regrindAllowed ?? true,
+          disposeAfterOneUse: std?.disposeAfterOneUse ?? false,
+          drawingNo: pm.drawingNumber || '-',
+          picCategory: pm.category.toLowerCase(),
+          currentSpareStock: stock?.onHandQuantity || 0,
+          minSpareStock: stock?.minimumStock || 0,
+          unitPriceThb: pm.unitCostThb || 0,
+          supplierName: 'Internal / Various',
+          descriptionTh: pm.description || pm.partNameTh || ''
+        };
+      });
+    } catch (e) {
+      console.warn('Failed to link Regrind Masters with Part Master:', e);
       const raw = localStorage.getItem(STORAGE_KEYS.TOOLING_MASTERS);
       return raw ? JSON.parse(raw) : REGRIND_TOOLING_MASTERS;
-    } catch {
-      return REGRIND_TOOLING_MASTERS;
     }
   }
 

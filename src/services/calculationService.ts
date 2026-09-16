@@ -1,4 +1,3 @@
-import { storageService } from "./storageService";
 import {
   AlertSeverity,
   LifeStatus,
@@ -95,7 +94,12 @@ export function findMatchingLifeStandard(
 export function determineLifeStatus(
   usagePercent: number | null | undefined,
   isStandardMissing: boolean = false,
-  isDataError: boolean = false
+  isDataError: boolean = false,
+  customThresholds?: {
+    warningThresholdPercent?: number;
+    prepareThresholdPercent?: number;
+    criticalThresholdPercent?: number;
+  }
 ): LifeStatus {
   if (isDataError) return 'DATA_ERROR';
   
@@ -103,10 +107,9 @@ export function determineLifeStatus(
     return 'STANDARD_MISSING';
   }
 
-  const settings = storageService.getSettings();
-  const warningTh = settings?.warningThresholdPercent ?? 70;
-  const prepareTh = settings?.prepareThresholdPercent ?? 85;
-  const criticalTh = settings?.criticalThresholdPercent ?? 95;
+  const warningTh = customThresholds?.warningThresholdPercent ?? 70;
+  const prepareTh = customThresholds?.prepareThresholdPercent ?? 85;
+  const criticalTh = customThresholds?.criticalThresholdPercent ?? 95;
 
   if (usagePercent >= 100) return 'OVER_LIFE';
   if (usagePercent >= criticalTh) return 'CRITICAL';
@@ -122,7 +125,11 @@ export function determineAlertSeverity(
   prepareTh: number = 85,
   criticalTh: number = 95
 ): AlertSeverity {
-  return determineLifeStatus(usagePercent);
+  return determineLifeStatus(usagePercent, false, false, {
+    warningThresholdPercent: warningTh,
+    prepareThresholdPercent: prepareTh,
+    criticalThresholdPercent: criticalTh
+  });
 }
 
 /**

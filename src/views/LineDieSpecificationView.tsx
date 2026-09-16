@@ -29,6 +29,7 @@ import {
   PartMaster
 } from '../types';
 import { storageService } from '../services/storageService';
+import { sortStagesInOrder } from '../utils/stageUtils';
 
 interface LineDieSpecificationViewProps {
   onAddNewPartClick?: () => void;
@@ -63,6 +64,7 @@ export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> =
   const [lineConfigs, setLineConfigs] = useState<Record<string, LineActiveConfiguration>>({});
   const [lineStatuses, setLineStatuses] = useState<Record<string, MachineStatus>>({});
   const [activeE3Die, setActiveE3Die] = useState<'E3-1' | 'E3-2' | 'E3-3'>(() => storageService.getActiveE3FinDie());
+  const [stageGroups, setStageGroups] = useState<string[]>(() => storageService.getStageGroups());
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Add Part Modal state
@@ -71,7 +73,7 @@ export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> =
     partCode: '',
     partName: '',
     partNameTh: '',
-    stageName: 'Stage 1: Piercing & Burring',
+    stageName: 'Piercing & Burring',
     category: 'PUNCH',
     drawingNumber: '',
     unit: 'PCS',
@@ -81,6 +83,7 @@ export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> =
 
   const loadData = () => {
     setActiveE3Die(storageService.getActiveE3FinDie());
+    setStageGroups(storageService.getStageGroups());
     const rawConfigs = storageService.getLineConfigs();
     const configMap: Record<string, LineActiveConfiguration> = {};
     const statusMap: Record<string, MachineStatus> = {};
@@ -752,12 +755,9 @@ export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> =
                     onChange={(e) => setNewPartData({ ...newPartData, stageName: e.target.value })}
                     className="w-full bg-[#070d1a] border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400 cursor-pointer"
                   >
-                    <option value="Stage 1: Piercing & Burring">Stage 1: Piercing & Burring</option>
-                    <option value="Stage 2: Louver & Ironing">Stage 2: Louver & Ironing</option>
-                    <option value="Stage 3: Slit & Reflaire">Stage 3: Slit & Reflaire</option>
-                    <option value="Stage 4: Cut Off & Corner Cut">Stage 4: Cut Off & Corner Cut</option>
-                    <option value="Row Slit & Side Cut">Row Slit & Side Cut</option>
-                    <option value="Guide & Pilot Section">Guide & Pilot Section</option>
+                    {sortStagesInOrder(stageGroups).map(stg => (
+                      <option key={stg} value={stg}>{stg}</option>
+                    ))}
                   </select>
                 </div>
 

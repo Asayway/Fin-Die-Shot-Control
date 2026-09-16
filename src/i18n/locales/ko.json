@@ -16,6 +16,17 @@
     "dieAndPartMaster": "금형 및 부품 마스터",
     "systemSettings": "시스템 설정"
   },
+  "tv": {
+    "finDieShotCount": "FIN DIE SHOT COUNT (핀 다이 타발 수)",
+    "stagePunchDie": "스테이지 펀치 / 다이",
+    "replacementCount": "교체 횟수",
+    "shotCount": "샷 수",
+    "progress": "진행률",
+    "lifeTime": "수명 (일)",
+    "installQty": "설치 수량",
+    "stockQty": "재고 수량",
+    "orderRequire": "STATUS"
+  },
   "table": {
     "no": "번호",
     "partName": "부품명",

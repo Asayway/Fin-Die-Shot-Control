@@ -9,6 +9,18 @@ export * from './LanguageContext';
 
 export type LanguageCode = 'EN' | 'TH' | 'KO' | 'DUAL';
 
+export interface TvTranslations {
+  stagePunchDie: string;
+  replacementCount: string;
+  shotCount: string;
+  progress: string;
+  lifeTime: string;
+  installQty: string;
+  stockQty: string;
+  orderRequire: string;
+  finDieShotCount?: string;
+}
+
 export interface TableTranslations {
   no: string;
   partName: string;
@@ -74,6 +86,7 @@ export interface HeaderTranslations {
 
 export interface Dictionary {
   table: TableTranslations;
+  tv: TvTranslations;
   controls: ControlsTranslations;
   sidebar: SidebarTranslations;
   header: HeaderTranslations;
@@ -93,6 +106,17 @@ export const TRANSLATIONS: Record<'EN' | 'TH' | 'KO', Dictionary> = {
       installed: en.table.installed,
       spare: en.table.spare,
       status: en.table.status
+    },
+    tv: {
+      stagePunchDie: en.tv.stagePunchDie,
+      replacementCount: en.tv.replacementCount,
+      shotCount: en.tv.shotCount,
+      progress: en.tv.progress,
+      lifeTime: en.tv.lifeTime,
+      installQty: en.tv.installQty,
+      stockQty: en.tv.stockQty,
+      orderRequire: en.tv.orderRequire,
+      finDieShotCount: en.tv.finDieShotCount
     },
     controls: {
       line: 'LINE',
@@ -155,6 +179,17 @@ export const TRANSLATIONS: Record<'EN' | 'TH' | 'KO', Dictionary> = {
       spare: th.table.spare,
       status: th.table.status
     },
+    tv: {
+      stagePunchDie: th.tv.stagePunchDie,
+      replacementCount: th.tv.replacementCount,
+      shotCount: th.tv.shotCount,
+      progress: th.tv.progress,
+      lifeTime: th.tv.lifeTime,
+      installQty: th.tv.installQty,
+      stockQty: th.tv.stockQty,
+      orderRequire: th.tv.orderRequire,
+      finDieShotCount: th.tv.finDieShotCount
+    },
     controls: {
       line: 'สายผลิต',
       sort: 'เรียงลำดับ',
@@ -215,6 +250,17 @@ export const TRANSLATIONS: Record<'EN' | 'TH' | 'KO', Dictionary> = {
       installed: ko.table.installed,
       spare: ko.table.spare,
       status: ko.table.status
+    },
+    tv: {
+      stagePunchDie: ko.tv.stagePunchDie,
+      replacementCount: ko.tv.replacementCount,
+      shotCount: ko.tv.shotCount,
+      progress: ko.tv.progress,
+      lifeTime: ko.tv.lifeTime,
+      installQty: ko.tv.installQty,
+      stockQty: ko.tv.stockQty,
+      orderRequire: ko.tv.orderRequire,
+      finDieShotCount: ko.tv.finDieShotCount
     },
     controls: {
       line: '라인',

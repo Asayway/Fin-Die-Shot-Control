@@ -1,5 +1,5 @@
 import { getMoldTypeForLine, getStagesForMoldType } from "../utils/moldMatrixUtils";
-import { deriveLogicalStage } from "../utils/stageUtils";
+import { cleanStageName, deriveLogicalStage, DEFAULT_STAGE_GROUPS } from "../utils/stageUtils";
 import {
   LineLiveMonitoringData,
   LineActiveConfiguration,
@@ -87,6 +87,7 @@ const STORAGE_KEYS = {
   POSITION_LOCKS: 'fin_press_position_locks',
   DOWNTIME_LOGS: 'fin_press_downtime_logs',
   ACTIVE_E3_FIN_DIE: 'fin_press_active_e3_fin_die',
+  STAGE_GROUPS: 'fin_press_custom_stage_groups',
   SEED_INITIALIZED: 'fin_press_seed_init_v9'
 };
 
@@ -123,6 +124,39 @@ class StorageService {
     const initialized = localStorage.getItem(STORAGE_KEYS.SEED_INITIALIZED);
     if (!initialized) {
       this.resetToSeedData();
+    }
+    this.migrateStageNamesToEnglish();
+  }
+
+  private migrateStageNamesToEnglish() {
+    try {
+      let updatedParts = false;
+      const parts = this.getPartMasters();
+      parts.forEach(p => {
+        const cleaned = cleanStageName(p.stageName);
+        if (cleaned !== p.stageName) {
+          p.stageName = cleaned;
+          updatedParts = true;
+        }
+      });
+      if (updatedParts) {
+        localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(parts));
+      }
+
+      let updatedGroups = false;
+      const groups = this.getStageGroups();
+      const cleanedGroups = groups.map(g => {
+        const cleaned = cleanStageName(g);
+        if (cleaned !== g) updatedGroups = true;
+        return cleaned;
+      });
+      if (updatedGroups) {
+        // deduplicate just in case
+        const uniqueGroups = Array.from(new Set(cleanedGroups));
+        localStorage.setItem(STORAGE_KEYS.STAGE_GROUPS, JSON.stringify(uniqueGroups));
+      }
+    } catch (e) {
+      console.error('Error migrating stage names:', e);
     }
   }
 
@@ -286,12 +320,32 @@ class StorageService {
     this.notify();
   }
 
+  public getStageGroups(): string[] {
+    const stored = localStorage.getItem(STORAGE_KEYS.STAGE_GROUPS);
+    if (stored) {
+      return JSON.parse(stored);
+    }
+    return DEFAULT_STAGE_GROUPS;
+  }
+
+  public saveStageGroups(groups: string[]) {
+    const seen = new Set<string>();
+    const uniqueGroups: string[] = [];
+    groups.forEach(g => {
+      const trimmed = g.trim();
+      if (!trimmed) return;
+      const normalized = trimmed.toUpperCase();
+      if (!seen.has(normalized)) {
+        seen.add(normalized);
+        uniqueGroups.push(trimmed);
+      }
+    });
+    localStorage.setItem(STORAGE_KEYS.STAGE_GROUPS, JSON.stringify(uniqueGroups));
+    this.notify();
+  }
+
   public getPartMasters(): PartMaster[] {
-    const raw: PartMaster[] = JSON.parse(localStorage.getItem(STORAGE_KEYS.PART_MASTERS) || '[]');
-    return raw.map(pm => ({
-      ...pm,
-      stageName: deriveLogicalStage(pm.partName, pm.stageName)
-    }));
+    return JSON.parse(localStorage.getItem(STORAGE_KEYS.PART_MASTERS) || '[]');
   }
 
   public savePartMaster(part: PartMaster): void {
@@ -369,22 +423,33 @@ class StorageService {
   }
 
   public renameStageGroup(oldStageName: string, newStageName: string): void {
+    const groups = this.getStageGroups();
+    const newGroups = groups.map(g => {
+      if (g === oldStageName || g.trim().toLowerCase() === oldStageName.trim().toLowerCase()) {
+        return newStageName.trim();
+      }
+      return g;
+    });
+    
+    this.saveStageGroups(newGroups);
+
     const list = this.getPartMasters();
     let updatedCount = 0;
     list.forEach(p => {
-      if (p.stageName === oldStageName) {
-        p.stageName = newStageName;
+      if (p.stageName === oldStageName || (p.stageName && p.stageName.trim().toLowerCase() === oldStageName.trim().toLowerCase())) {
+        p.stageName = newStageName.trim();
         updatedCount++;
       }
     });
+
     if (updatedCount > 0) {
       localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(list));
       
       // Also update Life Standards
       const lifeStds = this.getLifeStandards();
       lifeStds.forEach(std => {
-        if (std.stagePunchDie === oldStageName) {
-          std.stagePunchDie = newStageName;
+        if (std.stagePunchDie === oldStageName || (std.stagePunchDie && std.stagePunchDie.trim().toLowerCase() === oldStageName.trim().toLowerCase())) {
+          std.stagePunchDie = newStageName.trim();
         }
       });
       localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(lifeStds));
@@ -392,15 +457,55 @@ class StorageService {
       // Also update Regrind Standards
       const regrindStds = this.getRegrindMasterStandards();
       regrindStds.forEach(std => {
-        if (std.stagePunchDie === oldStageName) {
-          std.stagePunchDie = newStageName;
+        if (std.stagePunchDie === oldStageName || (std.stagePunchDie && std.stagePunchDie.trim().toLowerCase() === oldStageName.trim().toLowerCase())) {
+          std.stagePunchDie = newStageName.trim();
         }
       });
       localStorage.setItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(regrindStds));
 
       this.addAuditLog('SYSTEM', `Renamed Stage Group from "${oldStageName}" to "${newStageName}" across ${updatedCount} parts`);
-      this.notify();
     }
+    this.notify();
+  }
+
+  public deleteStageGroup(stageName: string): void {
+    const groups = this.getStageGroups();
+    const newGroups = groups.filter(g => g !== stageName && g.trim().toLowerCase() !== stageName.trim().toLowerCase());
+    this.saveStageGroups(newGroups);
+
+    const list = this.getPartMasters();
+    let updatedCount = 0;
+    list.forEach(p => {
+      if (p.stageName === stageName || (p.stageName && p.stageName.trim().toLowerCase() === stageName.trim().toLowerCase())) {
+        p.stageName = '';
+        updatedCount++;
+      }
+    });
+
+    if (updatedCount > 0) {
+      localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(list));
+      
+      // Update Life Standards
+      const lifeStds = this.getLifeStandards();
+      lifeStds.forEach(std => {
+        if (std.stagePunchDie === stageName || (std.stagePunchDie && std.stagePunchDie.trim().toLowerCase() === stageName.trim().toLowerCase())) {
+          std.stagePunchDie = '';
+        }
+      });
+      localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(lifeStds));
+
+      // Update Regrind Standards
+      const regrindStds = this.getRegrindMasterStandards();
+      regrindStds.forEach(std => {
+        if (std.stagePunchDie === stageName || (std.stagePunchDie && std.stagePunchDie.trim().toLowerCase() === stageName.trim().toLowerCase())) {
+          std.stagePunchDie = '';
+        }
+      });
+      localStorage.setItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(regrindStds));
+
+      this.addAuditLog('SYSTEM', `Deleted Stage Group "${stageName}" and cleared it from ${updatedCount} parts`);
+    }
+    this.notify();
   }
 
   public deletePartMaster(partCode: string): void {
@@ -1533,6 +1638,11 @@ class StorageService {
     const all = this.getLinesMonitoring();
     const line = all[lineId];
     if (!line) return;
+
+    // Enforce condition: Connected shots apply only if line is RUNNING
+    if (entryType === 'AUTOMATIC_PLC' && line.machineStatus !== 'RUNNING') {
+      return;
+    }
 
     const previousTotal = line.machineShotTotal;
     const newTotal = previousTotal + shotsAdded;
@@ -3462,6 +3572,92 @@ class StorageService {
 
   public clearTelemetryBuffer(): void {
     localStorage.setItem(STORAGE_KEYS.OFFLINE_BUFFER, JSON.stringify([]));
+  }
+
+  /**
+   * Performs a synchronization check across all part records to ensure all stage names 
+   * exist in the custom stage groups list. Fixes broken references and casing mismatches.
+   */
+  public validateAndSyncStages(): { added: number; fixed: number } {
+    const groups = this.getStageGroups();
+    const seen = new Set<string>(groups.map(g => g.trim().toUpperCase()));
+    const normalizedGroups = new Map<string, string>(groups.map(g => [g.trim().toUpperCase(), g.trim()]));
+    
+    let addedCount = 0;
+    let fixedCount = 0;
+    
+    const parts = this.getPartMasters();
+    const lifeStds = this.getLifeStandards();
+    const regrindStds = this.getRegrindMasterStandards();
+
+    // 1. Scan for missing stages and add them to groups
+    const scanAndAdd = (stg: string | undefined) => {
+      if (!stg || stg.trim() === '-' || stg.trim() === '') return;
+      const trimmed = stg.trim();
+      const upper = trimmed.toUpperCase();
+      if (!seen.has(upper)) {
+        groups.push(trimmed);
+        seen.add(upper);
+        normalizedGroups.set(upper, trimmed);
+        addedCount++;
+      }
+    };
+
+    parts.forEach(p => scanAndAdd(p.stageName));
+    lifeStds.forEach(s => scanAndAdd(s.stagePunchDie));
+    regrindStds.forEach(s => scanAndAdd(s.stagePunchDie));
+
+    // 2. Fix casing mismatches in records to match official groups
+    const fixCasing = (stg: string | undefined): string | null => {
+      if (!stg || stg.trim() === '-' || stg.trim() === '') return null;
+      const trimmed = stg.trim();
+      const official = normalizedGroups.get(trimmed.toUpperCase());
+      if (official && trimmed !== official) {
+        return official;
+      }
+      return null;
+    };
+
+    parts.forEach(p => {
+      const fixed = fixCasing(p.stageName);
+      if (fixed) {
+        p.stageName = fixed;
+        fixedCount++;
+      }
+    });
+
+    lifeStds.forEach(s => {
+      const fixed = fixCasing(s.stagePunchDie);
+      if (fixed) {
+        s.stagePunchDie = fixed;
+        fixedCount++;
+      }
+    });
+
+    regrindStds.forEach(s => {
+      const fixed = fixCasing(s.stagePunchDie);
+      if (fixed) {
+        s.stagePunchDie = fixed;
+        fixedCount++;
+      }
+    });
+
+    if (addedCount > 0) {
+      this.saveStageGroups(groups);
+    }
+
+    if (fixedCount > 0) {
+      localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(parts));
+      localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(lifeStds));
+      localStorage.setItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(regrindStds));
+    }
+
+    if (addedCount > 0 || fixedCount > 0) {
+      this.addAuditLog('SYSTEM', `Database Sync: Added ${addedCount} missing stages and fixed ${fixedCount} broken references.`);
+      this.notify();
+    }
+
+    return { added: addedCount, fixed: fixedCount };
   }
 }
 

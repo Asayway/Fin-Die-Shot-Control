@@ -85,7 +85,7 @@ export const UnifiedToolingMasterView: React.FC<UnifiedToolingMasterViewProps> =
 
       {activeTab === 'matrix' && (
         <div className="pt-0.5">
-          <InstallQuantityMatrixView />
+          <InstallQuantityMatrixView onNavigateToMaster={() => setActiveTab('master')} />
         </div>
       )}
     </div>

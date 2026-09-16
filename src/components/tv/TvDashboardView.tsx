@@ -19,7 +19,7 @@ import {
   sortTrackingItems, 
   TvSortMode
 } from '../../services/calculationService';
-import { getI18n, LanguageCode } from '../../i18n';
+import { getI18n, LanguageCode, useLanguage } from '../../i18n';
 import { TvTableRow } from './TvTableRow';
 
 interface TvDashboardViewProps {
@@ -33,6 +33,7 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
   isFullscreenMode = false,
   onToggleFullscreen
 }) => {
+  const { t: translate, language } = useLanguage();
   const [selectedLineId, setSelectedLineId] = useState<ProductionLineId>(initialLineId);
   const [lineData, setLineData] = useState<LineLiveMonitoringData | null>(null);
 
@@ -42,25 +43,7 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
   const [countdown, setCountdown] = useState<number>(10);
 
   // Active Display Language
-  const [currentLang, setCurrentLang] = useState<LanguageCode>(() => {
-    return (storageService.getSettings().language as LanguageCode) || 'EN';
-  });
-
-  useEffect(() => {
-    const checkLang = () => {
-      const activeLang = storageService.getSettings().language || 'EN';
-      if (activeLang !== currentLang) {
-        setCurrentLang(activeLang as LanguageCode);
-      }
-    };
-    const interval = setInterval(checkLang, 400);
-    window.addEventListener('storage', checkLang);
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('storage', checkLang);
-    };
-  }, [currentLang]);
-
+  const currentLang = language;
   const t = getI18n(currentLang);
   
   // Sort Mode State
@@ -178,7 +161,7 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
           slotId: item.slotId || `SLOT-${selectedLineId}-${idx + 1}`,
           partCode: item.partCode || matchedPart?.partCode || `P-${idx + 1}`,
           partName: matchedPart?.partName || item.partName || item.stagePunchDie,
-          stagePunchDie: item.stagePunchDie || matchedPart?.stageName || matchedPart?.partName || item.partName,
+          stagePunchDie: matchedPart?.partName || item.partName || item.stagePunchDie,
           position: item.position || `${item.stagePunchDie} Stage 1`,
           installQty: installQtyVal,
           backupQty: stockQtyVal,
@@ -244,9 +227,30 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
       setCountdown(prev => {
         if (prev <= 1) {
           setSelectedLineId(currentLine => {
-            const idx = linesList.indexOf(currentLine);
-            const nextIdx = (idx + 1) % linesList.length;
-            return linesList[nextIdx];
+            // Get all monitoring data to see which lines are active/running
+            const allMonitoring = storageService.getLinesMonitoring();
+            
+            // Sequential list of all lines
+            const allLines: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
+            
+            // Find current index
+            const currentIdx = allLines.indexOf(currentLine);
+            
+            // Try to find the next line that is RUNNING or at least has an active config
+            // We search through the list starting from the next item
+            for (let i = 1; i <= allLines.length; i++) {
+              const nextIdx = (currentIdx + i) % allLines.length;
+              const nextLineId = allLines[nextIdx];
+              const mData = allMonitoring[nextLineId];
+              
+              // If we found a line that is RUNNING or has an active config, switch to it
+              // Or if we've looped back to the start, just pick the next one anyway
+              if (mData?.machineStatus === 'RUNNING' || mData?.activeConfig || i === allLines.length) {
+                return nextLineId;
+              }
+            }
+            
+            return currentLine;
           });
           return autoCycleInterval;
         }
@@ -318,10 +322,10 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
           </span>
         </div>
 
-        {/* Center: {Line Title} Fin Die Shot Count */}
-        <div className="text-center flex-1 mx-2">
-          <h1 className="text-xl sm:text-3xl md:text-4xl lg:text-5xl font-black tracking-wide text-white font-sans uppercase">
-            {lineDisplayName} Fin Die Shot Count
+        {/* Center: FIN DIE SHOT COUNT */}
+        <div className="text-center flex-1 mx-2 overflow-hidden">
+          <h1 className="text-lg sm:text-2xl md:text-3xl lg:text-4xl font-black tracking-wide text-white font-sans uppercase truncate">
+            {lineDisplayName} FIN DIE SHOT COUNT
           </h1>
         </div>
 
@@ -389,17 +393,17 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
             <span className="text-[#888888] font-bold uppercase hidden md:inline mr-0.5 text-[10px] sm:text-xs">
               SIGNAL STANDARD:
             </span>
-            <span className="px-2 py-0.5 bg-[#00ff00] text-black rounded font-black text-[10px] sm:text-xs whitespace-nowrap">
-              Normal
+            <span className="px-2 py-0.5 bg-[#00ff00] text-black rounded font-black text-[10px] sm:text-xs whitespace-nowrap" title="Normal: < 70%">
+              Normal (ปกติ / 정상)
             </span>
-            <span className="px-2 py-0.5 bg-[#ffff00] text-black rounded font-black text-[10px] sm:text-xs whitespace-nowrap">
-              Warning Replace Count
+            <span className="px-2 py-0.5 bg-[#ffff00] text-black rounded font-black text-[10px] sm:text-xs whitespace-nowrap" title="Warning Replace Count: 70% - 84%">
+              Warning (เตือนเปลี่ยน / 경고)
             </span>
-            <span className="px-2 py-0.5 bg-[#f97316] text-white rounded font-black text-[10px] sm:text-xs whitespace-nowrap">
-              Prepare Replace Count
+            <span className="px-2 py-0.5 bg-[#f97316] text-white rounded font-black text-[10px] sm:text-xs whitespace-nowrap" title="Prepare Replace Count: 85% - 99%">
+              Prepare (เตรียมเปลี่ยน / 교체준비)
             </span>
-            <span className="px-2 py-0.5 bg-[#ff0000] text-white rounded font-black text-[10px] sm:text-xs whitespace-nowrap">
-              Over Life Replace Count
+            <span className="px-2 py-0.5 bg-[#ff0000] text-white rounded font-black text-[10px] sm:text-xs whitespace-nowrap" title="Over Life Replace Count: >= 100%">
+              Over Life (เกินอายุ / 수명초과)
             </span>
           </div>
 
@@ -436,7 +440,7 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
                 className="h-full flex items-center justify-center text-center px-1.5 sm:px-2 border-r border-[#282828] flex-shrink-0 relative"
                 style={{ width: `${colWidths.stage}%` }}
               >
-                <span className="truncate">Stage Punch / Die</span>
+                <span className="truncate">{t.tv.stagePunchDie}</span>
                 <div 
                   className="absolute right-0 top-0 bottom-0 w-3 cursor-col-resize hover:bg-white/50 z-20" 
                   onMouseDown={(e) => handleResizeStart(e, 'stage')} 
@@ -449,7 +453,7 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
                 className="h-full flex items-center justify-center text-center px-1.5 sm:px-2 border-r border-[#282828] flex-shrink-0 relative"
                 style={{ width: `${colWidths.replacement}%` }}
               >
-                <span className="truncate">Replacement Count</span>
+                <span className="truncate">{t.tv.replacementCount}</span>
                 <div 
                   className="absolute right-0 top-0 bottom-0 w-3 cursor-col-resize hover:bg-white/50 z-20" 
                   onMouseDown={(e) => handleResizeStart(e, 'replacement')} 
@@ -462,7 +466,7 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
                 className="h-full flex items-center justify-center text-center px-1.5 sm:px-2 border-r border-[#282828] flex-shrink-0 relative"
                 style={{ width: `${colWidths.shot}%` }}
               >
-                <span className="truncate">Shot Count</span>
+                <span className="truncate">{t.tv.shotCount}</span>
                 <div 
                   className="absolute right-0 top-0 bottom-0 w-3 cursor-col-resize hover:bg-white/50 z-20" 
                   onMouseDown={(e) => handleResizeStart(e, 'shot')} 
@@ -475,7 +479,7 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
                 className="h-full flex items-center justify-center text-center px-1 sm:px-2 border-r border-[#282828] flex-shrink-0 relative"
                 style={{ width: `${colWidths.progress}%` }}
               >
-                <span className="truncate">Progress</span>
+                <span className="truncate">{t.tv.progress}</span>
                 <div 
                   className="absolute right-0 top-0 bottom-0 w-3 cursor-col-resize hover:bg-white/50 z-20" 
                   onMouseDown={(e) => handleResizeStart(e, 'progress')} 
@@ -488,7 +492,7 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
                 className="h-full flex items-center justify-center text-center px-1.5 sm:px-2 border-r border-[#282828] flex-shrink-0 relative"
                 style={{ width: `${colWidths.lifetime}%` }}
               >
-                <span className="truncate">Life Time (Days)</span>
+                <span className="truncate">{t.tv.lifeTime}</span>
                 <div 
                   className="absolute right-0 top-0 bottom-0 w-3 cursor-col-resize hover:bg-white/50 z-20" 
                   onMouseDown={(e) => handleResizeStart(e, 'lifetime')} 
@@ -501,7 +505,7 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
                 className="h-full flex items-center justify-center text-center px-1 sm:px-2 border-r border-[#282828] flex-shrink-0 relative"
                 style={{ width: `${colWidths.installQty}%` }}
               >
-                <span className="truncate">Install Qty.</span>
+                <span className="truncate">{t.tv.installQty}</span>
                 <div 
                   className="absolute right-0 top-0 bottom-0 w-3 cursor-col-resize hover:bg-white/50 z-20" 
                   onMouseDown={(e) => handleResizeStart(e, 'installQty')} 
@@ -514,7 +518,7 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
                 className="h-full flex items-center justify-center text-center px-1 sm:px-2 border-r border-[#282828] flex-shrink-0 relative"
                 style={{ width: `${colWidths.stockQty}%` }}
               >
-                <span className="truncate">Stock Qty.</span>
+                <span className="truncate">{t.tv.stockQty}</span>
                 <div 
                   className="absolute right-0 top-0 bottom-0 w-3 cursor-col-resize hover:bg-white/50 z-20" 
                   onMouseDown={(e) => handleResizeStart(e, 'stockQty')} 
@@ -527,12 +531,7 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
                 className="h-full flex items-center justify-center text-center px-1 sm:px-2 flex-shrink-0 relative"
                 style={{ width: `${colWidths.orderRequire}%` }}
               >
-                <span className="truncate">Order Require</span>
-                <div 
-                  className="absolute right-0 top-0 bottom-0 w-3 cursor-col-resize hover:bg-white/50 z-20" 
-                  onMouseDown={(e) => handleResizeStart(e, 'orderRequire')} 
-                  title="Drag to resize column"
-                />
+                <span className="truncate">{t.tv.orderRequire}</span>
               </div>
 
             </div>
@@ -577,15 +576,15 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
                   setSelectedLineId(lineId);
                   setCountdown(autoCycleInterval);
                 }}
-                className={`px-2.5 py-1 text-xs font-mono font-bold rounded transition-all cursor-pointer flex items-center gap-1.5 ${
+                className={`px-2 py-1 text-[11px] sm:text-xs font-mono font-bold rounded transition-all cursor-pointer flex items-center justify-center gap-1.5 min-w-[125px] sm:min-w-[140px] flex-shrink-0 ${
                   isSelected
                     ? 'bg-[#00ff00] text-black border border-[#00dd00] shadow-[0_0_10px_rgba(0,255,0,0.85)] font-black'
                     : 'bg-[#181818] text-white hover:bg-[#282828] border border-[#444444]'
                 }`}
               >
-                <span>{label}</span>
+                <span className="truncate">{label}</span>
                 {subTag && (
-                  <span className={`text-[10px] px-1 py-0.2 rounded font-sans font-bold ${
+                  <span className={`text-[9px] px-1 py-0.2 rounded font-sans font-bold flex-shrink-0 ${
                     isSelected ? 'bg-black text-[#00ff00]' : 'bg-[#2a2a2a] text-slate-300'
                   }`}>
                     {subTag}
@@ -596,8 +595,38 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
           })}
         </div>
 
-        {/* Right side Bottom-Right Auto Cycle Controls (Single unified location) */}
+        {/* Right side Bottom-Right Auto Cycle Controls & Status Badge */}
         <div className="flex items-center gap-2">
+          {/* Status Badge matching Auto Cycle button size */}
+          {lineData && (
+            <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono font-bold rounded transition-all ${
+              lineData.machineStatus === 'STOPPED' 
+                ? 'bg-red-950/90 border border-red-500 text-red-200 shadow-[0_0_12px_rgba(239,68,68,0.7)] animate-pulse' :
+              lineData.machineStatus === 'IDLE' 
+                ? 'bg-amber-950/90 border border-yellow-400 text-yellow-200 shadow-[0_0_12px_rgba(234,179,8,0.7)] animate-pulse' :
+              lineData.machineStatus === 'MAINTENANCE' 
+                ? 'bg-blue-950/90 border border-blue-400 text-blue-200 shadow-[0_0_12px_rgba(59,130,246,0.7)] animate-pulse' :
+              lineData.machineStatus === 'CHANGEOVER'
+                ? 'bg-purple-950/90 border border-purple-400 text-purple-200 shadow-[0_0_12px_rgba(168,85,247,0.7)] animate-pulse' :
+                'bg-emerald-950/80 border border-emerald-500/50 text-emerald-300'
+            }`} title={`Current Line Status: ${lineData.machineStatus}`}>
+              <span>
+                {lineData.machineStatus === 'STOPPED' ? '🔴' :
+                 lineData.machineStatus === 'IDLE' ? '🟡' :
+                 lineData.machineStatus === 'MAINTENANCE' ? '🔧' :
+                 lineData.machineStatus === 'CHANGEOVER' ? '🔄' : '🟢'}
+              </span>
+              <span className="uppercase tracking-wider">
+                {lineData.machineStatus === 'RUNNING' ? 'RUNNING (กำลังผลิต)' :
+                 lineData.machineStatus === 'STOPPED' ? 'STOPPED (หยุด)' :
+                 lineData.machineStatus === 'IDLE' ? 'IDLE (พักสาย)' :
+                 lineData.machineStatus === 'MAINTENANCE' ? 'MAINTENANCE (ซ่อมบำรุง)' :
+                 lineData.machineStatus === 'CHANGEOVER' ? 'CHANGEOVER (เปลี่ยนรุ่น)' :
+                 lineData.machineStatus}
+              </span>
+            </div>
+          )}
+
           {/* Timer Interval selector buttons */}
           <div className="flex items-center gap-0.5 bg-[#141414] border border-[#444444] rounded p-0.5">
             {[5, 10, 15, 20].map((sec) => (
@@ -636,7 +665,7 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
             {isAutoCycleActive ? (
               <>
                 <RotateCw className="w-4 h-4 animate-spin text-[#00ff00]" />
-                <span className="font-black">AUTO CYCLING LINES ({countdown}s)</span>
+                <span className="font-black">AUTO CYCLING ({countdown}s)</span>
               </>
             ) : (
               <>

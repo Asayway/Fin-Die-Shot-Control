@@ -29,7 +29,6 @@ import { ProductionLineId, LineActiveConfiguration, PartMaster } from '../types'
 import { storageService } from '../services/storageService';
 import { formatShots } from '../services/calculationService';
 
-import { PartMasterModal } from '../components/common/PartMasterModal';
 import { DeleteConfirmationModal } from '../components/common/DeleteConfirmationModal';
 import { StageManagementModal } from '../components/common/StageManagementModal';
 import { exportInstallMatrixExcel } from '../utils/excelExport';
@@ -52,7 +51,13 @@ const LINE_COLUMNS: LineColDefinition[] = [
   { id: 'E5', label: 'E5', headerName: 'E5', subName: 'Ø5 Slit' },
 ];
 
-export const InstallQuantityMatrixView: React.FC = () => {
+interface InstallQuantityMatrixViewProps {
+  onNavigateToMaster?: () => void;
+}
+
+export const InstallQuantityMatrixView: React.FC<InstallQuantityMatrixViewProps> = ({
+  onNavigateToMaster
+}) => {
   const [lines, setLines] = useState<LineActiveConfiguration[]>([]);
   const [partMasters, setPartMasters] = useState<PartMaster[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -86,8 +91,6 @@ export const InstallQuantityMatrixView: React.FC = () => {
   });
 
   // CRUD Modals
-  const [showAddEditModal, setShowAddEditModal] = useState(false);
-  const [editingPartData, setEditingPartData] = useState<any | null>(null);
   const [deleteTargetPart, setDeleteTargetPart] = useState<{ partCode: string; partName: string; stage: string; total: number } | null>(null);
 
   // Batch Update Modal / Panel State
@@ -183,18 +186,54 @@ export const InstallQuantityMatrixView: React.FC = () => {
     }
   };
 
+  // Stage color badge style - Unified with PART INSTALL aesthetic
+  const getStageColor = (stage: string) => {
+    const stg = (stage || '').toUpperCase();
+    
+    // Define colors for standard stages
+    if (stg.includes('PIERCE') || stg.includes('BURRING')) return 'border-[#FFCC00] text-[#FFCC00]'; // Yellow/Amber
+    if (stg.includes('IRONING')) return 'border-blue-400 text-blue-400';
+    if (stg.includes('LOUVER') || stg.includes('SLIT')) return 'border-emerald-400 text-emerald-400';
+    if (stg.includes('REFLAIRE') || stg.includes('REFLARE')) return 'border-purple-400 text-purple-400';
+    if (stg.includes('NOTCH') || stg.includes('PUNCH')) return 'border-sky-400 text-sky-400';
+    if (stg.includes('CUT OFF') || stg.includes('SIDE CUT')) return 'border-rose-400 text-rose-400';
+    if (stg.includes('FORMING')) return 'border-teal-400 text-teal-400';
+    if (stg.includes('PILOT') || stg.includes('FEED')) return 'border-orange-400 text-orange-400';
+    
+    // Fallback for custom stages
+    return 'border-slate-500 text-slate-300';
+  };
+
   const getCellKey = (partCode: string, lineId: string) => `${partCode}__${lineId}`;
 
-  // Unique list of stages for dropdown (combining default stage groups and active stages)
+  // Unique list of stages for dropdown (combining custom stage groups and active stages)
   const stageOptions = useMemo(() => {
-    const set = new Set<string>(DEFAULT_STAGE_GROUPS);
-    partMasters.forEach(pm => {
-      const derived = deriveLogicalStage(pm.partName, pm.stageName);
-      if (derived && derived !== '-') {
-        set.add(derived);
+    const rawGroups = storageService.getStageGroups();
+    const seen = new Set<string>();
+    const uniqueList: string[] = [];
+
+    // First add managed groups
+    rawGroups.forEach(g => {
+      const normalized = g.trim().toUpperCase();
+      if (normalized && !seen.has(normalized)) {
+        seen.add(normalized);
+        uniqueList.push(g.trim());
       }
     });
-    return sortStagesInOrder(Array.from(set));
+
+    // Then add any stages from items that aren't in groups yet
+    partMasters.forEach(pm => {
+      const derived = pm.stageName || deriveLogicalStage(pm.partName, pm.stageName);
+      if (derived && derived !== '-') {
+        const normalized = derived.trim().toUpperCase();
+        if (!seen.has(normalized)) {
+          seen.add(normalized);
+          uniqueList.push(derived.trim());
+        }
+      }
+    });
+
+    return sortStagesInOrder(uniqueList);
   }, [partMasters]);
 
   // Build the live matrix rows
@@ -215,7 +254,7 @@ export const InstallQuantityMatrixView: React.FC = () => {
         partCode: pm.partCode,
         partName: pm.partName,
         drawingCode: (pm as any).drawingNumber || pm.partCode,
-        stageName: deriveLogicalStage(pm.partName, pm.stageName),
+        stageName: pm.stageName || deriveLogicalStage(pm.partName, pm.stageName),
         material: (pm as any).material || 'SKD11',
         maintenanceType: (pm as any).maintenanceType || 'REGRIND',
         quantities: {},
@@ -419,45 +458,11 @@ export const InstallQuantityMatrixView: React.FC = () => {
     }
   };
 
-  // Open Edit Modal for a row
+  // Open Edit Modal for a row (navigate to Part Master tab)
   const handleOpenEditModalForRow = (row: typeof matrixRows[0]) => {
-    const lifeStandards = storageService.getLifeStandards();
-    const ls = lifeStandards.find(s => (s as any).partCode === row.partCode || s.configKey?.partCode === row.partCode || s.id === row.partCode);
-
-    setEditingPartData({
-      partCode: row.partCode,
-      partName: row.partName,
-      stage: row.stageName,
-      drawingNo: row.drawingCode,
-      material: row.material,
-      maintenanceType: row.maintenanceType,
-      installQty: {
-        e1: row.quantities['E1'],
-        e2: row.quantities['E2'],
-        e3_1: row.quantities['E3-1'],
-        e3_2: row.quantities['E3-2'],
-        e3_3: row.quantities['E3-3'],
-        e4: row.quantities['E4'],
-        e5: row.quantities['E5'],
-      },
-      shotLifeCycle: {
-        e1_pcm: (ls as any)?.shotLifeStandards?.['E1'] ? ((ls as any).shotLifeStandards['E1'] / 1_000_000) : 5.0,
-        e2_gold: (ls as any)?.shotLifeStandards?.['E2'] ? ((ls as any).shotLifeStandards['E2'] / 1_000_000) : 5.0,
-        e3_1_pcm: (ls as any)?.shotLifeStandards?.['E3-1'] ? ((ls as any).shotLifeStandards['E3-1'] / 1_000_000) : 5.0,
-        e3_2_gold: (ls as any)?.shotLifeStandards?.['E3-2'] ? ((ls as any).shotLifeStandards['E3-2'] / 1_000_000) : 5.0,
-        e3_3_gold: (ls as any)?.shotLifeStandards?.['E3-3'] ? ((ls as any).shotLifeStandards['E3-3'] / 1_000_000) : 5.0,
-        e4_bare: (ls as any)?.shotLifeStandards?.['E4'] ? ((ls as any).shotLifeStandards['E4'] / 1_000_000) : 4.0,
-        e5_bare: (ls as any)?.shotLifeStandards?.['E5'] ? ((ls as any).shotLifeStandards['E5'] / 1_000_000) : 4.0,
-        lowerSpecScrapLimit: (ls as any)?.lowerSpecLimit || (ls as any)?.scrapLimit || '62.50'
-      },
-      regrindStandard: {
-        perGrindMm: (ls as any)?.oneTimeRegrindMm || '0.05 mm',
-        totalGrindMm: (ls as any)?.totalRegrindMm || '0.50',
-        regrindCycles: (ls as any)?.maxRegrindCount || 10,
-        note: (ls as any)?.specialNotes || (ls as any)?.notes || ''
-      }
-    });
-    setShowAddEditModal(true);
+    if (onNavigateToMaster) {
+      onNavigateToMaster();
+    }
   };
 
   // Export Matrix to Excel (.xlsx)
@@ -481,122 +486,116 @@ export const InstallQuantityMatrixView: React.FC = () => {
         </div>
       )}
 
-      {/* Main Action Bar */}
-      <div className="flex flex-wrap items-center justify-end gap-3 pb-2 border-b border-[#333333]">
-        <div className="flex items-center gap-2 flex-wrap font-mono">
-          <button
-            type="button"
-            onClick={() => setIsAddingInline(prev => !prev)}
-            className={`px-3 py-1.5 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
-              isAddingInline 
-                ? 'bg-amber-400 text-black font-extrabold shadow-md'
-                : 'bg-[#00FF00] hover:bg-[#00dd00] text-black'
-            }`}
-          >
-            <Plus className="w-4 h-4" />
-            <span>+ เพิ่มรายการใหม่ (Add Part Master)</span>
-          </button>
+      {/* Search and Stage Selector Bar + Actions */}
+      <div className="bg-[#111111] border border-[#666666] p-3 space-y-2.5 shadow-md mb-2">
+        <div className="flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 pt-1">
+          {/* Left Side: Filters & Search */}
+          <div className="flex flex-wrap items-center gap-2.5 flex-1">
+            {/* Stage Dropdown Filter & Manager Button */}
+            <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 bg-[#1a1a1a] border border-[#666666] px-2.5 py-1 text-xs min-w-[200px]">
+                <Layers className="w-3.5 h-3.5 text-[#00FF00]" />
+                <select
+                  value={selectedStageFilter}
+                  onChange={e => setSelectedStageFilter(e.target.value)}
+                  className="bg-transparent text-[#00FF00] font-mono text-xs font-bold focus:outline-none cursor-pointer w-full"
+                >
+                  <option value="ALL" className="bg-[#111111] text-white">ทุกสเตจ (All Stages)</option>
+                  {stageOptions.map(stage => (
+                    <option key={stage} value={stage} className="bg-[#111111] text-white">
+                      {stage}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-          {isEditing ? (
-            <>
               <button
                 type="button"
-                onClick={handleCancelEdit}
-                className="px-3 py-1.5 bg-[#222222] hover:bg-[#333333] text-slate-300 text-xs font-bold border border-[#666666] flex items-center gap-1.5 transition-colors cursor-pointer"
+                onClick={() => setIsStageManagerOpen(true)}
+                className="px-2.5 py-1.5 bg-[#1a1a1a] hover:bg-[#252525] text-[#00FF00] border border-[#666666] text-xs font-bold rounded flex items-center gap-1 cursor-pointer transition-all whitespace-nowrap"
+                title="เปิดหน้าต่างจัดกลุ่มและจัดการ Stage"
               >
-                <X className="w-3.5 h-3.5" />
-                <span>ยกเลิก</span>
+                <Sliders className="w-3.5 h-3.5 text-[#00FF00]" />
+                <span>⚙️ จัดกลุ่ม Stage</span>
               </button>
-              <button
-                type="button"
-                onClick={handleSaveMatrix}
-                className="px-4 py-1.5 bg-[#00FF00] hover:bg-[#00dd00] text-black font-black text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <Save className="w-3.5 h-3.5" />
-                <span>บันทึกการแก้ไข ({hasUnsavedChanges ? 'มีการเปลี่ยนแปลง' : 'พร้อมบันทึก'})</span>
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={handleExportCsv}
-                className="px-3 py-1.5 bg-[#1a1a1a] hover:bg-[#262626] text-slate-300 border border-[#666666] text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <FileSpreadsheet className="w-3.5 h-3.5 text-[#00FF00]" />
-                <span>Export Excel (.xlsx)</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleStartEdit}
-                className="px-3.5 py-1.5 bg-[#1a1a1a] hover:bg-[#262626] text-[#00FF00] border border-[#00FF00] font-black text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <Edit3 className="w-3.5 h-3.5" />
-                <span>แก้ไขตัวเลขในตาราง (Edit Cells)</span>
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-
-
-      {/* Search and Stage Selector Bar */}
-      <div className="bg-[#111111] border border-[#666666] p-3 space-y-2.5 shadow-md">
-        <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1">
-          {/* Stage Dropdown Filter & Manager Button */}
-          <div className="flex items-center gap-1.5">
-            <div className="flex items-center gap-1.5 bg-[#1a1a1a] border border-[#666666] px-2.5 py-1 text-xs min-w-[200px]">
-              <Layers className="w-3.5 h-3.5 text-[#00FF00]" />
-              <select
-                value={selectedStageFilter}
-                onChange={e => setSelectedStageFilter(e.target.value)}
-                className="bg-transparent text-[#00FF00] font-mono text-xs font-bold focus:outline-none cursor-pointer w-full"
-              >
-                <option value="ALL" className="bg-[#111111] text-white">ทุกสเตจ (All Stages)</option>
-                {stageOptions.map(stage => (
-                  <option key={stage} value={stage} className="bg-[#111111] text-white">
-                    {stage}
-                  </option>
-                ))}
-              </select>
             </div>
 
+            {/* Search Input */}
+            <div className="relative w-full max-w-md">
+              <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="ค้นหาชื่อชิ้นส่วน หรือ Stage..."
+                className="w-full pl-8 pr-7 py-1.5 bg-[#1a1a1a] border border-[#666666] text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-[#00FF00]"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2 top-2 text-slate-400 hover:text-white cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Right Side: Action Buttons */}
+          <div className="flex flex-wrap items-center gap-2 font-mono">
             <button
               type="button"
-              onClick={() => setIsStageManagerOpen(true)}
-              className="px-2.5 py-1.5 bg-[#1a1a1a] hover:bg-[#252525] text-[#00FF00] border border-[#666666] text-xs font-bold rounded flex items-center gap-1 cursor-pointer transition-all whitespace-nowrap"
-              title="เปิดหน้าต่างจัดกลุ่มและจัดการ Stage"
+              onClick={() => setIsAddingInline(prev => !prev)}
+              className={`px-3 py-1.5 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                isAddingInline 
+                  ? 'bg-amber-400 text-black font-extrabold shadow-md'
+                  : 'bg-[#00FF00] hover:bg-[#00dd00] text-black'
+              }`}
             >
-              <Sliders className="w-3.5 h-3.5 text-[#00FF00]" />
-              <span>⚙️ จัดกลุ่ม Stage</span>
+              <Plus className="w-4 h-4" />
+              <span>+ เพิ่มรายการใหม่ (Add Part Master)</span>
             </button>
-          </div>
 
-          {/* Search Input */}
-          <div className="relative flex-1 min-w-[240px] max-w-md">
-            <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="ค้นหาชื่อชิ้นส่วน หรือ Stage..."
-              className="w-full pl-8 pr-7 py-1.5 bg-[#1a1a1a] border border-[#666666] text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-[#00FF00]"
-            />
-            {searchTerm && (
-              <button
-                type="button"
-                onClick={() => setSearchTerm('')}
-                className="absolute right-2 top-2 text-slate-400 hover:text-white cursor-pointer"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
+            {isEditing ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  className="px-3 py-1.5 bg-[#222222] hover:bg-[#333333] text-slate-300 text-xs font-bold border border-[#666666] flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>ยกเลิก</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveMatrix}
+                  className="px-4 py-1.5 bg-[#00FF00] hover:bg-[#00dd00] text-black font-black text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>บันทึกการแก้ไข ({hasUnsavedChanges ? 'มีการเปลี่ยนแปลง' : 'พร้อมบันทึก'})</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={handleExportCsv}
+                  className="px-3 py-1.5 bg-[#1a1a1a] hover:bg-[#262626] text-slate-300 border border-[#666666] text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-[#00FF00]" />
+                  <span>Export Excel (.xlsx)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStartEdit}
+                  className="px-3.5 py-1.5 bg-[#1a1a1a] hover:bg-[#262626] text-[#00FF00] border border-[#00FF00] font-black text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>แก้ไขตัวเลขในตาราง (Edit Cells)</span>
+                </button>
+              </>
             )}
-          </div>
-
-          <div className="text-[11px] text-slate-400 font-mono flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-[#00FF00]"></span>
-            <span>หัวตารางล็อกคงที่ (Locked Sticky Header)</span>
           </div>
         </div>
       </div>
@@ -605,10 +604,25 @@ export const InstallQuantityMatrixView: React.FC = () => {
       {/* 2. INDUSTRIAL DATA TABLE WITH LOCKED STICKY HEADER */}
       {/* ======================================================== */}
       <div className="bg-[#111111] border border-[#666666] shadow-xl overflow-hidden">
+        {/* Table Header Bar for Consistency */}
+        <div className="p-2.5 bg-[#1a1a1a] border-b border-[#666666] flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Layers className="w-4 h-4 text-[#00FF00]" />
+            <span className="text-xs font-bold text-white font-mono uppercase tracking-wider">
+              INSTALLED QUANTITY MATRIX ({matrixRows.length} รายการ)
+            </span>
+          </div>
+          <div className="flex items-center gap-3 text-[11px] text-slate-400 font-mono">
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-[#00FF00]"></span>
+              <span>หัวตารางล็อกคงที่ (Locked Sticky Header)</span>
+            </span>
+          </div>
+        </div>
         {/* Scrollable Container with Sticky Table Headers */}
         <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] scrollbar-thin relative">
           <table 
-            className="w-full text-left text-xs font-mono min-w-[1100px]" 
+            className="w-full text-left text-xs font-mono min-w-full" 
             style={{ borderCollapse: 'separate', borderSpacing: 0 }}
           >
             {/* Top Multi-Header Row (Locked at top) */}
@@ -617,90 +631,90 @@ export const InstallQuantityMatrixView: React.FC = () => {
               <tr className="text-white select-none">
                 <th 
                   colSpan={3} 
-                  className="sticky top-0 z-20 bg-[#444455] text-white font-black py-1.5 px-2 border-b border-r border-[#666666] text-left uppercase tracking-wider text-xs shadow-xs"
+                  className="sticky top-0 z-20 bg-[#444455] text-white font-black py-1.5 px-1.5 border-b border-r border-[#666666] text-left uppercase tracking-wider text-[11px] shadow-xs"
                 >
                   1. PART IDENTIFICATION
                 </th>
                 <th 
                   colSpan={8} 
-                  className="sticky top-0 z-20 bg-[#3a3a4a] text-[#00FF00] font-black py-1.5 px-2 border-b border-r border-[#666666] text-center uppercase tracking-wider text-xs shadow-xs"
+                  className="sticky top-0 z-20 bg-[#3a3a4a] text-[#00FF00] font-black py-1.5 px-1.5 border-b border-r border-[#666666] text-center uppercase tracking-wider text-[11px] shadow-xs"
                 >
                   2. INSTALL QUANTITY BY LINE (EA)
                 </th>
                 <th 
                   colSpan={1} 
-                  className="sticky top-0 z-20 bg-[#444455] text-[#FFCC00] font-black py-1.5 px-2 border-b border-[#666666] text-center uppercase tracking-wider text-xs shadow-xs w-24"
+                  className="sticky top-0 z-20 bg-[#444455] text-[#FFCC00] font-black py-1.5 px-1.5 border-b border-[#666666] text-center uppercase tracking-wider text-[11px] shadow-xs w-20"
                 >
                   3. ACTIONS
                 </th>
               </tr>
 
               {/* Sub Columns Header: Row 2 (Sticky top-27px) */}
-              <tr className="text-white font-bold text-xs select-none">
+              <tr className="text-white font-bold text-[10px] select-none">
                 {/* Col: No */}
-                <th className="sticky top-[27px] z-20 py-1 px-2 w-12 text-center border-b border-r border-[#666666] bg-[#555566]">
+                <th className="sticky top-[27px] z-20 py-1 px-1 w-8 text-center border-b border-r border-[#666666] bg-[#555566]">
                   No
                 </th>
 
                 {/* Col: Stage */}
-                <th className="sticky top-[27px] z-20 py-1 px-2 w-36 text-center border-b border-r border-[#666666] bg-[#555566]">
+                <th className="sticky top-[27px] z-20 py-1 px-1 w-14 text-center border-b border-r border-[#666666] bg-[#555566]">
                   Stage
                 </th>
 
                 {/* Col: Part Name */}
-                <th className="sticky top-[27px] z-20 py-1 px-2 min-w-[220px] text-left border-b border-r border-[#666666] bg-[#555566]">
+                <th className="sticky top-[27px] z-20 py-1 px-1 min-w-[120px] text-left border-b border-r border-[#666666] bg-[#555566]">
                   Part Name
                 </th>
 
                 {/* Col: E1 */}
-                <th className="sticky top-[27px] z-20 py-1 px-2 w-16 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00]">
-                  <div>E1</div>
-                  <div className="text-[9px] text-slate-300 font-normal">Ø7 Slit</div>
+                <th className="sticky top-[27px] z-20 py-0.5 px-0.5 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00]">
+                  <div className="font-bold text-white text-[11px]">E1</div>
+                  <div className="text-[8px] text-slate-300 font-normal leading-tight">Ø7 Slit</div>
                 </th>
 
                 {/* Col: E2 */}
-                <th className="sticky top-[27px] z-20 py-1 px-2 w-16 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00]">
-                  <div>E2</div>
-                  <div className="text-[9px] text-slate-300 font-normal">Ø5 Slit</div>
+                <th className="sticky top-[27px] z-20 py-0.5 px-0.5 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00]">
+                  <div className="font-bold text-white text-[11px]">E2</div>
+                  <div className="text-[8px] text-slate-300 font-normal leading-tight">Ø5 Slit</div>
                 </th>
 
                 {/* Col: E3-1 */}
-                <th className="sticky top-[27px] z-20 py-1 px-2 w-16 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00]">
-                  <div>E3-1</div>
-                  <div className="text-[9px] text-slate-300 font-normal">Slit 3P</div>
+                <th className="sticky top-[27px] z-20 py-0.5 px-0.5 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00]">
+                  <div className="font-bold text-white text-[11px]">E3-1</div>
+                  <div className="text-[8px] text-slate-300 font-normal leading-tight">Slit 3P</div>
                 </th>
 
                 {/* Col: E3-2 */}
-                <th className="sticky top-[27px] z-20 py-1 px-2 w-16 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00]">
-                  <div>E3-2</div>
-                  <div className="text-[9px] text-slate-300 font-normal">WL+ 4P</div>
+                <th className="sticky top-[27px] z-20 py-0.5 px-0.5 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00]">
+                  <div className="font-bold text-white text-[11px]">E3-2</div>
+                  <div className="text-[8px] text-slate-300 font-normal leading-tight">WL+ 4P</div>
                 </th>
 
                 {/* Col: E3-3 */}
-                <th className="sticky top-[27px] z-20 py-1 px-2 w-16 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00]">
-                  <div>E3-3</div>
-                  <div className="text-[9px] text-slate-300 font-normal">New Cor 4P</div>
+                <th className="sticky top-[27px] z-20 py-0.5 px-0.5 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00]">
+                  <div className="font-bold text-white text-[11px]">E3-3</div>
+                  <div className="text-[8px] text-slate-300 font-normal leading-tight">New Cor 4P</div>
                 </th>
 
                 {/* Col: E4 */}
-                <th className="sticky top-[27px] z-20 py-1 px-2 w-16 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00]">
-                  <div>E4</div>
-                  <div className="text-[9px] text-slate-300 font-normal">Ø5 Slit</div>
+                <th className="sticky top-[27px] z-20 py-0.5 px-0.5 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00]">
+                  <div className="font-bold text-white text-[11px]">E4</div>
+                  <div className="text-[8px] text-slate-300 font-normal leading-tight">Ø5 Slit</div>
                 </th>
 
                 {/* Col: E5 */}
-                <th className="sticky top-[27px] z-20 py-1 px-2 w-16 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00]">
-                  <div>E5</div>
-                  <div className="text-[9px] text-slate-300 font-normal">Ø5 Slit</div>
+                <th className="sticky top-[27px] z-20 py-0.5 px-0.5 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00]">
+                  <div className="font-bold text-white text-[11px]">E5</div>
+                  <div className="text-[8px] text-slate-300 font-normal leading-tight">Ø5 Slit</div>
                 </th>
 
                 {/* Col: Total */}
-                <th className="sticky top-[27px] z-20 py-1 px-2 w-20 text-center bg-[#444455] text-[#FFCC00] font-bold border-b border-r border-[#666666]">
+                <th className="sticky top-[27px] z-20 py-1 px-1 w-14 text-center bg-[#444455] text-[#FFCC00] font-bold border-b border-r border-[#666666]">
                   Total
                 </th>
 
                 {/* Col: Actions */}
-                <th className="sticky top-[27px] z-20 py-1 px-2 w-24 text-center bg-[#4a4a5a] text-[#FFCC00] font-bold border-b border-[#666666]">
+                <th className="sticky top-[27px] z-20 py-1 px-1 w-16 text-center bg-[#444455] text-[#FFCC00] font-bold border-b border-[#666666]">
                   Actions
                 </th>
               </tr>
@@ -808,7 +822,7 @@ export const InstallQuantityMatrixView: React.FC = () => {
 
                       {/* Col 2: Stage */}
                       <td className="py-1 px-2 text-center border-r border-[#444444]">
-                        <span className="inline-block px-1.5 py-0.2 text-[10px] font-bold border border-[#555555] bg-[#111111] text-slate-200 uppercase">
+                        <span className={`inline-block px-1.5 py-0.5 text-[10px] font-bold border bg-[#111111] uppercase ${getStageColor(row.stageName)}`}>
                           {row.stageName}
                         </span>
                       </td>
@@ -828,7 +842,7 @@ export const InstallQuantityMatrixView: React.FC = () => {
                         return (
                           <td 
                             key={col.id} 
-                            className="py-1 px-1.5 text-center border-r border-[#444444] font-mono"
+                            className="py-1 px-0.5 text-center border-r border-[#444444] font-mono"
                           >
                             {isEditing ? (
                               <input
@@ -926,18 +940,6 @@ export const InstallQuantityMatrixView: React.FC = () => {
       {/* 4. MODALS */}
       {/* ======================================================== */}
       
-      <PartMasterModal
-        isOpen={showAddEditModal}
-        onClose={() => {
-          setShowAddEditModal(false);
-          setEditingPartData(null);
-        }}
-        onSaved={() => {
-          loadData();
-        }}
-        editItem={editingPartData}
-      />
-
       <DeleteConfirmationModal
         isOpen={!!deleteTargetPart}
         onClose={() => setDeleteTargetPart(null)}

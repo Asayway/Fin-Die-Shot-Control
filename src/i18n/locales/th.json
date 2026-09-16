@@ -16,6 +16,17 @@
     "dieAndPartMaster": "จัดการแม่พิมพ์/อะไหล่",
     "systemSettings": "ตั้งค่าระบบ"
   },
+  "tv": {
+    "finDieShotCount": "FIN DIE SHOT COUNT (ยอดการผลิตพาร์ทฟิน)",
+    "stagePunchDie": "ชื่อชิ้นส่วน (Stage Punch / Die)",
+    "replacementCount": "เป้าหมายการเปลี่ยน",
+    "shotCount": "ยอดผลิตปัจจุบัน",
+    "progress": "ความคืบหน้า %",
+    "lifeTime": "อายุงาน(วัน)",
+    "installQty": "จำนวนติดตั้ง",
+    "stockQty": "สต็อกอะไหล่",
+    "orderRequire": "STATUS"
+  },
   "table": {
     "no": "ลำดับ",
     "partName": "ชื่อชิ้นส่วน",

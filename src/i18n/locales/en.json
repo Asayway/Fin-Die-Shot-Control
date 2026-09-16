@@ -16,6 +16,17 @@
     "dieAndPartMaster": "Die & Part Master",
     "systemSettings": "System Settings"
   },
+  "tv": {
+    "finDieShotCount": "FIN DIE SHOT COUNT",
+    "stagePunchDie": "Stage Punch / Die",
+    "replacementCount": "Replacement Count",
+    "shotCount": "Shot Count",
+    "progress": "Progress",
+    "lifeTime": "Life Time (Days)",
+    "installQty": "Install Qty.",
+    "stockQty": "Stock Qty.",
+    "orderRequire": "STATUS"
+  },
   "table": {
     "no": "NO.",
     "partName": "PART NAME",

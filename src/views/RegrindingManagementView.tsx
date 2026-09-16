@@ -41,9 +41,6 @@ export const RegrindingManagementView: React.FC<RegrindingManagementViewProps> =
   onNavigateToDieLayout,
   currentUserName = 'Kittisak Wongsuwan'
 }) => {
-  const [activeTab, setActiveTab] = useState<
-    'EXCEL_31_DAYS' | 'QUEUE' | 'ANALYTICS' | 'DEFECT_SCRAP_MATRIX'
-  >('EXCEL_31_DAYS');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [selectedGlobalPartFilter, setSelectedGlobalPartFilter] = useState<string>('ALL');
 
@@ -281,89 +278,30 @@ export const RegrindingManagementView: React.FC<RegrindingManagementViewProps> =
           </div>
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="flex items-center gap-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 overflow-x-auto">
-          {[
-            {
-              id: 'EXCEL_31_DAYS',
-              label: '🗓️ ตารางวางแผน 31 วัน (Planning Board)',
-              icon: FileSpreadsheet,
-              badge: `${matrix.grandTotalRepair} ชิ้น`
-            },
-            {
-              id: 'QUEUE',
-              label: '📋 คิวงานเจียร (Job Queue List)',
-              icon: Wrench,
-              badge: metrics.pendingCount + metrics.inProcessCount
-            },
-            {
-              id: 'ANALYTICS',
-              label: '📊 กราฟวิเคราะห์ผล (Analytics)',
-              icon: BarChart3
-            },
-            {
-              id: 'DEFECT_SCRAP_MATRIX',
-              label: '⚠️ ตารางงานซ่อมไม่ได้ / ทิ้ง (Defect/Scrap)',
-              icon: AlertOctagon,
-              badge: `${matrix.grandTotalDefect} ชิ้น`
-            }
-          ].map(tab => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 ${
-                  isActive
-                    ? 'bg-slate-900 text-white dark:bg-cyan-600 shadow-sm'
-                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                <span>{tab.label}</span>
-                {tab.badge !== undefined && (
-                  <span
-                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
-                      isActive
-                        ? 'bg-white/20 text-white'
-                        : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
-                    }`}
-                  >
-                    {tab.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
       </div>
 
-      {/* Top KPI Cards (Only on relevant tabs) */}
-      {(activeTab === 'QUEUE' || activeTab === 'EXCEL_31_DAYS' || activeTab === 'DEFECT_SCRAP_MATRIX') && (
         <RegrindKpiCards
           metrics={metrics}
           onFilterStatus={status => {
             setStatusFilter(status);
-            setActiveTab('QUEUE');
+            // Scroll to queue table if needed
+            const queueEl = document.getElementById('job-queue-section');
+            if (queueEl) queueEl.scrollIntoView({ behavior: 'smooth' });
           }}
           activeStatusFilter={statusFilter}
         />
-      )}
 
-      {/* Tab Content Display */}
-      {activeTab === 'EXCEL_31_DAYS' && (
-        <Excel31DayMatrixView
-          matrix={matrix}
-          onUpdateCell={handleUpdateMatrixCell}
-          onMonthChange={handleMonthChange}
-          mode="REPAIR"
-          selectedGlobalPart={selectedGlobalPartFilter}
-          onRefreshData={reloadData}
-        />
-      )}
-
-      {activeTab === 'QUEUE' && (
+      {/* 1. Job Queue Section */}
+      <section id="job-queue-section" className="space-y-4">
+        <div className="flex items-center gap-2 mb-2 px-1">
+          <div className="p-2 rounded-lg bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400">
+            <Wrench className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-slate-800 dark:text-white">คิวงานเจียร (Job Queue List)</h2>
+            <p className="text-xs text-slate-500">จัดการรายการใบงานเจียรลับคมที่กำลังดำเนินการและรอคิว</p>
+          </div>
+        </div>
         <RegrindQueueTable
           tickets={tickets}
           activeStatusFilter={statusFilter}
@@ -375,24 +313,67 @@ export const RegrindingManagementView: React.FC<RegrindingManagementViewProps> =
           onOpenQrScanner={() => setIsQrScannerOpen(true)}
           selectedGlobalPart={selectedGlobalPartFilter}
         />
-      )}
+      </section>
 
-      {activeTab === 'ANALYTICS' && (
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        {/* 2. Planning Board Section */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-2 mb-2 px-1">
+            <div className="p-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
+              <Calendar className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-800 dark:text-white">ตารางวางแผน 31 วัน (Planning Board)</h2>
+              <p className="text-xs text-slate-500">แผนการซ่อมบำรุงและเจียรลับคมรายวัน</p>
+            </div>
+          </div>
+          <Excel31DayMatrixView
+            matrix={matrix}
+            onUpdateCell={handleUpdateMatrixCell}
+            onMonthChange={handleMonthChange}
+            mode="REPAIR"
+            selectedGlobalPart={selectedGlobalPartFilter}
+            onRefreshData={reloadData}
+          />
+        </section>
+
+        {/* 3. Defect/Scrap Section */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-2 mb-2 px-1">
+            <div className="p-2 rounded-lg bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400">
+              <AlertOctagon className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-800 dark:text-white">ตารางงานเสีย (Defect/Scrap Matrix)</h2>
+              <p className="text-xs text-slate-500">บันทึกรายการที่ไม่สามารถเจียรลับคมต่อได้</p>
+            </div>
+          </div>
+          <Excel31DayMatrixView
+            matrix={matrix}
+            onUpdateCell={handleUpdateMatrixCell}
+            onMonthChange={handleMonthChange}
+            mode="DEFECT_SCRAP"
+            selectedGlobalPart={selectedGlobalPartFilter}
+            onRefreshData={reloadData}
+          />
+        </section>
+      </div>
+
+      {/* 4. Analytics Section */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2 mb-2 px-1">
+          <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
+            <BarChart3 className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-slate-800 dark:text-white">วิเคราะห์ข้อมูล (Regrinding Analytics)</h2>
+            <p className="text-xs text-slate-500">สถิติและแนวโน้มการใช้งานทูลลิ่ง</p>
+          </div>
+        </div>
         <RegrindingAnalyticsView
           selectedGlobalPart={selectedGlobalPartFilter}
         />
-      )}
-
-      {activeTab === 'DEFECT_SCRAP_MATRIX' && (
-        <Excel31DayMatrixView
-          matrix={matrix}
-          onUpdateCell={handleUpdateMatrixCell}
-          onMonthChange={handleMonthChange}
-          mode="DEFECT_SCRAP"
-          selectedGlobalPart={selectedGlobalPartFilter}
-          onRefreshData={reloadData}
-        />
-      )}
+      </section>
 
       {/* Modals */}
       {completeModalTicket && (

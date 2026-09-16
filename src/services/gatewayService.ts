@@ -296,12 +296,16 @@ class GatewayService {
         return;
       }
 
+      // Check operational status - User requested: shots apply ONLY to lines that are opened as NORMAL (RUNNING)
+      if (lineData.machineStatus !== 'RUNNING') {
+        return; 
+      }
+
       lineData.machineShotTotal = (lineData.machineShotTotal || 0) + item.shotDelta;
       lineData.shiftShot = (lineData.shiftShot || 0) + item.shotDelta;
       lineData.dailyShot = (lineData.dailyShot || 0) + item.shotDelta;
       lineData.monthlyShot = (lineData.monthlyShot || 0) + item.shotDelta;
       lineData.lastUpdate = item.gatewayTimestamp.replace('T', ' ').substring(0, 19);
-      lineData.machineStatus = item.machineStatus || 'RUNNING';
 
       // Update parts installed on this line
       if (lineData.items && lineData.activeConfig) {

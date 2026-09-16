@@ -26,16 +26,20 @@ import {
   Plus,
   Edit3,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  ArrowUp,
+  ArrowDown,
+  ChevronsUp,
+  ChevronsDown,
+  Repeat
 } from 'lucide-react';
 import { PartMaster, PartLifeStandard, LineActiveConfiguration, ProductionLineId } from '../types';
 import { storageService } from '../services/storageService';
 
 import { DeleteConfirmationModal } from '../components/common/DeleteConfirmationModal';
-import { PartMasterModal } from '../components/common/PartMasterModal';
 import { StageManagementModal } from '../components/common/StageManagementModal';
 import { exportPartMasterExcel } from '../utils/excelExport';
-import { DEFAULT_STAGE_GROUPS, deriveLogicalStage } from '../utils/stageUtils';
+import { DEFAULT_STAGE_GROUPS, deriveLogicalStage, sortStagesInOrder } from '../utils/stageUtils';
 
 export interface UnifiedPartMasterRow {
   no: number;
@@ -99,8 +103,6 @@ export const PartMasterView: React.FC = () => {
   const [selectedStage, setSelectedStage] = useState<string>('ALL');
   const [selectedLineFilter, setSelectedLineFilter] = useState<string>('ALL');
   const [selectedPartForDetail, setSelectedPartForDetail] = useState<UnifiedPartMasterRow | null>(null);
-  const [showAddEditModal, setShowAddEditModal] = useState(false);
-  const [editingPartData, setEditingPartData] = useState<any | null>(null);
   const [showRegrindOnly, setShowRegrindOnly] = useState(false);
 
   // Inline Add New Part Row State (Top of table, no popup)
@@ -199,7 +201,7 @@ export const PartMasterView: React.FC = () => {
         no: idx + 1,
         partCode: pm.partCode,
         partName: pm.partName,
-        stage: deriveLogicalStage(pm.partName, pm.stageName),
+        stage: pm.stageName || deriveLogicalStage(pm.partName, pm.stageName),
         drawingNo: (pm as any).drawingNumber || pm.partCode,
         material: (pm as any).material || 'SKD11 / Carbide',
         maintenanceType: isDisposable ? 'DISPOSE' : 'REGRIND',
@@ -234,16 +236,34 @@ export const PartMasterView: React.FC = () => {
     });
   }, [partMasters, lifeStandards, lineConfigs]);
 
-  // Extract all unique stages (combining defaults and active item stages)
+  // Extract all unique stages (combining custom stage groups and active item stages)
   const allStages = useMemo(() => {
-    const stageSet = new Set<string>(DEFAULT_STAGE_GROUPS);
-    unifiedItems.forEach(item => {
-      if (item.stage && item.stage !== '-') {
-        stageSet.add(item.stage);
+    const rawGroups = storageService.getStageGroups();
+    const seen = new Set<string>();
+    const uniqueList: string[] = [];
+
+    // First add managed groups
+    rawGroups.forEach(g => {
+      const normalized = g.trim().toUpperCase();
+      if (normalized && !seen.has(normalized)) {
+        seen.add(normalized);
+        uniqueList.push(g.trim());
       }
     });
-    return Array.from(stageSet).sort();
-  }, [unifiedItems]);
+
+    // Then add any stages from items that aren't in groups yet
+    unifiedItems.forEach(item => {
+      if (item.stage && item.stage !== '-') {
+        const normalized = item.stage.trim().toUpperCase();
+        if (!seen.has(normalized)) {
+          seen.add(normalized);
+          uniqueList.push(item.stage.trim());
+        }
+      }
+    });
+
+    return sortStagesInOrder(uniqueList);
+  }, [unifiedItems, partMasters]); // Added partMasters to dependency to ensure update on notify
 
   // Filtered master items
   const filteredItems = useMemo(() => {
@@ -575,17 +595,49 @@ export const PartMasterView: React.FC = () => {
     }
   };
 
-  // Stage color badge style
+  // Reorder functionality
+  const handleMovePart = (partCode: string, direction: 'up' | 'down' | 'top' | 'bottom' | 'swap', targetIndexParam?: number) => {
+    const newItems = [...partMasters];
+    const index = newItems.findIndex(p => p.partCode === partCode);
+    if (index === -1) return;
+
+    let targetIndex = -1;
+    if (direction === 'up') targetIndex = index - 1;
+    else if (direction === 'down') targetIndex = index + 1;
+    else if (direction === 'top') targetIndex = 0;
+    else if (direction === 'bottom') targetIndex = newItems.length - 1;
+    else if (direction === 'swap' && targetIndexParam !== undefined) {
+      targetIndex = targetIndexParam;
+    }
+
+    if (targetIndex < 0 || targetIndex >= newItems.length || targetIndex === index) return;
+
+    // Move to specific position (shifting others)
+    const itemToMove = newItems.splice(index, 1)[0];
+    newItems.splice(targetIndex, 0, itemToMove);
+
+    // Persist new order
+    storageService.savePartMasters(newItems);
+    showToast(`ปรับปรุงตำแหน่งชิ้นส่วนเรียบร้อยแล้ว`, 'success');
+    loadDatabaseData();
+  };
+
+  // Stage color badge style - Unified with PART INSTALL aesthetic
   const getStageColor = (stage: string) => {
-    const stg = stage.toUpperCase();
-    if (stg.includes('PIERCE') || stg.includes('BURRING')) return 'bg-amber-950/40 text-amber-300 border-amber-800/60';
-    if (stg.includes('IRONING')) return 'bg-blue-950/40 text-blue-300 border-blue-800/60';
-    if (stg.includes('LOUVER')) return 'bg-emerald-950/40 text-emerald-300 border-emerald-800/60';
-    if (stg.includes('REFLAIRE') || stg.includes('REFLARE')) return 'bg-purple-950/40 text-purple-300 border-purple-800/60';
-    if (stg.includes('SLIT')) return 'bg-cyan-950/40 text-cyan-300 border-cyan-800/60';
-    if (stg.includes('CUT OFF') || stg.includes('SIDE CUT')) return 'bg-rose-950/40 text-rose-300 border-rose-800/60';
-    if (stg.includes('FORMING')) return 'bg-teal-950/40 text-teal-300 border-teal-800/60';
-    return 'bg-slate-800/50 text-slate-300 border-slate-700';
+    const stg = (stage || '').toUpperCase();
+    
+    // Define colors for standard stages
+    if (stg.includes('PIERCE') || stg.includes('BURRING')) return 'border-[#FFCC00] text-[#FFCC00]'; // Yellow/Amber
+    if (stg.includes('IRONING')) return 'border-blue-400 text-blue-400';
+    if (stg.includes('LOUVER') || stg.includes('SLIT')) return 'border-emerald-400 text-emerald-400';
+    if (stg.includes('REFLAIRE') || stg.includes('REFLARE')) return 'border-purple-400 text-purple-400';
+    if (stg.includes('NOTCH') || stg.includes('PUNCH')) return 'border-sky-400 text-sky-400';
+    if (stg.includes('CUT OFF') || stg.includes('SIDE CUT')) return 'border-rose-400 text-rose-400';
+    if (stg.includes('FORMING')) return 'border-teal-400 text-teal-400';
+    if (stg.includes('PILOT') || stg.includes('FEED')) return 'border-orange-400 text-orange-400';
+    
+    // Fallback for custom stages
+    return 'border-slate-500 text-slate-300';
   };
 
   // Export to Excel Function (.xlsx)
@@ -614,123 +666,63 @@ export const PartMasterView: React.FC = () => {
       )}
 
       {/* ======================================================== */}
-      {/* 1. HEADER & ACTIONS SUMMARY */}
+      {/* 1. SEARCH, STAGE DROPDOWN & LINE FILTERS + ACTIONS */}
       {/* ======================================================== */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-end gap-3 pb-2 border-b border-[#333333]">
-        {/* Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2 font-mono">
-          <button
-            type="button"
-            onClick={() => setIsAddingInline(prev => !prev)}
-            className={`px-3 py-1.5 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
-              isAddingInline 
-                ? 'bg-amber-400 text-black font-extrabold shadow-md'
-                : 'bg-[#00FF00] hover:bg-[#00dd00] text-black'
-            }`}
-          >
-            <Plus className="w-4 h-4" />
-            <span>+ เพิ่มรายการใหม่ (Add Part Master)</span>
-          </button>
-
-          {isEditing ? (
-            <>
-              <button
-                type="button"
-                onClick={handleCancelEdit}
-                className="px-3 py-1.5 bg-[#222222] hover:bg-[#333333] text-slate-300 text-xs font-bold border border-[#666666] flex items-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <X className="w-3.5 h-3.5" />
-                <span>ยกเลิก</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveBatchEdit}
-                className="px-4 py-1.5 bg-[#00FF00] hover:bg-[#00dd00] text-black font-black text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <Check className="w-3.5 h-3.5" />
-                <span>บันทึกการแก้ไข ({hasUnsavedChanges ? 'มีการเปลี่ยนแปลง' : 'พร้อมบันทึก'})</span>
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={handleExportCSV}
-                className="px-3 py-1.5 bg-[#1a1a1a] hover:bg-[#262626] text-slate-200 border border-[#666666] text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <FileSpreadsheet className="w-3.5 h-3.5 text-[#00FF00]" />
-                <span>Export Excel (.xlsx)</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleStartEdit}
-                className="px-3.5 py-1.5 bg-[#1a1a1a] hover:bg-[#262626] text-[#00FF00] border border-[#00FF00] font-black text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <Edit3 className="w-3.5 h-3.5" />
-                <span>แก้ไขตัวเลขในตาราง (Edit Cells)</span>
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* ======================================================== */}
-      {/* 2. SEARCH, STAGE DROPDOWN & LINE FILTERS */}
-      {/* ======================================================== */}
-      <div className="bg-[#111111] border border-[#666666] p-3 space-y-2.5 shadow-md">
+      <div className="bg-[#111111] border border-[#666666] p-3 space-y-2.5 shadow-md mb-2">
         
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5 pt-1">
-          {/* Stage Dropdown Filter & Manager Button */}
-          <div className="flex items-center gap-1.5">
-            <div className="flex items-center gap-1.5 bg-[#1a1a1a] border border-[#666666] px-2.5 py-1 text-xs min-w-[200px]">
-              <Layers className="w-3.5 h-3.5 text-[#00FF00]" />
-              <select
-                value={selectedStage}
-                onChange={e => setSelectedStage(e.target.value)}
-                className="bg-transparent text-[#00FF00] font-mono text-xs font-bold focus:outline-none cursor-pointer w-full"
+        <div className="flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 pt-1">
+          {/* Left Side: Filters & Search */}
+          <div className="flex flex-wrap items-center gap-2.5 flex-1">
+            {/* Stage Dropdown Filter & Manager Button */}
+            <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 bg-[#1a1a1a] border border-[#666666] px-2.5 py-1 text-xs min-w-[200px]">
+                <Layers className="w-3.5 h-3.5 text-[#00FF00]" />
+                <select
+                  value={selectedStage}
+                  onChange={e => setSelectedStage(e.target.value)}
+                  className="bg-transparent text-[#00FF00] font-mono text-xs font-bold focus:outline-none cursor-pointer w-full"
+                >
+                  <option value="ALL" className="bg-[#111111] text-white">ทุกสเตจ (All Stages)</option>
+                  {allStages.map(stage => (
+                    <option key={stage} value={stage} className="bg-[#111111] text-white">
+                      {stage}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsStageManagerOpen(true)}
+                className="px-2.5 py-1.5 bg-[#1a1a1a] hover:bg-[#252525] text-[#00FF00] border border-[#666666] text-xs font-bold rounded flex items-center gap-1 cursor-pointer transition-all whitespace-nowrap"
+                title="เปิดหน้าต่างจัดกลุ่มและจัดการ Stage"
               >
-                <option value="ALL" className="bg-[#111111] text-white">ทุกสเตจ (All Stages)</option>
-                {allStages.map(stage => (
-                  <option key={stage} value={stage} className="bg-[#111111] text-white">
-                    {stage}
-                  </option>
-                ))}
-              </select>
+                <Sliders className="w-3.5 h-3.5 text-[#00FF00]" />
+                <span>⚙️ จัดกลุ่ม Stage</span>
+              </button>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setIsStageManagerOpen(true)}
-              className="px-2.5 py-1.5 bg-[#1a1a1a] hover:bg-[#252525] text-[#00FF00] border border-[#666666] text-xs font-bold rounded flex items-center gap-1 cursor-pointer transition-all whitespace-nowrap"
-              title="เปิดหน้าต่างจัดกลุ่มและจัดการ Stage"
-            >
-              <Sliders className="w-3.5 h-3.5 text-[#00FF00]" />
-              <span>⚙️ จัดกลุ่ม Stage</span>
-            </button>
-          </div>
-          {/* Search Box */}
-          <div className="relative flex-1 min-w-[240px]">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="ค้นหาชื่อพาร์ท หรือสเตจ..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="w-full bg-[#1a1a1a] border border-[#666666] pl-8 pr-7 py-1.5 text-xs text-white placeholder:text-slate-500 font-mono focus:outline-none focus:border-[#00FF00]"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
+            {/* Search Box */}
+            <div className="relative w-full max-w-md">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="ค้นหาชื่อพาร์ท หรือสเตจ..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="w-full bg-[#1a1a1a] border border-[#666666] pl-8 pr-7 py-1.5 text-xs text-white placeholder:text-slate-500 font-mono focus:outline-none focus:border-[#00FF00]"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
 
-          {/* Additional Line and Regrind Filters */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Line Filter */}
+            {/* Additional Line Filter */}
             <div className="flex items-center gap-1.5 bg-[#1a1a1a] border border-[#666666] px-2.5 py-1 text-xs">
               <Factory className="w-3.5 h-3.5 text-[#FFCC00]" />
               <span className="font-mono text-[11px] text-slate-300">Installed Line:</span>
@@ -750,20 +742,7 @@ export const PartMasterView: React.FC = () => {
               </select>
             </div>
 
-            {/* Toggle Re-grind only */}
-            <button
-              onClick={() => setShowRegrindOnly(!showRegrindOnly)}
-              className={`px-2.5 py-1 border text-xs font-mono flex items-center gap-1.5 transition-colors cursor-pointer ${
-                showRegrindOnly
-                  ? 'bg-purple-950/80 border-purple-500 text-purple-300 font-bold'
-                  : 'bg-[#1a1a1a] border-[#666666] text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Wrench className="w-3.5 h-3.5 text-purple-400" />
-              <span>เฉพาะพาร์ทลับคม</span>
-            </button>
-
-            {(selectedStage !== 'ALL' || selectedLineFilter !== 'ALL' || showRegrindOnly || searchTerm) && (
+            {(selectedStage !== 'ALL' || selectedLineFilter !== 'ALL' || searchTerm) && (
               <button
                 type="button"
                 onClick={() => {
@@ -778,6 +757,62 @@ export const PartMasterView: React.FC = () => {
                 <X className="w-3 h-3 text-[#FFCC00]" />
                 <span>รีเซ็ต</span>
               </button>
+            )}
+          </div>
+
+          {/* Right Side: Action Buttons */}
+          <div className="flex flex-wrap items-center gap-2 font-mono">
+            <button
+              type="button"
+              onClick={() => setIsAddingInline(prev => !prev)}
+              className={`px-3 py-1.5 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                isAddingInline 
+                  ? 'bg-amber-400 text-black font-extrabold shadow-md'
+                  : 'bg-[#00FF00] hover:bg-[#00dd00] text-black'
+              }`}
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ เพิ่มรายการใหม่ (Add Part Master)</span>
+            </button>
+
+            {isEditing ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  className="px-3 py-1.5 bg-[#222222] hover:bg-[#333333] text-slate-300 text-xs font-bold border border-[#666666] flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>ยกเลิก</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveBatchEdit}
+                  className="px-4 py-1.5 bg-[#00FF00] hover:bg-[#00dd00] text-black font-black text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>บันทึกการแก้ไข ({hasUnsavedChanges ? 'มีการเปลี่ยนแปลง' : 'พร้อมบันทึก'})</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={handleExportCSV}
+                  className="px-3 py-1.5 bg-[#1a1a1a] hover:bg-[#262626] text-slate-200 border border-[#666666] text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-[#00FF00]" />
+                  <span>Export Excel (.xlsx)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStartEdit}
+                  className="px-3.5 py-1.5 bg-[#1a1a1a] hover:bg-[#262626] text-[#00FF00] border border-[#00FF00] font-black text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>แก้ไขตัวเลขในตาราง (Edit Cells)</span>
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -806,7 +841,7 @@ export const PartMasterView: React.FC = () => {
         {/* Scrollable Container with Sticky Table Headers */}
         <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] scrollbar-thin relative">
           <table 
-            className="w-full text-left text-xs font-mono min-w-[1200px]" 
+            className="w-full text-left text-xs font-mono min-w-full" 
             style={{ borderCollapse: 'separate', borderSpacing: 0 }}
           >
             {/* Multi-tier Locked Sticky Table Header */}
@@ -833,7 +868,7 @@ export const PartMasterView: React.FC = () => {
                 </th>
                 <th 
                   colSpan={1} 
-                  className="sticky top-0 z-20 py-1.5 px-2 border-b border-[#666666] text-[#FFCC00] font-bold text-center bg-[#3a3a4a] shadow-xs w-24"
+                  className="sticky top-0 z-20 py-1.5 px-2 border-b border-[#666666] text-[#FFCC00] font-bold text-center bg-[#3a3a4a] shadow-xs w-20"
                 >
                   4. ACTIONS
                 </th>
@@ -842,44 +877,51 @@ export const PartMasterView: React.FC = () => {
               {/* Header Tier 2 (Sticky Top 28px) */}
               <tr className="text-white text-[10px] tracking-wider select-none font-bold">
                 {/* 1. Identification */}
-                <th className="sticky top-[27px] z-20 py-1 px-2 text-center w-10 border-b border-r border-[#666666] bg-[#555566]">No</th>
-                <th className="sticky top-[27px] z-20 py-1 px-2 border-b border-r border-[#666666] bg-[#555566]">Stage</th>
-                <th className="sticky top-[27px] z-20 py-1 px-2 border-b border-r border-[#666666] bg-[#555566] min-w-[200px]">Part Name</th>
+                <th className="sticky top-[27px] z-20 py-1 px-1.5 text-center w-8 border-b border-r border-[#666666] bg-[#555566]">No</th>
+                <th className="sticky top-[27px] z-20 py-1 px-1.5 border-b border-r border-[#666666] bg-[#555566]">Stage</th>
+                <th className="sticky top-[27px] z-20 py-1 px-1.5 border-b border-r border-[#666666] bg-[#555566] min-w-[150px]">Part Name</th>
 
-                {/* 2. Shot Usage Standards (Per reference naming) */}
-                <th className="sticky top-[27px] z-20 py-1 px-2 text-center text-[#00FF00] border-b border-r border-[#666666] bg-[#4a4a5a] min-w-[70px]">
-                  E1 (Ø7 Slit)
+                {/* 2. Shot Usage Standards (Matching PART INSTALL 2-line header reference) */}
+                <th className="sticky top-[27px] z-20 py-0.5 px-1 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00] min-w-[56px]">
+                  <div className="font-bold text-white text-[11px]">E1</div>
+                  <div className="text-[9px] text-slate-300 font-normal">Ø7 Slit</div>
                 </th>
-                <th className="sticky top-[27px] z-20 py-1 px-2 text-center text-[#00FF00] border-b border-r border-[#666666] bg-[#4a4a5a] min-w-[70px]">
-                  E2 (Ø5 Slit)
+                <th className="sticky top-[27px] z-20 py-0.5 px-1 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00] min-w-[56px]">
+                  <div className="font-bold text-white text-[11px]">E2</div>
+                  <div className="text-[9px] text-slate-300 font-normal">Ø5 Slit</div>
                 </th>
-                <th className="sticky top-[27px] z-20 py-1 px-2 text-center text-[#00FF00] border-b border-r border-[#666666] bg-[#4a4a5a] min-w-[70px]">
-                  E3-1 (Slit 3P)
+                <th className="sticky top-[27px] z-20 py-0.5 px-1 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00] min-w-[56px]">
+                  <div className="font-bold text-white text-[11px]">E3-1</div>
+                  <div className="text-[9px] text-slate-300 font-normal">Slit 3P</div>
                 </th>
-                <th className="sticky top-[27px] z-20 py-1 px-2 text-center text-[#00FF00] border-b border-r border-[#666666] bg-[#4a4a5a] min-w-[70px]">
-                  E3-2 (WL+ 4P)
+                <th className="sticky top-[27px] z-20 py-0.5 px-1 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00] min-w-[56px]">
+                  <div className="font-bold text-white text-[11px]">E3-2</div>
+                  <div className="text-[9px] text-slate-300 font-normal">WL+ 4P</div>
                 </th>
-                <th className="sticky top-[27px] z-20 py-1 px-2 text-center text-[#00FF00] border-b border-r border-[#666666] bg-[#4a4a5a] min-w-[70px]">
-                  E3-3 (New Cor 4P)
+                <th className="sticky top-[27px] z-20 py-0.5 px-1 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00] min-w-[62px]">
+                  <div className="font-bold text-white text-[11px]">E3-3</div>
+                  <div className="text-[9px] text-slate-300 font-normal">New Cor 4P</div>
                 </th>
-                <th className="sticky top-[27px] z-20 py-1 px-2 text-center text-[#00FF00] border-b border-r border-[#666666] bg-[#4a4a5a] min-w-[70px]">
-                  E4 (Ø5 Slit)
+                <th className="sticky top-[27px] z-20 py-0.5 px-1 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00] min-w-[56px]">
+                  <div className="font-bold text-white text-[11px]">E4</div>
+                  <div className="text-[9px] text-slate-300 font-normal">Ø5 Slit</div>
                 </th>
-                <th className="sticky top-[27px] z-20 py-1 px-2 text-center text-[#00FF00] border-b border-r border-[#666666] bg-[#4a4a5a] min-w-[70px]">
-                  E5 (Ø5 Slit)
+                <th className="sticky top-[27px] z-20 py-0.5 px-1 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00] min-w-[56px]">
+                  <div className="font-bold text-white text-[11px]">E5</div>
+                  <div className="text-[9px] text-slate-300 font-normal">Ø5 Slit</div>
                 </th>
-                <th className="sticky top-[27px] z-20 py-1 px-2 text-center text-slate-300 border-b border-r border-[#666666] bg-[#4a4a5a] min-w-[75px]">
+                <th className="sticky top-[27px] z-20 py-1 px-1.5 text-center text-slate-300 border-b border-r border-[#666666] bg-[#4a4a5a] min-w-[65px]">
                   Scrap Limit
                 </th>
 
                 {/* 3. Regrinding Standards */}
-                <th className="sticky top-[27px] z-20 py-1 px-2 text-center text-purple-300 border-b border-r border-[#666666] bg-[#555566] min-w-[75px]">1 time (mm)</th>
-                <th className="sticky top-[27px] z-20 py-1 px-2 text-center text-purple-300 border-b border-r border-[#666666] bg-[#555566] min-w-[70px]">Total (mm)</th>
-                <th className="sticky top-[27px] z-20 py-1 px-2 text-center text-purple-300 border-b border-r border-[#666666] bg-[#555566] min-w-[70px]">Max Cycles</th>
-                <th className="sticky top-[27px] z-20 py-1 px-2 text-purple-200 border-b border-r border-[#666666] bg-[#555566] min-w-[150px]">Note / Standard</th>
+                <th className="sticky top-[27px] z-20 py-1 px-1 text-center text-purple-300 border-b border-r border-[#666666] bg-[#555566] min-w-[60px]">1 time (mm)</th>
+                <th className="sticky top-[27px] z-20 py-1 px-1 text-center text-purple-300 border-b border-r border-[#666666] bg-[#555566] min-w-[60px]">Total (mm)</th>
+                <th className="sticky top-[27px] z-20 py-1 px-1 text-center text-purple-300 border-b border-r border-[#666666] bg-[#555566] min-w-[60px]">Max Cycles</th>
+                <th className="sticky top-[27px] z-20 py-1 px-1.5 text-purple-200 border-b border-r border-[#666666] bg-[#555566] min-w-[120px]">Note / Standard</th>
 
                 {/* 4. Actions */}
-                <th className="sticky top-[27px] z-20 py-1 px-2 text-center text-[#FFCC00] border-b border-[#666666] bg-[#4a4a5a] w-24">
+                <th className="sticky top-[27px] z-20 py-1 px-1.5 text-center text-[#FFCC00] border-b border-[#666666] bg-[#4a4a5a] w-24">
                   Actions
                 </th>
               </tr>
@@ -1355,84 +1397,48 @@ export const PartMasterView: React.FC = () => {
                       }`}
                     >
                       {/* 1. Identification */}
-                      <td 
-                        onClick={() => setSelectedPartForDetail(item)}
-                        className="py-1 px-2 text-center font-bold text-slate-400 border-r border-[#444444] cursor-pointer"
-                      >
+                      <td className="py-1 px-2 text-center font-bold text-slate-400 border-r border-[#444444]">
                         {item.no}
                       </td>
-                      <td 
-                        onClick={() => setSelectedPartForDetail(item)}
-                        className="py-1 px-2 border-r border-[#444444] cursor-pointer"
-                      >
-                        <span className={`px-1.5 py-0.5 text-[10px] font-bold border ${getStageColor(item.stage)}`}>
+                      <td className="py-1 px-2 border-r border-[#444444]">
+                        <span className={`inline-block px-1.5 py-0.5 text-[10px] font-bold border bg-[#111111] uppercase ${getStageColor(item.stage)}`}>
                           {item.stage}
                         </span>
                       </td>
-                      <td 
-                        onClick={() => setSelectedPartForDetail(item)}
-                        className="py-1 px-2 font-bold text-white border-r border-[#444444] cursor-pointer"
-                      >
+                      <td className="py-1 px-2 font-bold text-white border-r border-[#444444]">
                         <div>
-                          <span className="hover:text-[#00FF00] transition-colors block">{item.partName}</span>
+                          <span className="block">{item.partName}</span>
                         </div>
                       </td>
 
                       {/* 2. Shot Usage Cycle Standards */}
-                      <td 
-                        onClick={() => setSelectedPartForDetail(item)}
-                        className="py-1 px-2 text-center text-[#00FF00] border-r border-[#444444] cursor-pointer"
-                      >
+                      <td className="py-1 px-2 text-center text-[#00FF00] border-r border-[#444444]">
                         {item.shotLifeCycle.e1_pcm !== undefined ? `${item.shotLifeCycle.e1_pcm}M` : '-'}
                       </td>
-                      <td 
-                        onClick={() => setSelectedPartForDetail(item)}
-                        className="py-1 px-2 text-center text-[#00FF00] border-r border-[#444444] cursor-pointer"
-                      >
+                      <td className="py-1 px-2 text-center text-[#00FF00] border-r border-[#444444]">
                         {item.shotLifeCycle.e2_gold !== undefined ? `${item.shotLifeCycle.e2_gold}M` : '-'}
                       </td>
-                      <td 
-                        onClick={() => setSelectedPartForDetail(item)}
-                        className="py-1 px-2 text-center text-[#00FF00] border-r border-[#444444] cursor-pointer"
-                      >
+                      <td className="py-1 px-2 text-center text-[#00FF00] border-r border-[#444444]">
                         {item.shotLifeCycle.e3_1_pcm !== undefined ? `${item.shotLifeCycle.e3_1_pcm}M` : '-'}
                       </td>
-                      <td 
-                        onClick={() => setSelectedPartForDetail(item)}
-                        className="py-1 px-2 text-center text-[#00FF00] border-r border-[#444444] cursor-pointer"
-                      >
+                      <td className="py-1 px-2 text-center text-[#00FF00] border-r border-[#444444]">
                         {item.shotLifeCycle.e3_2_gold !== undefined ? `${item.shotLifeCycle.e3_2_gold}M` : '-'}
                       </td>
-                      <td 
-                        onClick={() => setSelectedPartForDetail(item)}
-                        className="py-1 px-2 text-center text-[#00FF00] border-r border-[#444444] cursor-pointer"
-                      >
+                      <td className="py-1 px-2 text-center text-[#00FF00] border-r border-[#444444]">
                         {item.shotLifeCycle.e3_3_gold !== undefined ? `${item.shotLifeCycle.e3_3_gold}M` : '-'}
                       </td>
-                      <td 
-                        onClick={() => setSelectedPartForDetail(item)}
-                        className="py-1 px-2 text-center text-[#00FF00] border-r border-[#444444] cursor-pointer"
-                      >
+                      <td className="py-1 px-2 text-center text-[#00FF00] border-r border-[#444444]">
                         {item.shotLifeCycle.e4_bare !== undefined ? `${item.shotLifeCycle.e4_bare}M` : '-'}
                       </td>
-                      <td 
-                        onClick={() => setSelectedPartForDetail(item)}
-                        className="py-1 px-2 text-center text-[#00FF00] border-r border-[#444444] cursor-pointer"
-                      >
+                      <td className="py-1 px-2 text-center text-[#00FF00] border-r border-[#444444]">
                         {item.shotLifeCycle.e5_bare !== undefined ? `${item.shotLifeCycle.e5_bare}M` : '-'}
                       </td>
-                      <td 
-                        onClick={() => setSelectedPartForDetail(item)}
-                        className="py-1 px-2 text-center text-slate-300 border-r border-[#444444] text-[10px] cursor-pointer"
-                      >
+                      <td className="py-1 px-2 text-center text-slate-300 border-r border-[#444444] text-[10px]">
                         {item.shotLifeCycle.lowerSpecScrapLimit ? `${item.shotLifeCycle.lowerSpecScrapLimit} mm` : '-'}
                       </td>
 
                       {/* 3. Regrind Standards */}
-                      <td 
-                        onClick={() => setSelectedPartForDetail(item)}
-                        className="py-1 px-2 text-center border-r border-[#444444] cursor-pointer"
-                      >
+                      <td className="py-1 px-2 text-center border-r border-[#444444]">
                         {isDisposable ? (
                           <span className="text-[10px] text-[#C40045] bg-[#22000c] px-1 py-0.2 border border-[#C40045]">
                             Disposable
@@ -1441,29 +1447,88 @@ export const PartMasterView: React.FC = () => {
                           <span className="text-purple-300">{item.regrindStandard?.perGrindMm || '-'}</span>
                         )}
                       </td>
-                      <td 
-                        onClick={() => setSelectedPartForDetail(item)}
-                        className="py-1 px-2 text-center text-purple-300 border-r border-[#444444] cursor-pointer"
-                      >
+                      <td className="py-1 px-2 text-center text-purple-300 border-r border-[#444444]">
                         {item.regrindStandard?.totalGrindMm !== '-' && item.regrindStandard?.totalGrindMm ? `${item.regrindStandard.totalGrindMm} mm` : '-'}
                       </td>
-                      <td 
-                        onClick={() => setSelectedPartForDetail(item)}
-                        className="py-1 px-2 text-center text-purple-300 font-bold border-r border-[#444444] cursor-pointer"
-                      >
+                      <td className="py-1 px-2 text-center text-purple-300 font-bold border-r border-[#444444]">
                         {item.regrindStandard?.regrindCycles ?? '-'}
                       </td>
                       <td 
-                        onClick={() => setSelectedPartForDetail(item)}
-                        className="py-1 px-2 text-slate-300 text-[11px] truncate max-w-[180px] border-r border-[#444444] cursor-pointer" 
+                        className="py-1 px-2 text-slate-300 text-[11px] truncate max-w-[180px] border-r border-[#444444]" 
                         title={item.regrindStandard?.note}
                       >
                         {item.regrindStandard?.note && item.regrindStandard?.note !== '-' ? item.regrindStandard.note : '-'}
                       </td>
 
-                      {/* 4. Row Action Buttons: Edit and Delete */}
+                      {/* 4. Row Action Buttons: Move, Edit and Delete */}
                       <td className="py-1 px-2 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
+                        <div className="flex items-center justify-center gap-1">
+                          {/* Reorder Buttons (Compact Grid) */}
+                          <div className="grid grid-cols-2 gap-0.5 mr-1 border-r border-[#444444] pr-1.5">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMovePart(item.partCode, 'top');
+                              }}
+                              disabled={partMasters.findIndex(p => p.partCode === item.partCode) === 0}
+                              className={`p-0.5 rounded ${partMasters.findIndex(p => p.partCode === item.partCode) === 0 ? 'text-slate-800 cursor-not-allowed' : 'text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 cursor-pointer'}`}
+                              title="ย้ายไปบนสุด (Move to Top)"
+                            >
+                              <ChevronsUp className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const targetNoStr = window.prompt(`สลับตำแหน่ง No. ${item.no} กับ No. ? (1-${partMasters.length})`);
+                                if (targetNoStr) {
+                                  const targetNo = parseInt(targetNoStr);
+                                  if (!isNaN(targetNo) && targetNo >= 1 && targetNo <= partMasters.length) {
+                                    handleMovePart(item.partCode, 'swap', targetNo - 1);
+                                  } else {
+                                    showToast('กรุณาระบุลำดับที่ถูกต้อง', 'error');
+                                  }
+                                }
+                              }}
+                              className="p-0.5 rounded text-sky-400 hover:text-sky-300 hover:bg-sky-400/10 cursor-pointer"
+                              title="ย้ายไปยังลำดับที่... (Move to Position)"
+                            >
+                              <Repeat className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMovePart(item.partCode, 'up');
+                              }}
+                              disabled={partMasters.findIndex(p => p.partCode === item.partCode) === 0}
+                              className={`p-0.5 rounded ${partMasters.findIndex(p => p.partCode === item.partCode) === 0 ? 'text-slate-800 cursor-not-allowed' : 'text-slate-400 hover:text-white hover:bg-slate-700 cursor-pointer'}`}
+                              title="เลื่อนขึ้น (Move Up)"
+                            >
+                              <ArrowUp className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMovePart(item.partCode, 'down');
+                              }}
+                              disabled={partMasters.findIndex(p => p.partCode === item.partCode) === partMasters.length - 1}
+                              className={`p-0.5 rounded ${partMasters.findIndex(p => p.partCode === item.partCode) === partMasters.length - 1 ? 'text-slate-800 cursor-not-allowed' : 'text-slate-400 hover:text-white hover:bg-slate-700 cursor-pointer'}`}
+                              title="เลื่อนลง (Move Down)"
+                            >
+                              <ArrowDown className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMovePart(item.partCode, 'bottom');
+                              }}
+                              disabled={partMasters.findIndex(p => p.partCode === item.partCode) === partMasters.length - 1}
+                              className={`p-0.5 rounded ${partMasters.findIndex(p => p.partCode === item.partCode) === partMasters.length - 1 ? 'text-slate-800 cursor-not-allowed' : 'text-rose-500 hover:text-rose-400 hover:bg-rose-500/10 cursor-pointer'}`}
+                              title="ย้ายไปล่างสุด (Move to Bottom)"
+                            >
+                              <ChevronsDown className="w-3 h-3" />
+                            </button>
+                          </div>
+
                           <button
                             type="button"
                             onClick={(e) => {
@@ -1500,176 +1565,6 @@ export const PartMasterView: React.FC = () => {
       </div>
 
       {/* ======================================================== */}
-      {/* 4. DETAIL SPECIFICATION DRAWER / MODAL */}
-      {/* ======================================================== */}
-      {selectedPartForDetail && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-[#111111] border border-[#666666] p-5 w-full max-w-2xl shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-[#666666] pb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 bg-[#1a1a1a] border border-[#00FF00] flex items-center justify-center text-[#00FF00] font-bold font-mono">
-                  #{selectedPartForDetail.no}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2 py-0.5 text-[10px] font-bold border ${getStageColor(selectedPartForDetail.stage)}`}>
-                      {selectedPartForDetail.stage}
-                    </span>
-                  </div>
-                  <h3 className="text-sm sm:text-base font-bold text-white font-mono mt-0.5">
-                    {selectedPartForDetail.partName}
-                  </h3>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    handleStartInlineEdit(selectedPartForDetail);
-                    setSelectedPartForDetail(null);
-                  }}
-                  className="px-2.5 py-1 bg-[#1a1a1a] hover:bg-[#262626] text-[#00FF00] border border-[#00FF00] text-xs font-mono flex items-center gap-1 cursor-pointer"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>แก้ไขข้อมูลในตาราง (Edit Inline)</span>
-                </button>
-                <button
-                  onClick={() => setSelectedPartForDetail(null)}
-                  className="text-slate-400 hover:text-white px-2.5 py-1 bg-[#222222] hover:bg-[#333333] border border-[#666666] text-xs font-mono cursor-pointer"
-                >
-                  ปิด (Close)
-                </button>
-              </div>
-            </div>
-
-            {/* 4 Main Data Sections */}
-            <div className="space-y-3 text-xs font-mono">
-              {/* 1. Identification */}
-              <div className="bg-[#1a1a1a] border border-[#666666] p-3 space-y-2">
-                <div className="text-[#00FF00] font-bold flex items-center gap-1.5 text-xs">
-                  <Tag className="w-3.5 h-3.5" />
-                  <span>1. PART IDENTIFICATION & CLASSIFICATION</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2.5 pt-1 text-slate-300">
-                  <div>
-                    <span className="text-slate-500 block text-[10px]">STAGE NAME:</span>
-                    <span className="text-white font-bold">{selectedPartForDetail.stage}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block text-[10px]">PART SPEC / MATERIAL:</span>
-                    <span className="text-[#00FF00] font-bold">{selectedPartForDetail.material || 'SKD11 / Carbide'}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* 2. Line Installed Quantities - Direct Single Source of Truth */}
-              <div className="bg-[#1a1a1a] border border-[#666666] p-3 space-y-2">
-                <div className="text-[#FFCC00] font-bold flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-1.5">
-                    <Factory className="w-3.5 h-3.5" />
-                    <span>2. LINKED INSTALL QUANTITY BY LINE (SINGLE SOURCE OF TRUTH)</span>
-                  </div>
-                  <span className="text-xs bg-[#222222] px-2 py-0.5 border border-[#666666]">
-                    TOTAL: <strong className="text-[#FFCC00]">{selectedPartForDetail.installQty.totalQty} EA</strong>
-                  </span>
-                </div>
-                <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5 pt-1">
-                  {[
-                    { line: 'E1', val: selectedPartForDetail.installQty.e1 },
-                    { line: 'E2', val: selectedPartForDetail.installQty.e2 },
-                    { line: 'E3-1', val: selectedPartForDetail.installQty.e3_1 },
-                    { line: 'E3-2', val: selectedPartForDetail.installQty.e3_2 },
-                    { line: 'E3-3', val: selectedPartForDetail.installQty.e3_3 },
-                    { line: 'E4', val: selectedPartForDetail.installQty.e4 },
-                    { line: 'E5', val: selectedPartForDetail.installQty.e5 },
-                  ].map(slot => (
-                    <div key={slot.line} className="bg-[#111111] border border-[#666666] p-1.5 text-center">
-                      <span className="text-[10px] text-slate-400 block">{slot.line}</span>
-                      <span className={`text-xs font-bold ${slot.val ? 'text-[#FFCC00]' : 'text-slate-600'}`}>
-                        {slot.val || '-'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* 3. Standardization of Shot Usage Cycle */}
-              <div className="bg-[#1a1a1a] border border-[#666666] p-3 space-y-2">
-                <div className="text-[#00FF00] font-bold flex items-center gap-1.5 text-xs">
-                  <Gauge className="w-3.5 h-3.5" />
-                  <span>3. STANDARDIZATION OF SHOT USAGE CYCLE (MILLION SHOTS)</span>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-slate-300">
-                  <div className="bg-[#111111] border border-[#666666] p-1.5">
-                    <span className="text-slate-500 block text-[10px]">E1 PCM / E3-1 PCM:</span>
-                    <span className="text-[#00FF00] font-bold">
-                      {selectedPartForDetail.shotLifeCycle.e1_pcm ? `${selectedPartForDetail.shotLifeCycle.e1_pcm}M shots` : '-'}
-                    </span>
-                  </div>
-                  <div className="bg-[#111111] border border-[#666666] p-1.5">
-                    <span className="text-slate-500 block text-[10px]">E2 GOLD:</span>
-                    <span className="text-[#00FF00] font-bold">
-                      {selectedPartForDetail.shotLifeCycle.e2_gold ? `${selectedPartForDetail.shotLifeCycle.e2_gold}M shots` : '-'}
-                    </span>
-                  </div>
-                  <div className="bg-[#111111] border border-[#666666] p-1.5">
-                    <span className="text-slate-500 block text-[10px]">E4 / E5 BARE:</span>
-                    <span className="text-[#00FF00] font-bold">
-                      {selectedPartForDetail.shotLifeCycle.e4_bare ? `${selectedPartForDetail.shotLifeCycle.e4_bare}M shots` : '-'}
-                    </span>
-                  </div>
-                  <div className="bg-[#111111] border border-[#666666] p-1.5">
-                    <span className="text-slate-500 block text-[10px]">SCRAP / LOWER LIMIT:</span>
-                    <span className="text-[#C40045] font-bold">
-                      {selectedPartForDetail.shotLifeCycle.lowerSpecScrapLimit ? `${selectedPartForDetail.shotLifeCycle.lowerSpecScrapLimit} mm` : 'N/A'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* 4. Standard Re-grinding & Maintenance Standard */}
-              <div className="bg-[#1a1a1a] border border-[#666666] p-3 space-y-2">
-                <div className="text-purple-300 font-bold flex items-center gap-1.5 text-xs">
-                  <Wrench className="w-3.5 h-3.5" />
-                  <span>4. STANDARD RE-GRINDING & TOOLROOM INSTRUCTION</span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-slate-300">
-                  <div className="bg-[#111111] border border-[#666666] p-1.5">
-                    <span className="text-slate-500 block text-[10px]">1 TIME / RE-GRIND:</span>
-                    <span className="text-purple-300 font-bold">{selectedPartForDetail.regrindStandard?.perGrindMm || '-'}</span>
-                  </div>
-                  <div className="bg-[#111111] border border-[#666666] p-1.5">
-                    <span className="text-slate-500 block text-[10px]">TOTAL GRIND DEPTH:</span>
-                    <span className="text-purple-300 font-bold">{selectedPartForDetail.regrindStandard?.totalGrindMm || '-'} mm</span>
-                  </div>
-                  <div className="bg-[#111111] border border-[#666666] p-1.5">
-                    <span className="text-slate-500 block text-[10px]">MAX RE-GRIND CYCLES:</span>
-                    <span className="text-purple-300 font-bold">{selectedPartForDetail.regrindStandard?.regrindCycles ?? '-'}</span>
-                  </div>
-                </div>
-                {selectedPartForDetail.regrindStandard?.note && selectedPartForDetail.regrindStandard.note !== '-' && (
-                  <div className="bg-[#111111] border border-purple-900/60 p-2 text-purple-200 text-xs mt-1">
-                    <span className="font-bold text-[10px] text-purple-400 block uppercase">Special Note / Guideline:</span>
-                    {selectedPartForDetail.regrindStandard.note}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Modal Actions */}
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#666666]">
-              <button
-                onClick={() => setSelectedPartForDetail(null)}
-                className="px-4 py-1.5 bg-[#00FF00] hover:bg-[#00dd00] text-black text-xs font-mono font-bold transition-colors cursor-pointer"
-              >
-                ตกลง (OK)
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ======================================================== */}
       {/* 6. DELETE CONFIRMATION MODAL */}
       {/* ======================================================== */}
       <DeleteConfirmationModal
@@ -1683,22 +1578,7 @@ export const PartMasterView: React.FC = () => {
       />
 
       {/* ======================================================== */}
-      {/* 7. ADD / EDIT PART MODAL */}
-      {/* ======================================================== */}
-      <PartMasterModal
-        isOpen={showAddEditModal}
-        onClose={() => {
-          setShowAddEditModal(false);
-          setEditingPartData(null);
-        }}
-        onSaved={() => {
-          loadDatabaseData();
-        }}
-        editItem={editingPartData}
-      />
-
-      {/* ======================================================== */}
-      {/* 8. STAGE GROUPING MANAGEMENT MODAL */}
+      {/* 7. STAGE GROUPING MANAGEMENT MODAL */}
       {/* ======================================================== */}
       <StageManagementModal
         isOpen={isStageManagerOpen}

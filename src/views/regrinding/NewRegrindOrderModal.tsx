@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ProductionLineId } from '../../types';
 import { ToolingPartMasterItem, DefectReasonCode, DEFECT_REASON_LABELS } from '../../types/regrind';
 import { ToolingPicThumbnail } from '../../components/regrind/ToolingPicThumbnail';
 import { PlusCircle, Wrench, X } from 'lucide-react';
+import { storageService } from '../../services/storageService';
 
 interface NewRegrindOrderModalProps {
   isOpen: boolean;
@@ -31,16 +32,39 @@ export const NewRegrindOrderModal: React.FC<NewRegrindOrderModalProps> = ({
   onSubmit,
   currentUserName = 'Somchai Prasert'
 }) => {
-  const [selectedPartName, setSelectedPartName] = useState<string>(toolingMasters[0]?.partName || 'Burring Ø 7');
+  const [selectedPartName, setSelectedPartName] = useState<string>('');
   const [lineId, setLineId] = useState<ProductionLineId>('E1');
-  const [stageName, setStageName] = useState<string>('Stage 1: Piercing & Burring');
-  const [positionId, setPositionId] = useState<string>('BURR-01');
+  const [stageName, setStageName] = useState<string>('');
+  const [positionId, setPositionId] = useState<string>('P-01');
   const [defectReason, setDefectReason] = useState<DefectReasonCode>('NORMAL_WEAR');
   const [defectNotes, setDefectNotes] = useState<string>('');
-  const [previousLengthMm, setPreviousLengthMm] = useState<number>(68.50);
-  const [regrindCountBefore, setRegrindCountBefore] = useState<number>(1);
+  const [previousLengthMm, setPreviousLengthMm] = useState<number>(0);
+  const [regrindCountBefore, setRegrindCountBefore] = useState<number>(0);
   const [urgency, setUrgency] = useState<'HIGH' | 'NORMAL' | 'LOW'>('NORMAL');
   const [receivedBy, setReceivedBy] = useState<string>(currentUserName);
+  
+  const [stageGroups, setStageGroups] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (isOpen) {
+      const groups = storageService.getStageGroups();
+      setStageGroups(groups);
+      
+      if (toolingMasters.length > 0) {
+        const first = toolingMasters[0];
+        setSelectedPartName(first.partName);
+        setPreviousLengthMm(first.nominalLengthMm);
+        
+        // Find stage for this part if possible
+        const partMaster = storageService.getPartMasters().find(p => p.partCode === first.partCode);
+        if (partMaster && partMaster.stageName) {
+          setStageName(partMaster.stageName);
+        } else if (groups.length > 0) {
+          setStageName(groups[0]);
+        }
+      }
+    }
+  }, [isOpen, toolingMasters]);
 
   if (!isOpen) return null;
 
@@ -116,7 +140,7 @@ export const NewRegrindOrderModal: React.FC<NewRegrindOrderModalProps> = ({
           </div>
 
           {/* Line & Stage */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 สายการผลิต (Line ID) *
@@ -136,6 +160,25 @@ export const NewRegrindOrderModal: React.FC<NewRegrindOrderModalProps> = ({
               </select>
             </div>
 
+            <div>
+              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                กลุ่มสเตจ (Stage Group) *
+              </label>
+              <select
+                value={stageName}
+                onChange={e => setStageName(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white font-bold"
+              >
+                {stageGroups.map(stg => (
+                  <option key={stg} value={stg}>
+                    {stg}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 ตำแหน่ง (Position ID)

@@ -84,6 +84,17 @@ export const TvTableRow: React.FC<TvTableRowProps> = React.memo(({
   // Shot Count Column background color: Always solid Green (#00ff00 text-black) as requested
   const shotBgClass = item.lifeLimit > 0 ? 'bg-[#00ff00] text-black' : 'bg-[#000000] text-white';
 
+  // Format clean English display name for TV Monitor (strip any stage group Thai translations and specs)
+  const getCleanDisplayName = () => {
+    let name = item.partName || item.stagePunchDie || '';
+    // Strip everything inside parentheses like (Ø7) or (3P) and Thai text
+    if (name.includes('(')) {
+      name = name.replace(/\s*\(.*?\)/g, '').trim();
+    }
+    return name || item.partName || item.stagePunchDie || 'Tooling Part';
+  };
+  const displayName = getCleanDisplayName();
+
   return (
     <div 
       className={`flex items-center font-sans bg-[#000000] hover:bg-[#151515] border-b border-[#282828] transition-colors ${rowHeightClass}`}
@@ -93,9 +104,9 @@ export const TvTableRow: React.FC<TvTableRowProps> = React.memo(({
         onClick={() => onSelectModalItem(item)}
         className="h-full flex items-center justify-start px-2 sm:px-3 font-sans font-black text-white border-r border-[#282828] flex-shrink-0 cursor-pointer truncate text-base sm:text-xl md:text-2xl lg:text-3xl tracking-tight"
         style={{ width: `${colWidths.stage}%` }}
-        title={item.stagePunchDie || item.partName}
+        title={displayName}
       >
-        <span className="truncate">{item.stagePunchDie || item.partName}</span>
+        <span className="truncate">{displayName}</span>
       </div>
 
       {/* 2. Replacement Count (Right aligned, white bold text, large display) */}

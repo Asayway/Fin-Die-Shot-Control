@@ -7,7 +7,13 @@ import {
   RefreshCw,
   FolderPlus,
   Sparkles,
-  Filter
+  Filter,
+  Trash2,
+  Edit2,
+  Check,
+  LayoutList,
+  Settings2,
+  Database
 } from 'lucide-react';
 import { storageService } from '../../services/storageService';
 import { PartMaster } from '../../types';
@@ -24,13 +30,20 @@ export const StageManagementModal: React.FC<StageManagementModalProps> = ({
   onClose,
   onSave
 }) => {
+  const [activeTab, setActiveTab] = useState<'ASSIGN' | 'MANAGE'>('ASSIGN');
   const [partMasters, setPartMasters] = useState<PartMaster[]>([]);
   const [partSearch, setPartSearch] = useState('');
   const [stageFilter, setStageFilter] = useState<string>('ALL');
 
+  // Stage Groups State
+  const [stageGroups, setStageGroups] = useState<string[]>([]);
+
   // New Stage Form
   const [newStageInput, setNewStageInput] = useState('');
-  const [customStageList, setCustomStageList] = useState<string[]>([]);
+
+  // Editing Stage
+  const [editingStage, setEditingStage] = useState<string | null>(null);
+  const [editStageInput, setEditStageInput] = useState('');
 
   // Toast Notification
   const [toast, setToast] = useState<string | null>(null);
@@ -42,7 +55,50 @@ export const StageManagementModal: React.FC<StageManagementModalProps> = ({
 
   const loadData = () => {
     const masters = storageService.getPartMasters();
+    
+    // Auto-clean Thai names from previously saved stage groups if they exist
+    let savedGroups = storageService.getStageGroups();
+    let cleanedGroups = false;
+    
+    savedGroups = savedGroups.map(g => {
+      if (/[\u0E00-\u0E7F]/.test(g)) {
+        cleanedGroups = true;
+        return g.replace(/\s*\([\u0E00-\u0E7F\s\/]+\)/g, '').trim();
+      }
+      return g.trim();
+    });
+
+    // Ensure strict case-insensitive deduplication
+    const seen = new Set<string>();
+    const deduplicatedGroups: string[] = [];
+    savedGroups.forEach(g => {
+      const normalized = g.toUpperCase();
+      if (!seen.has(normalized)) {
+        seen.add(normalized);
+        deduplicatedGroups.push(g);
+      }
+    });
+
+    if (deduplicatedGroups.length !== savedGroups.length || cleanedGroups) {
+      storageService.saveStageGroups(deduplicatedGroups);
+      savedGroups = deduplicatedGroups;
+    }
+    
+    // Auto-clean Thai names from parts on load
+    let cleanedParts = false;
+    masters.forEach(p => {
+      if (p.stageName && /[\u0E00-\u0E7F]/.test(p.stageName)) {
+        p.stageName = p.stageName.replace(/\s*\([\u0E00-\u0E7F\s\/]+\)/g, '').trim();
+        cleanedParts = true;
+      }
+    });
+    
+    if (cleanedParts) {
+      storageService.savePartMasters(masters);
+    }
+
     setPartMasters(masters);
+    setStageGroups(savedGroups);
   };
 
   useEffect(() => {
@@ -51,21 +107,28 @@ export const StageManagementModal: React.FC<StageManagementModalProps> = ({
     }
   }, [isOpen]);
 
-  // All valid Stage Groups
+  // Managed Stage Groups (strictly user-defined stage groups for the Manage tab)
+  const managedStageGroups = useMemo(() => {
+    return sortStagesInOrder(stageGroups);
+  }, [stageGroups]);
+
+  // All valid Stage Groups combined (strictly user-managed stage groups)
   const allStageGroups = useMemo(() => {
-    const stageSet = new Set<string>(DEFAULT_STAGE_GROUPS);
+    return sortStagesInOrder(stageGroups);
+  }, [stageGroups]);
+
+  // Handler: Run Sync Check
+  const handleRunSyncCheck = () => {
+    const results = storageService.validateAndSyncStages();
+    loadData();
+    if (onSave) onSave();
     
-    partMasters.forEach(pm => {
-      const derived = deriveLogicalStage(pm.partName, pm.stageName);
-      if (derived && derived !== '-') {
-        stageSet.add(derived);
-      }
-    });
-
-    customStageList.forEach(stg => stageSet.add(stg));
-
-    return sortStagesInOrder(Array.from(stageSet));
-  }, [partMasters, customStageList]);
+    if (results.added === 0 && results.fixed === 0) {
+      showToast('🛡️ ฐานข้อมูลปกติ: ไม่พบ Stage ที่ขาดหายหรือความสัมพันธ์ที่เสียหาย');
+    } else {
+      showToast(`⚙️ ซิงค์สำเร็จ: เพิ่ม ${results.added} Stage และแก้ไข ${results.fixed} รายการ`);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -75,14 +138,67 @@ export const StageManagementModal: React.FC<StageManagementModalProps> = ({
     const trimmed = newStageInput.trim();
     if (!trimmed) return;
 
-    if (allStageGroups.includes(trimmed)) {
+    if (managedStageGroups.some(g => g.toLowerCase() === trimmed.toLowerCase())) {
       showToast('⚠️ ชื่อ Stage นี้มีอยู่อยู่แล้วในระบบ');
       return;
     }
 
-    setCustomStageList(prev => [...prev, trimmed]);
+    const newGroups = [...stageGroups, trimmed];
+    setStageGroups(newGroups);
+    storageService.saveStageGroups(newGroups);
     setNewStageInput('');
+    loadData();
+    if (onSave) onSave();
     showToast(`✅ เพิ่ม Stage ใหม่ "${trimmed}" เรียบร้อย`);
+  };
+
+  // Handler: Start Editing Stage
+  const startEditingStage = (stageName: string) => {
+    setEditingStage(stageName);
+    setEditStageInput(stageName);
+  };
+
+  // Handler: Save Edited Stage
+  const saveEditedStage = (oldName: string) => {
+    const newName = editStageInput.trim();
+    if (!newName || !newName.length) {
+      setEditingStage(null);
+      return;
+    }
+    
+    if (newName === oldName) {
+      setEditingStage(null);
+      return;
+    }
+
+    // Check if the new name already exists (excluding oldName)
+    if (managedStageGroups.some(g => g.toLowerCase() === newName.toLowerCase() && g !== oldName)) {
+      if (!confirm(`ชื่อ Stage "${newName}" มีอยู่ในระบบแล้ว\nคุณต้องการรวม (Merge) Stage "${oldName}" เข้ากับ "${newName}" หรือไม่?`)) {
+        return;
+      }
+    }
+
+    // Use centralized service to update everywhere
+    storageService.renameStageGroup(oldName, newName);
+    
+    loadData();
+    if (onSave) onSave();
+
+    setEditingStage(null);
+    showToast(`✅ เปลี่ยนชื่อ Stage เป็น "${newName}" สำเร็จ`);
+  };
+
+  // Handler: Delete Stage
+  const handleDeleteStage = (stageName: string) => {
+    if (!confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบ Stage: ${stageName}? รายการพาร์ทที่อยู่ในสเตจนี้จะถูกรีเซ็ตเป็นสเตจเริ่มต้น`)) return;
+
+    // Use centralized service to delete everywhere
+    storageService.deleteStageGroup(stageName);
+    
+    loadData();
+    if (onSave) onSave();
+    
+    showToast(`🗑️ ลบ Stage "${stageName}" เรียบร้อย`);
   };
 
   // Handler: Reassign Single Part Stage
@@ -98,32 +214,11 @@ export const StageManagementModal: React.FC<StageManagementModalProps> = ({
     }
   };
 
-  // Handler: Auto-Group & Clean Raw Duplicate Stages
-  const handleAutoCleanAndGroup = () => {
-    const list = storageService.getPartMasters();
-    let updatedCount = 0;
 
-    list.forEach(pm => {
-      const logical = deriveLogicalStage(pm.partName, pm.stageName);
-      if (pm.stageName !== logical) {
-        pm.stageName = logical;
-        updatedCount++;
-      }
-    });
-
-    if (updatedCount > 0) {
-      storageService.savePartMasters(list);
-      loadData();
-      if (onSave) onSave();
-      showToast(`⚡ ทำความสะอาดและจัดกลุ่ม Stage อัตโนมัติสำเร็จ ${updatedCount} รายการ!`);
-    } else {
-      showToast(`ℹ️ รายการทั้งหมดอยู่ในกลุ่ม Stage มาตรฐานเรียบร้อยแล้ว`);
-    }
-  };
 
   // Filtered Parts
   const filteredParts = partMasters.filter(p => {
-    const currentStg = deriveLogicalStage(p.partName, p.stageName);
+    const currentStg = p.stageName || deriveLogicalStage(p.partName, p.stageName, stageGroups);
     if (stageFilter !== 'ALL' && currentStg !== stageFilter) {
       return false;
     }
@@ -174,134 +269,273 @@ export const StageManagementModal: React.FC<StageManagementModalProps> = ({
           </div>
         )}
 
-        {/* Top Control Bar: Add Stage & Auto Clean */}
-        <div className="p-3 bg-[#172131] border-b border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          
-          {/* Add New Stage Group */}
-          <form onSubmit={handleAddNewStage} className="flex items-center gap-2 flex-1 max-w-md">
-            <div className="relative flex-1">
-              <FolderPlus className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="พิมพ์ชื่อ Stage ใหม่... (e.g. Stage 11: Special Punch)"
-                value={newStageInput}
-                onChange={e => setNewStageInput(e.target.value)}
-                className="w-full bg-[#111827] border border-slate-700 pl-9 pr-3 py-1.5 text-xs text-white rounded-xl placeholder:text-slate-500 font-mono focus:outline-none focus:border-[#00FF00]"
-              />
-            </div>
-            <button
-              type="submit"
-              className="px-3 py-1.5 bg-[#00FF00] hover:bg-emerald-400 text-black font-black text-xs rounded-xl flex items-center gap-1 transition-all cursor-pointer whitespace-nowrap shadow-sm"
-            >
-              <Plus className="w-4 h-4" />
-              <span>เพิ่ม Stage</span>
-            </button>
-          </form>
-
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleAutoCleanAndGroup}
-              className="px-3.5 py-1.5 bg-emerald-950 hover:bg-emerald-900 text-[#00FF00] border border-[#00FF00]/40 font-extrabold text-xs rounded-xl flex items-center gap-1.5 transition-all shadow-sm cursor-pointer whitespace-nowrap"
-              title="สแกนและจัดกลุ่มชื่อ Stage ที่ซ้ำหรือเป็นชื่อพาร์ทเดิม ให้เข้ากลุ่ม Stage มาตรฐานอัตโนมัติ"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>⚡ ล้างสเตจซ้ำ & จัดกลุ่มอัตโนมัติ</span>
-            </button>
-          </div>
+        {/* Tabs */}
+        <div className="flex px-4 pt-3 bg-[#172131] border-b border-slate-800 gap-2">
+          <button
+            onClick={() => setActiveTab('ASSIGN')}
+            className={`px-4 py-2 text-xs font-bold rounded-t-lg transition-colors flex items-center gap-2 ${
+              activeTab === 'ASSIGN' 
+                ? 'bg-[#1f2937] text-[#00FF00] border-t border-x border-[#00FF00]/30' 
+                : 'bg-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <LayoutList className="w-4 h-4" />
+            <span>กำหนดพาร์ทลงสเตจ (Assign Parts)</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('MANAGE')}
+            className={`px-4 py-2 text-xs font-bold rounded-t-lg transition-colors flex items-center gap-2 ${
+              activeTab === 'MANAGE' 
+                ? 'bg-[#1f2937] text-[#00FF00] border-t border-x border-[#00FF00]/30' 
+                : 'bg-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Settings2 className="w-4 h-4" />
+            <span>จัดการรายชื่อสเตจ (Manage Stages)</span>
+          </button>
         </div>
 
-        {/* Search & Filter Bar */}
-        <div className="p-3 bg-[#131d2e] border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 flex-1 min-w-[240px] max-w-md">
-            <div className="relative flex-1">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="ค้นหาชื่อพาร์ท หรือสเตจ..."
-                value={partSearch}
-                onChange={e => setPartSearch(e.target.value)}
-                className="w-full bg-[#111827] border border-slate-700 pl-9 pr-3 py-1.5 text-xs text-slate-200 rounded-xl focus:outline-none focus:border-[#00FF00]"
-              />
-            </div>
-          </div>
+        {activeTab === 'ASSIGN' ? (
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            {/* Top Control Bar: Quick Add & Auto Clean */}
+            <div className="p-3 bg-[#172131] border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 flex-none">
+              <form onSubmit={handleAddNewStage} className="flex flex-1 min-w-[300px] max-w-md items-center gap-2">
+                <div className="relative flex-1">
+                  <FolderPlus className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="พิมพ์ชื่อ Stage ใหม่... (e.g. Special Punch)"
+                    value={newStageInput}
+                    onChange={e => setNewStageInput(e.target.value)}
+                    className="w-full bg-[#111827] border border-slate-700 pl-9 pr-3 py-1.5 text-xs text-white rounded-xl placeholder:text-slate-500 focus:outline-none focus:border-[#00FF00]"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="px-3 py-1.5 bg-[#00FF00] hover:bg-emerald-400 text-black font-black text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-sm whitespace-nowrap"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>เพิ่ม Stage</span>
+                </button>
+              </form>
 
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 text-xs font-mono">
-              <Filter className="w-3.5 h-3.5 text-[#00FF00]" />
-              <span className="text-slate-400 font-bold">กรองตาม Stage:</span>
-              <select
-                value={stageFilter}
-                onChange={e => setStageFilter(e.target.value)}
-                className="bg-[#111827] text-[#00FF00] border border-slate-700 px-2 py-1 text-xs font-bold rounded-lg focus:outline-none focus:border-[#00FF00] cursor-pointer"
-              >
-                <option value="ALL">ทุกสเตจ (All Stages)</option>
-                {allStageGroups.map(stg => (
-                  <option key={stg} value={stg} className="bg-[#111827] text-white">
-                    {stg}
-                  </option>
-                ))}
-              </select>
+
             </div>
 
-            <div className="text-xs text-slate-400 font-mono">
-              แสดง <strong className="text-[#00FF00]">{filteredParts.length}</strong> จาก {partMasters.length} รายการ
-            </div>
-          </div>
-        </div>
+            {/* Search & Filter Bar */}
+            <div className="p-3 bg-[#131d2e] border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 flex-none">
+              <div className="flex items-center gap-2 flex-1 min-w-[240px] max-w-md">
+                <div className="relative flex-1">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="ค้นหาชื่อพาร์ท หรือสเตจ..."
+                    value={partSearch}
+                    onChange={e => setPartSearch(e.target.value)}
+                    className="w-full bg-[#111827] border border-slate-700 pl-9 pr-3 py-1.5 text-xs text-slate-200 rounded-xl focus:outline-none focus:border-[#00FF00]"
+                  />
+                </div>
+              </div>
 
-        {/* Main Table Body - Exactly matching requested layout (No Part Code, No DWG No.) */}
-        <div className="flex-1 overflow-y-auto p-3 bg-[#0c121e]">
-          <table className="w-full text-left border-collapse font-mono text-xs">
-            <thead>
-              <tr className="bg-[#1a2536] text-slate-300 border-b border-slate-700">
-                <th className="p-3 w-16 text-center font-bold">No</th>
-                <th className="p-3 font-bold text-white">ชื่อชิ้นส่วนแม่พิมพ์ (Part Name)</th>
-                <th className="p-3 w-80 font-bold text-[#00FF00]">Stage สเตจที่สังกัด</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/80">
-              {filteredParts.length === 0 ? (
-                <tr>
-                  <td colSpan={3} className="p-8 text-center text-slate-500 font-sans">
-                    ไม่พบรายการชิ้นส่วนตรงกับคำค้นหา
-                  </td>
-                </tr>
-              ) : (
-                filteredParts.map((part, idx) => {
-                  const currentStg = deriveLogicalStage(part.partName, part.stageName);
-                  return (
-                    <tr key={part.partCode || idx} className="hover:bg-[#162234] transition-colors">
-                      <td className="p-3 text-center text-slate-400 font-bold">{idx + 1}</td>
-                      <td className="p-3 font-bold text-white text-sm">{part.partName}</td>
-                      <td className="p-3">
-                        <select
-                          value={currentStg}
-                          onChange={e =>
-                            handleReassignSinglePart(part.partCode, part.partName, e.target.value)
-                          }
-                          className="w-full bg-[#111827] text-[#00FF00] border border-emerald-600/60 px-3 py-1.5 text-xs font-bold rounded-lg focus:outline-none focus:border-[#00FF00] cursor-pointer shadow-sm"
-                        >
-                          {allStageGroups.map(stg => (
-                            <option key={stg} value={stg} className="bg-[#111827] text-white">
-                              {stg}
-                            </option>
-                          ))}
-                        </select>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5 text-xs font-mono">
+                  <Filter className="w-3.5 h-3.5 text-[#00FF00]" />
+                  <span className="text-slate-400 font-bold">กรองตาม Stage:</span>
+                  <select
+                    value={stageFilter}
+                    onChange={e => setStageFilter(e.target.value)}
+                    className="bg-[#111827] text-[#00FF00] border border-slate-700 px-2 py-1 text-xs font-bold rounded-lg focus:outline-none focus:border-[#00FF00] cursor-pointer"
+                  >
+                    <option value="ALL">ทุกสเตจ (All Stages)</option>
+                    {allStageGroups.map(stg => (
+                      <option key={stg} value={stg} className="bg-[#111827] text-white">
+                        {stg}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="text-xs text-slate-400 font-mono">
+                  แสดง <strong className="text-[#00FF00]">{filteredParts.length}</strong> จาก {partMasters.length} รายการ
+                </div>
+              </div>
+            </div>
+
+            {/* Main Table Body - Exactly matching requested layout (No Part Code, No DWG No.) */}
+            <div className="flex-1 overflow-y-auto p-3 bg-[#0c121e]">
+              <table className="w-full text-left border-collapse font-mono text-xs">
+                <thead>
+                  <tr className="bg-[#1a2536] text-slate-300 border-b border-slate-700">
+                    <th className="p-3 w-16 text-center font-bold">No</th>
+                    <th className="p-3 font-bold text-white">ชื่อชิ้นส่วนแม่พิมพ์ (Part Name)</th>
+                    <th className="p-3 w-80 font-bold text-[#00FF00]">Stage สเตจที่สังกัด</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/80">
+                  {filteredParts.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="p-8 text-center text-slate-500 font-sans">
+                        ไม่พบรายการชิ้นส่วนตรงกับคำค้นหา
                       </td>
                     </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                  ) : (
+                    filteredParts.map((part, idx) => {
+                      const currentStg = deriveLogicalStage(part.partName, part.stageName, stageGroups);
+                      return (
+                        <tr key={part.partCode || idx} className="hover:bg-[#162234] transition-colors">
+                          <td className="p-3 text-center text-slate-400 font-bold">{idx + 1}</td>
+                          <td className="p-3 font-bold text-white text-sm">{part.partName}</td>
+                          <td className="p-3">
+                            <div className="flex items-center gap-2">
+                              <span className={`inline-block px-1.5 py-0.5 text-[10px] font-bold border bg-[#111111] uppercase whitespace-nowrap ${
+                                currentStg.toUpperCase().includes('PIERCE') || currentStg.toUpperCase().includes('BURRING') ? 'border-[#FFCC00] text-[#FFCC00]' :
+                                currentStg.toUpperCase().includes('IRONING') ? 'border-blue-400 text-blue-400' :
+                                currentStg.toUpperCase().includes('LOUVER') || currentStg.toUpperCase().includes('SLIT') ? 'border-emerald-400 text-emerald-400' :
+                                currentStg.toUpperCase().includes('REFLARE') || currentStg.toUpperCase().includes('REFLAIRE') ? 'border-purple-400 text-purple-400' :
+                                currentStg.toUpperCase().includes('NOTCH') || currentStg.toUpperCase().includes('PUNCH') ? 'border-sky-400 text-sky-400' :
+                                currentStg.toUpperCase().includes('CUT OFF') || currentStg.toUpperCase().includes('SIDE CUT') ? 'border-rose-400 text-rose-400' :
+                                currentStg.toUpperCase().includes('FORMING') ? 'border-teal-400 text-teal-400' :
+                                currentStg.toUpperCase().includes('PILOT') || currentStg.toUpperCase().includes('FEED') ? 'border-orange-400 text-orange-400' :
+                                'border-slate-500 text-slate-300'
+                              }`}>
+                                {currentStg}
+                              </span>
+                              <select
+                                value={currentStg}
+                                onChange={e =>
+                                  handleReassignSinglePart(part.partCode, part.partName, e.target.value)
+                                }
+                                className="flex-1 bg-[#111827] text-[#00FF00] border border-emerald-600/60 px-2 py-1 text-[11px] font-bold rounded-lg focus:outline-none focus:border-[#00FF00] cursor-pointer shadow-sm"
+                              >
+                                {allStageGroups.map(stg => (
+                                  <option key={stg} value={stg} className="bg-[#111827] text-white">
+                                    {stg}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 min-h-0 flex flex-col bg-[#0c121e]">
+            <div className="p-4 bg-[#172131] border-b border-slate-800 flex-none">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold text-white">เพิ่ม Stage ใหม่</h3>
+                <button
+                  type="button"
+                  onClick={handleRunSyncCheck}
+                  className="px-3 py-1 bg-[#1a2536] hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-[10px] font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer shadow-sm group"
+                  title="ตรวจสอบความถูกต้องของชื่อ Stage ทั้งระบบและซ่อมแซมความสัมพันธ์ที่เสียหาย"
+                >
+                  <Database className="w-3.5 h-3.5 text-[#00FF00] group-hover:scale-110 transition-transform" />
+                  <span>SYNCHRONIZATION CHECK</span>
+                </button>
+              </div>
+              <form onSubmit={handleAddNewStage} className="flex items-center gap-2 max-w-lg">
+                <div className="relative flex-1">
+                  <FolderPlus className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="พิมพ์ชื่อ Stage ใหม่... (e.g. Stage 11: Special Punch)"
+                    value={newStageInput}
+                    onChange={e => setNewStageInput(e.target.value)}
+                    className="w-full bg-[#111827] border border-slate-700 pl-9 pr-3 py-2 text-xs text-white rounded-xl placeholder:text-slate-500 font-mono focus:outline-none focus:border-[#00FF00]"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-[#00FF00] hover:bg-emerald-400 text-black font-black text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>เพิ่ม</span>
+                </button>
+              </form>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 flex flex-col">
+              <div className="bg-[#172131] rounded-xl border border-slate-800 overflow-hidden">
+                <div className="p-3 border-b border-slate-800 bg-[#1a2536]">
+                  <h3 className="text-sm font-bold text-white">รายชื่อ Stage ทั้งหมด</h3>
+                </div>
+                <ul className="divide-y divide-slate-800/80 max-h-[55vh] overflow-y-auto">
+                  {managedStageGroups.map((stg, idx) => (
+                    <li key={`${stg}-${idx}`} className="p-3 flex items-center justify-between hover:bg-[#1a2536] transition-colors">
+                      <div className="flex items-center gap-3">
+                        <span className="text-slate-500 font-mono text-xs w-6 text-right">{idx + 1}.</span>
+                        {editingStage === stg ? (
+                          <input
+                            type="text"
+                            value={editStageInput}
+                            onChange={e => setEditStageInput(e.target.value)}
+                            className="bg-[#111827] border border-[#00FF00] text-[#00FF00] px-2 py-1 text-sm font-bold rounded-lg focus:outline-none"
+                            autoFocus
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') saveEditedStage(stg);
+                              if (e.key === 'Escape') setEditingStage(null);
+                            }}
+                          />
+                        ) : (
+                          <span className={`inline-block px-2 py-0.5 text-xs font-bold border bg-[#111111] uppercase tracking-wider rounded-sm ${
+                            stg.toUpperCase().includes('PIERCE') || stg.toUpperCase().includes('BURRING') ? 'border-[#FFCC00] text-[#FFCC00]' :
+                            stg.toUpperCase().includes('IRONING') ? 'border-blue-400 text-blue-400' :
+                            stg.toUpperCase().includes('LOUVER') || stg.toUpperCase().includes('SLIT') ? 'border-emerald-400 text-emerald-400' :
+                            stg.toUpperCase().includes('REFLARE') || stg.toUpperCase().includes('REFLAIRE') ? 'border-purple-400 text-purple-400' :
+                            stg.toUpperCase().includes('NOTCH') || stg.toUpperCase().includes('PUNCH') ? 'border-sky-400 text-sky-400' :
+                            stg.toUpperCase().includes('CUT OFF') || stg.toUpperCase().includes('SIDE CUT') ? 'border-rose-400 text-rose-400' :
+                            stg.toUpperCase().includes('FORMING') ? 'border-teal-400 text-teal-400' :
+                            stg.toUpperCase().includes('PILOT') || stg.toUpperCase().includes('FEED') ? 'border-orange-400 text-orange-400' :
+                            'border-slate-500 text-slate-300'
+                          }`}>
+                            {stg}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {editingStage === stg ? (
+                          <button
+                            onClick={() => saveEditedStage(stg)}
+                            className="p-1.5 text-[#00FF00] hover:bg-[#00FF00]/10 rounded-lg transition-colors cursor-pointer"
+                            title="บันทึก"
+                          >
+                            <Check className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => startEditingStage(stg)}
+                            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                            title="แก้ไขชื่อ Stage"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                        )}
+                        
+                        <button
+                          onClick={() => handleDeleteStage(stg)}
+                          className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded-lg transition-colors cursor-pointer"
+                          title="ลบ Stage"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Modal Footer */}
         <div className="p-3.5 bg-[#1f2937] border-t border-slate-700 flex items-center justify-between">
           <div className="text-xs text-slate-400">
-            จำนวน Stage ทั้งหมด: <strong className="text-[#00FF00]">{allStageGroups.length}</strong> กลุ่ม | ชิ้นส่วนทั้งหมด: <strong className="text-white">{partMasters.length}</strong> รายการ
+            จำนวน Stage ทั้งหมด: <strong className="text-[#00FF00]">{managedStageGroups.length}</strong> กลุ่ม | ชิ้นส่วนทั้งหมด: <strong className="text-white">{partMasters.length}</strong> รายการ
           </div>
           <button
             onClick={onClose}
