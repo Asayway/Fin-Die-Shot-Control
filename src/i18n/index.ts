@@ -19,6 +19,15 @@ export interface TvTranslations {
   stockQty: string;
   orderRequire: string;
   finDieShotCount?: string;
+  mainFinDie?: string;
+  total?: string;
+  today?: string;
+  signalStandard?: string;
+  normal?: string;
+  warning?: string;
+  prepare?: string;
+  overLife?: string;
+  autoWidth?: string;
 }
 
 export interface TableTranslations {
@@ -116,7 +125,16 @@ export const TRANSLATIONS: Record<'EN' | 'TH' | 'KO', Dictionary> = {
       installQty: en.tv.installQty,
       stockQty: en.tv.stockQty,
       orderRequire: en.tv.orderRequire,
-      finDieShotCount: en.tv.finDieShotCount
+      finDieShotCount: en.tv.finDieShotCount,
+      mainFinDie: en.tv.mainFinDie,
+      total: en.tv.total,
+      today: en.tv.today,
+      signalStandard: en.tv.signalStandard,
+      normal: en.tv.normal,
+      warning: en.tv.warning,
+      prepare: en.tv.prepare,
+      overLife: en.tv.overLife,
+      autoWidth: en.tv.autoWidth
     },
     controls: {
       line: 'LINE',
@@ -188,7 +206,16 @@ export const TRANSLATIONS: Record<'EN' | 'TH' | 'KO', Dictionary> = {
       installQty: th.tv.installQty,
       stockQty: th.tv.stockQty,
       orderRequire: th.tv.orderRequire,
-      finDieShotCount: th.tv.finDieShotCount
+      finDieShotCount: th.tv.finDieShotCount,
+      mainFinDie: th.tv.mainFinDie,
+      total: th.tv.total,
+      today: th.tv.today,
+      signalStandard: th.tv.signalStandard,
+      normal: th.tv.normal,
+      warning: th.tv.warning,
+      prepare: th.tv.prepare,
+      overLife: th.tv.overLife,
+      autoWidth: th.tv.autoWidth
     },
     controls: {
       line: 'สายผลิต',
@@ -260,7 +287,16 @@ export const TRANSLATIONS: Record<'EN' | 'TH' | 'KO', Dictionary> = {
       installQty: ko.tv.installQty,
       stockQty: ko.tv.stockQty,
       orderRequire: ko.tv.orderRequire,
-      finDieShotCount: ko.tv.finDieShotCount
+      finDieShotCount: ko.tv.finDieShotCount,
+      mainFinDie: ko.tv.mainFinDie,
+      total: ko.tv.total,
+      today: ko.tv.today,
+      signalStandard: ko.tv.signalStandard,
+      normal: ko.tv.normal,
+      warning: ko.tv.warning,
+      prepare: ko.tv.prepare,
+      overLife: ko.tv.overLife,
+      autoWidth: ko.tv.autoWidth
     },
     controls: {
       line: '라인',

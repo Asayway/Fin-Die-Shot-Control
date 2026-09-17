@@ -55,27 +55,29 @@ export const TvTableRow: React.FC<TvTableRowProps> = React.memo(({
   const clampPercent = item.lifeLimit > 0 ? Math.min(100, Math.max(0, percentVal)) : 0;
   const progressFillColor = '#555555'; // Grey bar fill matching TV reference image
 
-  // Life Time (Days) calculation or reference values
-  let lifeTimeDisplay: string | number = '-';
-  if (item.daysRemainingForecast !== undefined && item.daysRemainingForecast > 0) {
+  // Life Time (Days) calculation or explicit state
+  let lifeTimeDisplay: React.ReactNode = '-';
+  if (isStdMissing) {
+    lifeTimeDisplay = (
+      <span className="text-xs font-mono font-bold text-slate-500 uppercase">
+        STANDARD NOT SET
+      </span>
+    );
+  } else if (item.daysRemainingForecast !== undefined && item.daysRemainingForecast > 0) {
     lifeTimeDisplay = item.daysRemainingForecast;
-  } else if (item.lifeLimit > 0) {
-    if (stageLower.includes('pierce') || stageLower.includes('pirecing') || stageLower.includes('burring')) {
-      lifeTimeDisplay = 9;
-    } else if (stageLower.includes('ironing')) {
-      lifeTimeDisplay = 73;
-    } else if (stageLower.includes('louver') || stageLower.includes('refalre') || stageLower.includes('reflaire')) {
-      lifeTimeDisplay = 173;
-    } else if (stageLower.includes('row slit')) {
-      lifeTimeDisplay = 4;
-    } else if (stageLower.includes('side cutting')) {
-      lifeTimeDisplay = 19;
-    } else if (stageLower.includes('cut off')) {
-      lifeTimeDisplay = 25;
-    } else {
-      const remaining = item.remainingShot !== undefined ? item.remainingShot : Math.max(0, item.lifeLimit - usedShotVal);
-      lifeTimeDisplay = Math.max(1, Math.round(remaining / 46468));
-    }
+  } else if (item.daysRemainingForecast === 0) {
+    lifeTimeDisplay = (
+      <span className="text-xs font-mono font-bold text-red-500 uppercase">
+        0 (OVER LIFE)
+      </span>
+    );
+  } else {
+    // If daily rate is 0 or unconfigured, we do not invent arbitrary divisors
+    lifeTimeDisplay = (
+      <span className="text-xs font-mono font-bold text-slate-500 uppercase">
+        NO FORECAST
+      </span>
+    );
   }
 
   // Row height: flex-1 min-h-0 so rows fill available screen height dynamically
@@ -114,7 +116,11 @@ export const TvTableRow: React.FC<TvTableRowProps> = React.memo(({
         className="h-full flex items-center justify-end px-2 sm:px-3 text-white font-black flex-shrink-0 border-r border-[#282828] whitespace-nowrap tabular-nums font-mono text-base sm:text-xl md:text-2xl lg:text-3xl"
         style={{ width: `${colWidths.replacement}%` }}
       >
-        {isStdMissing ? '-' : formatShots(item.lifeLimit)}
+        {isStdMissing ? (
+          <span className="text-xs font-mono font-bold text-slate-500 uppercase">STANDARD NOT SET</span>
+        ) : (
+          formatShots(item.lifeLimit)
+        )}
       </div>
 
       {/* 3. Shot Count (Always solid Green #00ff00 text-black, bold text, right aligned, extra large display) */}
@@ -122,7 +128,11 @@ export const TvTableRow: React.FC<TvTableRowProps> = React.memo(({
         className={`h-full flex items-center justify-end px-2 sm:px-3 flex-shrink-0 border-r border-[#282828] whitespace-nowrap tabular-nums font-mono text-lg sm:text-2xl md:text-3xl lg:text-4xl font-black ${shotBgClass}`}
         style={{ width: `${colWidths.shot}%` }}
       >
-        {item.lifeLimit > 0 ? formatShots(usedShotVal) : '-'}
+        {usedShotVal !== undefined && !isNaN(usedShotVal) ? (
+          formatShots(usedShotVal)
+        ) : (
+          <span className="text-xs font-mono font-bold text-slate-400 uppercase">NO DATA</span>
+        )}
       </div>
 
       {/* 4. Progress (Proportional grey fill bar matching percentage over dark grey background) */}
@@ -154,7 +164,13 @@ export const TvTableRow: React.FC<TvTableRowProps> = React.memo(({
         className="h-full flex items-center justify-end px-2 sm:px-3 text-white font-black flex-shrink-0 border-r border-[#282828] whitespace-nowrap tabular-nums font-mono text-base sm:text-xl md:text-2xl lg:text-3xl"
         style={{ width: `${colWidths.installQty}%` }}
       >
-        {item.installQty > 0 ? item.installQty : '-'}
+        {item.installQty !== undefined && item.installQty > 0 ? (
+          item.installQty
+        ) : item.installQty === 0 ? (
+          <span className="text-xs font-mono font-bold text-amber-500 uppercase">0 (NOT SET)</span>
+        ) : (
+          <span className="text-[10px] sm:text-xs font-mono font-bold text-slate-500 uppercase">INSTALL QTY. NOT SET</span>
+        )}
       </div>
 
       {/* 7. Stock Qty. (Right aligned, white bold text, large display) */}
@@ -162,7 +178,20 @@ export const TvTableRow: React.FC<TvTableRowProps> = React.memo(({
         className="h-full flex items-center justify-end px-2 sm:px-3 text-white font-black flex-shrink-0 border-r border-[#282828] whitespace-nowrap tabular-nums font-mono text-base sm:text-xl md:text-2xl lg:text-3xl"
         style={{ width: `${colWidths.stockQty}%` }}
       >
-        {availableSpareVal !== undefined ? availableSpareVal : (item.installQty > 0 ? item.installQty : '-')}
+        {item.lineStockQty !== undefined || availableSpareVal !== undefined ? (
+          <div className="flex flex-col items-end justify-center leading-none">
+            <span className={`${(item.lineStockQty ?? availableSpareVal) === 0 ? 'text-red-400' : 'text-white font-black'}`}>
+              {item.lineStockQty ?? availableSpareVal}
+            </span>
+            {item.totalStockQty !== undefined && item.totalStockQty !== (item.lineStockQty ?? availableSpareVal) && (
+              <span className="text-[10px] sm:text-[11px] md:text-[12px] text-slate-400 font-bold mt-0.5 font-sans">
+                (รวม: {item.totalStockQty})
+              </span>
+            )}
+          </div>
+        ) : (
+          <span className="text-[10px] sm:text-xs font-mono font-bold text-slate-500 uppercase">STOCK DATA NOT AVAILABLE</span>
+        )}
       </div>
 
       {/* 8. Order Require (Color-coded indicator matching Signal Standard: Green/Yellow/Orange/Red) */}

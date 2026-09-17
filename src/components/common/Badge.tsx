@@ -26,6 +26,16 @@ export const Badge: React.FC<BadgeProps> = ({
     const isRunning = statusNormalized === 'RUNNING';
     const isIdle = statusNormalized === 'IDLE';
     const isChangeover = statusNormalized.includes('CHANGE');
+    const isWaiting = statusNormalized.includes('WAITING') || statusNormalized.includes('GATEWAY');
+
+    if (isWaiting) {
+      return (
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono font-bold uppercase tracking-wider bg-blue-950/80 text-blue-300 border border-blue-500/80 animate-pulse ${className}`}>
+          {showIcon && <RefreshCw className="w-3 h-3 text-blue-300 animate-spin-slow" />}
+          <span>{label || 'WAITING FOR GATEWAY'}</span>
+        </span>
+      );
+    }
 
     if (isMaintenance) {
       return (

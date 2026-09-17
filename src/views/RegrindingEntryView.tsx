@@ -847,7 +847,7 @@ export const RegrindingEntryView: React.FC = () => {
                         type="date"
                         value={regrindDate}
                         onChange={e => setRegrindDate(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 font-mono"
+                        className="w-full bg-slate-950 border border-slate-600 rounded-lg px-3 py-2 text-xs text-white font-mono [color-scheme:dark]"
                         required
                       />
                     </div>

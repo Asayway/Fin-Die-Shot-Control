@@ -1,18 +1,21 @@
 /**
  * Standard Stage Groups & Utilities for Mold Tooling Management
+ * 12 Canonical Production Stages
  */
 
 export const DEFAULT_STAGE_GROUPS: string[] = [
-  'Piercing & Burring',
-  'Notching & Punching',
-  'Forming & Bending',
-  'Louver & Slitting',
-  'Cut Off & Separating',
-  'Side Cut & Guide',
-  'Ironing & Calibrating',
-  'Reflare',
-  'Pilot & Feed Pin',
-  'General Tooling'
+  'PIERCE & BURRING',
+  'IRONING',
+  'LOUVER',
+  'REFLARE',
+  'SLIT',
+  'WIDE LOWER',
+  'ROW SLIT',
+  'CUT OFF',
+  'SIDE CUT',
+  'S5 CENTER NOTCH',
+  'CORNER CUT',
+  'HITCH FEED'
 ];
 
 /**
@@ -33,10 +36,10 @@ export function sortStagesInOrder(stages: string[]): string[] {
     for (let i = 0; i < normalizedDefaults.length; i++) {
       const def = normalizedDefaults[i];
       // If default group contains the input or input contains the default
-      if (def.includes(s) || s.includes(def)) return i;
+      if (def === s || def.includes(s) || s.includes(def)) return i;
       
       // Try splitting by common separators and matching words
-      const defWords = def.split(/[&\s\/]+/).filter(w => w.length > 3);
+      const defWords = def.split(/[&\s\/]+/).filter(w => w.length > 2);
       if (defWords.some(w => s.includes(w))) return i;
     }
     
@@ -58,7 +61,7 @@ export function sortStagesInOrder(stages: string[]): string[] {
 }
 
 /**
- * Helper to strip 'Stage X:' prefix from any custom user string
+ * Helper to strip 'Stage X:' prefix and extraneous non-ASCII from any custom user string
  */
 export function cleanStageName(stageStr: string): string {
   if (!stageStr) return '';
@@ -70,11 +73,18 @@ export function cleanStageName(stageStr: string): string {
   cleaned = cleaned.replace(/[\u0E00-\u0E7F]+/g, '');
   // 4. Remove any trailing slashes or random punctuation left behind
   cleaned = cleaned.replace(/\s*\/\s*$/g, '');
-  return cleaned.trim();
+  cleaned = cleaned.trim();
+  
+  // Match to canonical 12 stages if close
+  const upper = cleaned.toUpperCase();
+  for (const def of DEFAULT_STAGE_GROUPS) {
+    if (def.toUpperCase() === upper) return def;
+  }
+  return cleaned;
 }
 
 /**
- * Normalizes raw stage names into standard Stage Groups without 'Stage X:' prefixes
+ * Normalizes raw stage names into standard 12 Stage Groups
  */
 export function deriveLogicalStage(partName: string, currentStageName?: string, customStageGroups?: string[]): string {
   let stageStr = (currentStageName || '').trim();
@@ -89,40 +99,48 @@ export function deriveLogicalStage(partName: string, currentStageName?: string, 
     return stripped;
   }
 
+  // Exact uppercase match against groupsToUse
+  const match = groupsToUse.find(g => g.toUpperCase() === stripped.toUpperCase());
+  if (match) return match;
+
   // Combine stageStr and partStr for matching
   const combined = `${stageStr} ${partStr}`.toUpperCase();
 
-  // ONLY fallback to hardcoded logic if we are using defaults OR if the stripped name is empty/generic
-  const isGeneric = !stripped || stripped === '-' || stripped.toUpperCase().includes('DIE') || stripped.toUpperCase().includes('PUNCH');
-
-  if (isGeneric) {
-    if (combined.includes('PIERCING') || combined.includes('BURRING') || combined.includes('PIERCE') || combined.includes('BURR')) {
-      return groupsToUse.find(g => g.toUpperCase().includes('PIERCE')) || groupsToUse[0] || 'Piercing & Burring';
-    }
-    if (combined.includes('NOTCH') || combined.includes('CENTER NOTCH') || combined.includes('CORNER CUT')) {
-      return groupsToUse.find(g => g.toUpperCase().includes('NOTCH')) || groupsToUse[1] || 'Notching & Punching';
-    }
-    if (combined.includes('FORMING') || combined.includes('BUCKING') || combined.includes('BEND')) {
-      return groupsToUse.find(g => g.toUpperCase().includes('FORM')) || groupsToUse[2] || 'Forming & Bending';
-    }
-    if (combined.includes('LOUVER') || combined.includes('SLIT')) {
-      return groupsToUse.find(g => g.toUpperCase().includes('LOUVER') || g.toUpperCase().includes('SLIT')) || groupsToUse[3] || 'Louver & Slitting';
-    }
-    if (combined.includes('CUT OFF') || combined.includes('CUTOFF') || combined.includes('CUT')) {
-      return groupsToUse.find(g => g.toUpperCase().includes('CUT OFF')) || groupsToUse[4] || 'Cut Off & Separating';
-    }
-    if (combined.includes('SIDE') || combined.includes('GUIDE')) {
-      return groupsToUse.find(g => g.toUpperCase().includes('SIDE')) || groupsToUse[5] || 'Side Cut & Guide';
-    }
-    if (combined.includes('IRONING') || combined.includes('IRON')) {
-      return groupsToUse.find(g => g.toUpperCase().includes('IRONING')) || groupsToUse[6] || 'Ironing & Calibrating';
-    }
-    if (combined.includes('REFLARE') || combined.includes('REFL') || combined.includes('REFLAIRE')) {
-      return groupsToUse.find(g => g.toUpperCase().includes('REFLARE')) || groupsToUse[7] || 'Reflare';
-    }
-    if (combined.includes('PILOT') || combined.includes('FEED')) {
-      return groupsToUse.find(g => g.toUpperCase().includes('PILOT')) || groupsToUse[8] || 'Pilot & Feed Pin';
-    }
+  if (combined.includes('PIERCE') || combined.includes('BURRING') || combined.includes('PIERCING')) {
+    return 'PIERCE & BURRING';
+  }
+  if (combined.includes('IRONING') || combined.includes('IRON')) {
+    return 'IRONING';
+  }
+  if (combined.includes('LOUVER')) {
+    return 'LOUVER';
+  }
+  if (combined.includes('REFLARE') || combined.includes('REFLAIRE') || combined.includes('REFL')) {
+    return 'REFLARE';
+  }
+  if (combined.includes('ROW SLIT') || combined.includes('ROW SLID')) {
+    return 'ROW SLIT';
+  }
+  if (combined.includes('SLIT')) {
+    return 'SLIT';
+  }
+  if (combined.includes('WIDE LOWER') || combined.includes('FORMING')) {
+    return 'WIDE LOWER';
+  }
+  if (combined.includes('CUT OFF') || combined.includes('CUTOFF')) {
+    return 'CUT OFF';
+  }
+  if (combined.includes('SIDE CUT') || combined.includes('SIDECUT')) {
+    return 'SIDE CUT';
+  }
+  if (combined.includes('S5') || combined.includes('CENTER NOTCH') || combined.includes('S1/S0')) {
+    return 'S5 CENTER NOTCH';
+  }
+  if (combined.includes('CORNER CUT')) {
+    return 'CORNER CUT';
+  }
+  if (combined.includes('HITCH') || combined.includes('SIECH') || combined.includes('FEED PIN') || combined.includes('PILOT')) {
+    return 'HITCH FEED';
   }
 
   // If it's a custom stage name created by user that isn't raw part name
@@ -130,5 +148,5 @@ export function deriveLogicalStage(partName: string, currentStageName?: string, 
     return stripped;
   }
 
-  return groupsToUse[groupsToUse.length - 1] || 'General Tooling';
+  return groupsToUse[0] || 'PIERCE & BURRING';
 }

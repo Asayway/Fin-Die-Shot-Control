@@ -99,9 +99,19 @@ export type FinType =
 
 export type PitchOption = '3P (Pitch)' | '4P (Pitch)' | string;
 
-export type MachineStatus = 'RUNNING' | 'IDLE' | 'STOPPED' | 'MAINTENANCE' | 'CHANGEOVER';
+export type MachineStatus = 
+  | 'RUNNING' 
+  | 'IDLE' 
+  | 'STOPPED' 
+  | 'MAINTENANCE' 
+  | 'CHANGEOVER'
+  | 'NO_DATA'
+  | 'NOT_CONFIGURED'
+  | 'CONNECTION_LOST'
+  | 'STALE_DATA'
+  | 'SIMULATION_ACTIVE';
 
-export type ShotSignalQuality = 'NORMAL' | 'DEGRADED' | 'DISCONNECTED';
+export type ShotSignalQuality = 'NORMAL' | 'DEGRADED' | 'DISCONNECTED' | 'STALE' | 'SIMULATED';
 
 export type AlertSeverity = 'NORMAL' | 'WARNING' | 'PREPARE' | 'CRITICAL' | 'OVER_LIFE' | 'STANDARD_MISSING' | 'DATA_ERROR';
 export type LifeStatus = AlertSeverity;
@@ -341,6 +351,7 @@ export interface PartMaster {
   unit: string;
   unitCostThb: number;
   description?: string;
+  stockNote?: string;
   isImportedSeed?: boolean;
 }
 
@@ -393,6 +404,8 @@ export interface LineActiveConfiguration {
   createdAt?: string;
   notes?: string;
   installedPartQuantities: Record<string, number>; // partCode -> qty
+  stockQuantities?: Record<string, number>;
+  stockNotes?: Record<string, string>;
 }
 
 export interface PartLiveTrackingItem {
@@ -404,6 +417,8 @@ export interface PartLiveTrackingItem {
   installQty: number;
   backupQty: number;
   availableSpare?: number; // Standardized alias for backupQty
+  lineStockQty?: number; // Real-time line-specific stock qty
+  totalStockQty?: number; // Real-time total stock qty
   lifeLimit: number; // Total life standard limit shots
   currentShot: number; // Accumulated shots since last change
   usedShot?: number; // Standardized alias for currentShot
@@ -446,6 +461,9 @@ export interface LineLiveMonitoringData {
   activeConfig: LineActiveConfiguration | null;
   items: PartLiveTrackingItem[];
   alertBanner?: string;
+  dataSource?: 'REAL_PLC' | 'SIMULATION' | 'LOCAL_MANUAL' | 'NO_DATA';
+  dataFreshness?: 'REALTIME' | 'STALE' | 'OFFLINE' | 'NO_DATA';
+  hasStandard?: boolean;
 }
 
 export type ShotInputMethod = 'METER_READING' | 'DIRECT_INCREMENT';
@@ -809,7 +827,19 @@ export type GatewayPLCConnectionStatus =
   | 'GATEWAY_OFFLINE' 
   | 'BUFFERING' 
   | 'SIMULATION' 
-  | 'DISABLED';
+  | 'DISABLED'
+  | 'SIMULATION_DISABLED'
+  | 'TEST_SIMULATION_ACTIVE'
+  | 'WAITING_FOR_GATEWAY'
+  | 'GATEWAY_CONNECTING'
+  | 'GATEWAY_ONLINE'
+  | 'TELEMETRY_RECEIVED'
+  | 'VERIFIED_DATA'
+  | 'STALE_DATA'
+  | 'INVALID_DATA'
+  | 'COUNTER_ANOMALY'
+  | 'DATABASE_UNAVAILABLE'
+  | 'CONFIGURATION_NOT_COMPLETE';
 
 export type PLCConnectionStatus = GatewayPLCConnectionStatus;
 

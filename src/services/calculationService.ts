@@ -283,7 +283,7 @@ export function calculatePartMetrics(
   activeConfig: LineActiveConfiguration | null,
   standards: PartLifeStandard[],
   stockItems: SpareStockItem[],
-  dailyShotRate: number = 500000
+  dailyShotRate: number = 0
 ): PartLiveTrackingItem {
   const usedShotVal = part.usedShot !== undefined ? part.usedShot : (part.currentShot || 0);
   const shotAtLastChangeVal = part.shotAtLastChange !== undefined ? part.shotAtLastChange : (part.lastChangeShot || 0);
@@ -293,7 +293,15 @@ export function calculatePartMetrics(
 
   const standard = activeConfig ? findMatchingLifeStandard(standards, activeConfig, part.partCode, part.position) : null;
   const stock = stockItems.find(s => s.partCode === part.partCode);
-  const availableSpare = stock ? stock.currentStockQty : (part.backupQty || 0);
+
+  const totalStockQty = stock 
+    ? (stock.availableQuantity !== undefined ? stock.availableQuantity : (stock.currentStockQty !== undefined ? stock.currentStockQty : stock.onHandQuantity)) 
+    : (part.backupQty || 0);
+
+  const hasLineStockConfig = activeConfig && activeConfig.stockQuantities && activeConfig.stockQuantities[part.partCode] !== undefined;
+  const lineStockQty = hasLineStockConfig ? activeConfig!.stockQuantities![part.partCode] : totalStockQty;
+
+  const availableSpare = hasLineStockConfig ? lineStockQty : totalStockQty;
   const stockStatus = determineStockStatus(stock, part.installQty);
   const orderStatus = stock ? stock.orderStatus : 'NOT REQUIRED';
   const etaDeliveryDate = stock?.poEtaDate;
@@ -310,6 +318,8 @@ export function calculatePartMetrics(
       installQty: part.installQty,
       backupQty: availableSpare,
       availableSpare,
+      lineStockQty,
+      totalStockQty,
       lifeLimit: 0,
       currentShot: usedShotVal,
       usedShot: usedShotVal,
@@ -381,6 +391,8 @@ export function calculatePartMetrics(
     installQty: part.installQty,
     backupQty: availableSpare,
     availableSpare,
+    lineStockQty,
+    totalStockQty,
     lifeLimit,
     currentShot: usedShotVal,
     usedShot: usedShotVal,

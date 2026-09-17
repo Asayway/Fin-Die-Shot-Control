@@ -707,7 +707,7 @@ export const SpareStockProcurementView: React.FC = () => {
                           type="date"
                           value={editForm.expectedDeliveryDate || ''}
                           onChange={e => handleFormChange('expectedDeliveryDate', e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-amber-300"
+                          className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-white font-bold [color-scheme:dark]"
                         />
                       </div>
                     </div>

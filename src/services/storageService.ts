@@ -88,7 +88,8 @@ const STORAGE_KEYS = {
   DOWNTIME_LOGS: 'fin_press_downtime_logs',
   ACTIVE_E3_FIN_DIE: 'fin_press_active_e3_fin_die',
   STAGE_GROUPS: 'fin_press_custom_stage_groups',
-  SEED_INITIALIZED: 'fin_press_seed_init_v9'
+  TV_DISPLAY_CONFIGS: 'fin_press_tv_display_configs',
+  SEED_INITIALIZED: 'fin_press_seed_init_v12_stages_2025'
 };
 
 type Listener = () => void;
@@ -122,7 +123,10 @@ class StorageService {
   private ensureInitialized() {
     this.cleanUpStorageQuota();
     const initialized = localStorage.getItem(STORAGE_KEYS.SEED_INITIALIZED);
-    if (!initialized) {
+    const users = localStorage.getItem(STORAGE_KEYS.USERS);
+    const parts = localStorage.getItem(STORAGE_KEYS.PART_MASTERS);
+    const lines = localStorage.getItem(STORAGE_KEYS.LINE_MONITORING);
+    if (!initialized || !users || !parts || !lines) {
       this.resetToSeedData();
     }
     this.migrateStageNamesToEnglish();
@@ -219,6 +223,7 @@ class StorageService {
   public resetToSeedData() {
     localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(INITIAL_USERS));
     localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(INITIAL_USERS[0]));
+    localStorage.setItem(STORAGE_KEYS.STAGE_GROUPS, JSON.stringify(DEFAULT_STAGE_GROUPS));
     localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(INITIAL_PART_MASTERS));
     localStorage.setItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(INITIAL_LINE_CONFIGS));
     localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(INITIAL_PART_LIFE_STANDARDS));
@@ -293,7 +298,7 @@ class StorageService {
     return {
       lineId,
       lineName: lineId,
-      machineStatus: 'RUNNING',
+      machineStatus: 'IDLE',
       machineShotTotal: totalShots,
       shiftShot: Math.round(180000 + Math.random() * 80000),
       dailyShot: Math.round(3800000 + Math.random() * 1500000),
@@ -301,17 +306,34 @@ class StorageService {
       shotSignal: 'NORMAL',
       lastUpdate: new Date().toISOString().replace('T', ' ').substring(0, 19),
       activeConfig: config,
-      items: baseItems
+      items: baseItems,
+      dataSource: 'NO_DATA',
+      dataFreshness: 'OFFLINE'
     };
   }
 
   // --- Getters ---
   public getUsers(): User[] {
-    return JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || '[]');
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.USERS);
+      if (!raw) return INITIAL_USERS;
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_USERS;
+    } catch {
+      return INITIAL_USERS;
+    }
   }
 
   public getCurrentUser(): User {
-    return JSON.parse(localStorage.getItem(STORAGE_KEYS.CURRENT_USER) || JSON.stringify(INITIAL_USERS[0]));
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
+      if (!raw) return INITIAL_USERS[0];
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.id && parsed.name) return parsed;
+      return INITIAL_USERS[0];
+    } catch {
+      return INITIAL_USERS[0];
+    }
   }
 
   public setCurrentUser(user: User) {
@@ -321,11 +343,16 @@ class StorageService {
   }
 
   public getStageGroups(): string[] {
-    const stored = localStorage.getItem(STORAGE_KEYS.STAGE_GROUPS);
-    if (stored) {
-      return JSON.parse(stored);
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.STAGE_GROUPS);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      return DEFAULT_STAGE_GROUPS;
+    } catch {
+      return DEFAULT_STAGE_GROUPS;
     }
-    return DEFAULT_STAGE_GROUPS;
   }
 
   public saveStageGroups(groups: string[]) {
@@ -345,7 +372,14 @@ class StorageService {
   }
 
   public getPartMasters(): PartMaster[] {
-    return JSON.parse(localStorage.getItem(STORAGE_KEYS.PART_MASTERS) || '[]');
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.PART_MASTERS);
+      if (!raw) return INITIAL_PART_MASTERS;
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_PART_MASTERS;
+    } catch {
+      return INITIAL_PART_MASTERS;
+    }
   }
 
   public savePartMaster(part: PartMaster): void {
@@ -542,7 +576,14 @@ class StorageService {
   }
 
   public getLineConfigs(): LineActiveConfiguration[] {
-    return JSON.parse(localStorage.getItem(STORAGE_KEYS.LINE_CONFIGS) || '[]');
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.LINE_CONFIGS);
+      if (!raw) return INITIAL_LINE_CONFIGS;
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_LINE_CONFIGS;
+    } catch {
+      return INITIAL_LINE_CONFIGS;
+    }
   }
 
   public saveLineConfigs(configs: LineActiveConfiguration[]): void {
@@ -583,17 +624,52 @@ class StorageService {
   }
 
   public getLinesMonitoring(): Record<ProductionLineId, LineLiveMonitoringData> {
+    const defaultLinesMonitoring: Record<ProductionLineId, LineLiveMonitoringData> = {
+      'E1': INITIAL_LIVE_DATA_E1,
+      'E2': this.generateLineMonitoring('E2', INITIAL_LINE_CONFIGS[1] || INITIAL_LINE_CONFIGS[0], 142890520),
+      'E3-1': this.generateLineMonitoring('E3-1', INITIAL_LINE_CONFIGS[2] || INITIAL_LINE_CONFIGS[0], 98450120),
+      'E3-2': this.generateLineMonitoring('E3-2', INITIAL_LINE_CONFIGS[3] || INITIAL_LINE_CONFIGS[0], 112450890),
+      'E3-3': this.generateLineMonitoring('E3-3', INITIAL_LINE_CONFIGS[4] || INITIAL_LINE_CONFIGS[0], 87620340),
+      'E4': this.generateLineMonitoring('E4', INITIAL_LINE_CONFIGS[5] || INITIAL_LINE_CONFIGS[0], 168920150),
+      'E5': this.generateLineMonitoring('E5', INITIAL_LINE_CONFIGS[6] || INITIAL_LINE_CONFIGS[0], 135400980)
+    };
+
     const raw = localStorage.getItem(STORAGE_KEYS.LINE_MONITORING);
-    if (!raw) return {} as Record<ProductionLineId, LineLiveMonitoringData>;
-    return JSON.parse(raw);
+    if (!raw) {
+      localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(defaultLinesMonitoring));
+      return defaultLinesMonitoring;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        const lineKeys: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
+        let updated = false;
+        lineKeys.forEach((lId, idx) => {
+          if (!parsed[lId]) {
+            parsed[lId] = defaultLinesMonitoring[lId] || this.generateLineMonitoring(lId, INITIAL_LINE_CONFIGS[idx] || INITIAL_LINE_CONFIGS[0], 100000000);
+            updated = true;
+          }
+        });
+        if (updated) {
+          localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(parsed));
+        }
+        return parsed;
+      }
+      return defaultLinesMonitoring;
+    } catch {
+      return defaultLinesMonitoring;
+    }
   }
 
   public getLineMonitoring(lineId: ProductionLineId): LineLiveMonitoringData | null {
     const all = this.getLinesMonitoring();
-    if (!all[lineId]) {
-      const defaultData = this.generateLineMonitoring(lineId, INITIAL_LINE_CONFIGS[0], 100000);
-      all[lineId] = defaultData;
-      localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(all));
+    if (!all || !all[lineId]) {
+      const configs = this.getLineConfigs();
+      const config = configs.find(c => c.lineId === lineId) || INITIAL_LINE_CONFIGS.find(c => c.lineId === lineId) || INITIAL_LINE_CONFIGS[0];
+      const defaultData = this.generateLineMonitoring(lineId, config, 100000);
+      const safeAll = all && typeof all === 'object' ? all : ({} as Record<ProductionLineId, LineLiveMonitoringData>);
+      safeAll[lineId] = defaultData;
+      localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(safeAll));
       return defaultData;
     }
     return all[lineId];
@@ -647,15 +723,36 @@ class StorageService {
   }
 
   public getSpareStocks(): SpareStockItem[] {
-    return JSON.parse(localStorage.getItem(STORAGE_KEYS.SPARE_STOCKS) || '[]');
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.SPARE_STOCKS);
+      if (!raw) return INITIAL_SPARE_STOCKS;
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_SPARE_STOCKS;
+    } catch {
+      return INITIAL_SPARE_STOCKS;
+    }
   }
 
   public getReplacements(): ReplacementRecord[] {
-    return JSON.parse(localStorage.getItem(STORAGE_KEYS.REPLACEMENTS) || '[]');
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.REPLACEMENTS);
+      if (!raw) return INITIAL_REPLACEMENT_HISTORY;
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : INITIAL_REPLACEMENT_HISTORY;
+    } catch {
+      return INITIAL_REPLACEMENT_HISTORY;
+    }
   }
 
   public getReplacementDrafts(): any[] {
-    return JSON.parse(localStorage.getItem(STORAGE_KEYS.REPLACEMENT_DRAFTS) || '[]');
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.REPLACEMENT_DRAFTS);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
   }
 
   public saveReplacementDraft(draft: any): any {
@@ -684,7 +781,14 @@ class StorageService {
   }
 
   public getRegrindRecords(): RegrindingRecord[] {
-    return JSON.parse(localStorage.getItem(STORAGE_KEYS.REGRINDS) || '[]');
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.REGRINDS);
+      if (!raw) return INITIAL_REGRIND_RECORDS;
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : INITIAL_REGRIND_RECORDS;
+    } catch {
+      return INITIAL_REGRIND_RECORDS;
+    }
   }
 
   public getRegrindMasterStandards(): RegrindMasterStandard[] {
@@ -716,15 +820,36 @@ class StorageService {
   }
 
   public getInspections(): ConditionInspectionRecord[] {
-    return JSON.parse(localStorage.getItem(STORAGE_KEYS.INSPECTIONS) || '[]');
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.INSPECTIONS);
+      if (!raw) return INITIAL_INSPECTIONS;
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : INITIAL_INSPECTIONS;
+    } catch {
+      return INITIAL_INSPECTIONS;
+    }
   }
 
   public getShotLogs(): ShotEntryRecord[] {
-    return JSON.parse(localStorage.getItem(STORAGE_KEYS.SHOT_LOGS) || '[]');
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.SHOT_LOGS);
+      if (!raw) return INITIAL_SHOT_LOGS;
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : INITIAL_SHOT_LOGS;
+    } catch {
+      return INITIAL_SHOT_LOGS;
+    }
   }
 
   public getAuditLogs(): AuditLogEntry[] {
-    return JSON.parse(localStorage.getItem(STORAGE_KEYS.AUDIT_LOGS) || '[]');
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.AUDIT_LOGS);
+      if (!raw) return INITIAL_AUDIT_LOGS;
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : INITIAL_AUDIT_LOGS;
+    } catch {
+      return INITIAL_AUDIT_LOGS;
+    }
   }
 
   public saveLinesMonitoring(lines: Record<ProductionLineId, LineLiveMonitoringData>): void {
@@ -3043,6 +3168,11 @@ class StorageService {
     return item;
   }
 
+  public saveSpareStocksList(stocks: SpareStockItem[]): void {
+    localStorage.setItem(STORAGE_KEYS.SPARE_STOCKS, JSON.stringify(stocks));
+    this.notify();
+  }
+
   // ==========================================
   // POSITION LOCK (ล็อคตำแหน่ง) MANAGEMENT
   // ==========================================
@@ -3658,6 +3788,23 @@ class StorageService {
     }
 
     return { added: addedCount, fixed: fixedCount };
+  }
+
+  public getTvDisplayConfigs(): Record<ProductionLineId, string[]> {
+    const raw = localStorage.getItem(STORAGE_KEYS.TV_DISPLAY_CONFIGS);
+    if (!raw) {
+      return {} as Record<ProductionLineId, string[]>;
+    }
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return {} as Record<ProductionLineId, string[]>;
+    }
+  }
+
+  public saveTvDisplayConfigs(configs: Record<ProductionLineId, string[]>): void {
+    localStorage.setItem(STORAGE_KEYS.TV_DISPLAY_CONFIGS, JSON.stringify(configs));
+    this.notify();
   }
 }
 

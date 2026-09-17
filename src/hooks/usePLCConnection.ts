@@ -123,7 +123,12 @@ export function usePLCConnection() {
     let pollingTimer: any = null;
 
     if (!config.isAutoPolling) {
-      setStatus('DISCONNECTED');
+      if (config.connectionMode === 'SIMULATION') {
+        setStatus('SIMULATION_DISABLED');
+      } else {
+        setStatus('WAITING_FOR_GATEWAY');
+      }
+      
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
@@ -131,11 +136,11 @@ export function usePLCConnection() {
       return;
     }
 
-    setStatus('CONNECTED');
     const intervalMs = config.pollingIntervalMs || 1000;
 
     // Mode A: SIMULATION
     if (config.connectionMode === 'SIMULATION') {
+      setStatus('TEST_SIMULATION_ACTIVE');
       appendLog(`[PLC DRIVER] SIMULATION Mode Active. Polling interval: ${intervalMs}ms`);
       pollingTimer = setInterval(() => {
         // Pick an active line (E1, E2, E3-1, E3-2, E3-3, E4, E5) to simulate PLC shot increment
@@ -152,16 +157,16 @@ export function usePLCConnection() {
     }
 
     // Mode B: WEBSOCKET / MQTT EDGE GATEWAY
-    else if (config.connectionMode === 'WEBSOCKET_MQTT') {
+    else if (config.connectionMode === 'WEBSOCKET_MQTT' || config.connectionMode === 'EDGE_MQTT') {
       appendLog(`[PLC DRIVER] Opening WebSocket Edge Gateway to ${config.wsUrl}...`);
-      setStatus('CONNECTING');
+      setStatus('GATEWAY_CONNECTING');
 
       try {
         const ws = new WebSocket(config.wsUrl);
         wsRef.current = ws;
 
         ws.onopen = () => {
-          setStatus('CONNECTED');
+          setStatus('GATEWAY_ONLINE');
           setPingLatency(Math.floor(Math.random() * 15) + 5);
           appendLog(`[PLC DRIVER] WebSocket Edge Gateway CONNECTED! Subscribed to line pulse feeds.`);
         };
@@ -196,18 +201,20 @@ export function usePLCConnection() {
     }
 
     // Mode C: REST API POLLING
-    else if (config.connectionMode === 'REST_POLLING') {
+    else if (config.connectionMode === 'REST_API_GATEWAY' || config.connectionMode === 'REST_POLLING') {
       appendLog(`[PLC DRIVER] REST API Polling Active -> ${config.restApiUrl} (${intervalMs}ms)`);
       pollingTimer = setInterval(async () => {
         try {
+          setStatus('GATEWAY_CONNECTING');
           // Attempt real REST fetch with short timeout
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 2000);
           
-          const res = await fetch(config.restApiUrl, { signal: controller.signal }).catch(() => null);
+          const res = await fetch(config.restApiUrl!, { signal: controller.signal }).catch(() => null);
           clearTimeout(timeoutId);
 
           if (res && res.ok) {
+            setStatus('GATEWAY_ONLINE');
             const json = await res.json();
             if (Array.isArray(json)) {
               json.forEach((item: any) => {
@@ -218,34 +225,22 @@ export function usePLCConnection() {
               });
             }
           } else {
-            // Simulated response when endpoint is offline
-            const activeLines = (Object.values(config.lineRegisters) as PLCLineRegisterMap[]).filter((r: PLCLineRegisterMap) => r.active);
-            if (activeLines.length > 0) {
-              const target = activeLines[Math.floor(Math.random() * activeLines.length)].lineId;
-              const curr = pendingBatchRef.current.get(target) || 0;
-              pendingBatchRef.current.set(target, curr + 2);
-            }
+            setStatus('GATEWAY_OFFLINE');
+            appendLog(`[PLC DRIVER] REST Gateway Offline or Error. Waiting for retry...`);
           }
         } catch {
-          // Fallback simulation
-          const curr = pendingBatchRef.current.get('E1') || 0;
-          pendingBatchRef.current.set('E1', curr + 1);
+          setStatus('GATEWAY_OFFLINE');
         }
       }, intervalMs);
     }
 
     // Mode D: LOCAL BRIDGE / MODBUS TCP OVER WEBSOCKET
-    else if (config.connectionMode === 'MODBUS_TCP') {
+    else if (config.connectionMode === 'MODBUS_TCP' || config.connectionMode === 'LOCAL_BRIDGE') {
       appendLog(`[PLC DRIVER] Modbus TCP Driver Active (${config.ip}:${config.port}, Slave ID: ${config.slaveId}). Polling ${intervalMs}ms`);
+      setStatus('GATEWAY_CONNECTING');
       pollingTimer = setInterval(() => {
-        // Poll registers %MW101-%MW107
-        const activeLines = (Object.values(config.lineRegisters) as PLCLineRegisterMap[]).filter((r: PLCLineRegisterMap) => r.active);
-        if (activeLines.length === 0) return;
-
-        const target = activeLines[Math.floor(Math.random() * activeLines.length)].lineId;
-        const inc = Math.floor(Math.random() * 3) + 1;
-        const curr = pendingBatchRef.current.get(target) || 0;
-        pendingBatchRef.current.set(target, curr + inc);
+        // Read-only preparation: No real socket connection to production PLC yet
+        setStatus('WAITING_FOR_GATEWAY');
       }, intervalMs);
     }
 
@@ -271,21 +266,28 @@ export function usePLCConnection() {
 
   // 3. TEST PLC CONNECTION & READ REGISTERS
   const handleTestConnection = useCallback(() => {
-    setStatus('CONNECTING');
     appendLog(`[PLC DRIVER] Initiating connection handshake to ${config.ip}:${config.port}...`);
+    
+    // Safety check for production IP
+    if (config.ip === '192.168.10.50') {
+      setStatus('ERROR');
+      appendLog(`[PLC DRIVER] SAFETY BLOCKED: Connection to production PLC (192.168.10.50) is restricted in READ-ONLY PREPARATION mode.`);
+      return;
+    }
+
+    setStatus('CONNECTING');
     appendLog(`[PLC DRIVER] Protocol: ${config.protocol} | Mode: ${config.connectionMode} | Unit ID: ${config.slaveId}`);
 
     setTimeout(() => {
       const latency = Math.floor(Math.random() * 12) + 6;
       setPingLatency(latency);
-      setStatus('CONNECTED');
-
-      const mappedAddresses = (Object.values(config.lineRegisters) as PLCLineRegisterMap[])
-        .map((r: PLCLineRegisterMap) => `${r.lineId}:${r.address}`)
-        .join(', ');
-
-      appendLog(`[PLC DRIVER] Socket handshake SUCCESS! Latency: ${latency}ms`);
-      appendLog(`[PLC DRIVER] Target Holding Registers [${mappedAddresses}] Read SUCCESS (16 Bytes Parsed)`);
+      if (config.connectionMode === 'SIMULATION' || config.ip === '127.0.0.1') {
+        setStatus('CONNECTED');
+        appendLog(`[PLC DRIVER] SUCCESS: Diagnostic handshake complete. Latency: ${latency}ms`);
+      } else {
+        setStatus('GATEWAY_OFFLINE');
+        appendLog(`[PLC DRIVER] FAILED: Gateway at ${config.ip} unreachable. (Phase 1 PREPARATION ONLY)`);
+      }
 
       const sampleLine = config.lineRegisters['E1'];
       if (sampleLine) {

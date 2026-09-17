@@ -909,7 +909,7 @@ export const Excel31DayMatrixView: React.FC<Excel31DayMatrixViewProps> = ({
                   type="datetime-local"
                   value={modalTargetDate}
                   onChange={e => setModalTargetDate(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-[#070D19] border border-slate-700 font-mono text-slate-200 text-xs focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+                  className="w-full px-3 py-2 rounded-xl bg-[#070D19] border border-slate-600 font-mono text-white text-xs focus:ring-2 focus:ring-cyan-500 focus:outline-none [color-scheme:dark]"
                 />
               </div>
 

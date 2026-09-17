@@ -30,6 +30,7 @@ import {
 } from '../types';
 import { storageService } from '../services/storageService';
 import { sortStagesInOrder } from '../utils/stageUtils';
+import { useLanguage } from '../i18n';
 
 interface LineDieSpecificationViewProps {
   onAddNewPartClick?: () => void;
@@ -60,6 +61,7 @@ const ALL_LINE_OPTIONS: LineOption[] = [
 export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> = ({
   onAddNewPartClick
 }) => {
+  const { language } = useLanguage();
   const [selectedLineFilter, setSelectedLineFilter] = useState<string>('E1');
   const [lineConfigs, setLineConfigs] = useState<Record<string, LineActiveConfiguration>>({});
   const [lineStatuses, setLineStatuses] = useState<Record<string, MachineStatus>>({});

@@ -130,39 +130,83 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
     // Find active configuration from lineConfigs or rawData
     const activeConfig = lineConfigs.find(c => c.lineId === selectedLineId && c.isActive) || rawData.activeConfig;
 
-    const recalculatedItems = (rawData.items || []).map((item, idx) => {
+    // Check if configuration exists
+    const hasConfig = !!activeConfig;
+
+    // Check system connection status
+    const plcConfig = storageService.getPLCConfig();
+    const isSimMode = plcConfig.connectionMode === 'SIMULATION';
+    const isAutoPolling = plcConfig.isAutoPolling;
+
+    // Determine data source and freshness
+    let dataSource: 'REAL_PLC' | 'SIMULATION' | 'LOCAL_MANUAL' | 'NO_DATA' = 'LOCAL_MANUAL';
+    let dataFreshness: 'REALTIME' | 'STALE' | 'OFFLINE' | 'NO_DATA' = 'REALTIME';
+
+    if (!isAutoPolling) {
+      dataFreshness = 'OFFLINE';
+    } else if (isSimMode) {
+      dataSource = 'SIMULATION';
+    } else {
+      dataSource = 'REAL_PLC';
+    }
+
+    // Check timestamp freshness (stale if > 60 seconds old)
+    if (rawData.lastUpdate) {
+      const lastUpTime = new Date(rawData.lastUpdate).getTime();
+      if (!isNaN(lastUpTime) && Date.now() - lastUpTime > 60000) {
+        dataFreshness = 'STALE';
+      }
+    } else {
+      dataFreshness = 'NO_DATA';
+    }
+
+    const recalculatedItems = (rawData.items || []).map((item) => {
       // Match with Part Master
       const matchedPart = partMasters.find(p => 
-        p.partCode === item.partCode || 
-        p.stageName === item.stagePunchDie || 
-        p.partName === item.partName
+        (item.partCode && p.partCode === item.partCode) || 
+        (item.stagePunchDie && p.stageName === item.stagePunchDie) || 
+        (item.partName && p.partName === item.partName)
       );
       
       // Match with Life Standards
       const matchedStd = standards.find(s => 
-        (s as any).partCode === item.partCode ||
-        s.configKey?.partCode === item.partCode || 
-        s.stagePunchDie === item.stagePunchDie ||
-        s.partName === item.partName
+        (item.partCode && ((s as any).partCode === item.partCode || s.configKey?.partCode === item.partCode)) || 
+        (item.stagePunchDie && s.stagePunchDie === item.stagePunchDie) ||
+        (item.partName && s.partName === item.partName)
       );
 
       // Match with Spare Stock
       const matchedStock = stocks.find(s => 
-        s.partCode === item.partCode || 
-        s.partName === item.partName
+        (item.partCode && s.partCode === item.partCode) || 
+        (item.partName && s.partName === item.partName)
       );
 
-      const lifeLimitVal = item.lifeLimit > 0 ? item.lifeLimit : (matchedStd?.lifeLimitShots || 18000000);
-      const installQtyVal = item.installQty > 0 ? item.installQty : (matchedStock?.requiredQuantityPerFullReplacement || 168);
-      const stockQtyVal = item.availableSpare !== undefined ? item.availableSpare : (matchedStock?.availableQuantity !== undefined ? matchedStock.availableQuantity : item.backupQty);
+      // Use actual permanent part code or existing slotId without deriving from array indexes
+      const permanentPartCode = item.partCode || matchedPart?.partCode || '';
+      const permanentSlotId = item.slotId || (permanentPartCode ? `SLOT-${permanentPartCode}` : (item.stagePunchDie ? `SLOT-${item.stagePunchDie.replace(/\s+/g, '_')}` : 'SLOT-UNASSIGNED'));
+
+      // Do NOT invent realistic fallback numbers (18,000,000 or 168)
+      const lifeLimitVal = item.lifeLimit > 0 ? item.lifeLimit : (matchedStd?.lifeLimitShots || 0);
+      const installQtyVal = item.installQty > 0 ? item.installQty : (matchedStock?.requiredQuantityPerFullReplacement || 0);
+
+      // Resolve real-time stock from master/configs to ensure it matches and updates instantly
+      const hasLineStockConfig = activeConfig && activeConfig.stockQuantities && activeConfig.stockQuantities[permanentPartCode] !== undefined;
+      const lineStockQty = hasLineStockConfig ? activeConfig!.stockQuantities![permanentPartCode] : undefined;
+      const totalStockQty = matchedStock 
+        ? (matchedStock.availableQuantity !== undefined ? matchedStock.availableQuantity : (matchedStock.currentStockQty !== undefined ? matchedStock.currentStockQty : matchedStock.onHandQuantity)) 
+        : item.backupQty;
+      const stockQtyVal = lineStockQty !== undefined ? lineStockQty : totalStockQty;
+
+      const partDisplayName = item.partName || matchedPart?.partName || item.stagePunchDie || 'Tooling Component';
+      const stageName = item.stagePunchDie || matchedPart?.stageName || item.partName || 'Die Stage';
 
       return calculatePartMetrics(
         {
-          slotId: item.slotId || `SLOT-${selectedLineId}-${idx + 1}`,
-          partCode: item.partCode || matchedPart?.partCode || `P-${idx + 1}`,
-          partName: matchedPart?.partName || item.partName || item.stagePunchDie,
-          stagePunchDie: matchedPart?.partName || item.partName || item.stagePunchDie,
-          position: item.position || `${item.stagePunchDie} Stage 1`,
+          slotId: permanentSlotId,
+          partCode: permanentPartCode,
+          partName: partDisplayName,
+          stagePunchDie: stageName,
+          position: item.position || stageName,
           installQty: installQtyVal,
           backupQty: stockQtyVal,
           usedShot: item.usedShot !== undefined ? item.usedShot : item.currentShot,
@@ -175,17 +219,63 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
         },
         activeConfig,
         standards,
-        stocks
+        stocks,
+        rawData.dailyShot || 0
       );
     });
 
-    const sortedItems = sortTrackingItems(recalculatedItems, tvSortMode);
+    // Filter and sort items according to the TV display configurations for the selected line
+    const tvConfigs = storageService.getTvDisplayConfigs();
+    const lineTvConfig = tvConfigs[selectedLineId] || [];
+
+    let sortedItems = recalculatedItems;
+    if (lineTvConfig.length > 0) {
+      // Filter items to include only those selected in the TV config
+      const selectedSet = new Set(lineTvConfig);
+      const filteredItems = recalculatedItems.filter(item => {
+        return item.partCode && selectedSet.has(item.partCode);
+      });
+
+      // If sort mode is 'STAGE_ORDER' or standard default, use the exact manual ordering from lineTvConfig!
+      // Otherwise, apply the chosen sort mode on the filtered items list.
+      if (tvSortMode === 'STAGE_ORDER' || !tvSortMode) {
+        const orderMap = new Map<string, number>();
+        lineTvConfig.forEach((pCode, idx) => orderMap.set(pCode, idx));
+        filteredItems.sort((a, b) => {
+          const idxA = orderMap.get(a.partCode) ?? 999;
+          const idxB = orderMap.get(b.partCode) ?? 999;
+          return idxA - idxB;
+        });
+        sortedItems = filteredItems;
+      } else {
+        sortedItems = sortTrackingItems(filteredItems, tvSortMode);
+      }
+    } else {
+      // If no custom config is saved, display all items sorted by the chosen sort mode
+      sortedItems = sortTrackingItems(recalculatedItems, tvSortMode);
+    }
+
+    // Explicit machine status based on connection and config
+    let effectiveMachineStatus = rawData.machineStatus;
+    if (!hasConfig) {
+      effectiveMachineStatus = 'NOT_CONFIGURED';
+    } else if (dataFreshness === 'OFFLINE') {
+      effectiveMachineStatus = 'CONNECTION_LOST';
+    } else if (dataFreshness === 'STALE') {
+      effectiveMachineStatus = 'STALE_DATA';
+    } else if (dataSource === 'SIMULATION') {
+      effectiveMachineStatus = 'SIMULATION_ACTIVE';
+    }
 
     setLineData({
       ...rawData,
       activeConfig,
+      machineStatus: effectiveMachineStatus,
       lineName: `LINE ${selectedLineId}`,
-      items: sortedItems
+      items: sortedItems,
+      dataSource,
+      dataFreshness,
+      hasStandard: recalculatedItems.some(i => i.lifeLimit > 0)
     });
   };
 
@@ -227,30 +317,15 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
       setCountdown(prev => {
         if (prev <= 1) {
           setSelectedLineId(currentLine => {
-            // Get all monitoring data to see which lines are active/running
-            const allMonitoring = storageService.getLinesMonitoring();
-            
             // Sequential list of all lines
             const allLines: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
             
             // Find current index
             const currentIdx = allLines.indexOf(currentLine);
             
-            // Try to find the next line that is RUNNING or at least has an active config
-            // We search through the list starting from the next item
-            for (let i = 1; i <= allLines.length; i++) {
-              const nextIdx = (currentIdx + i) % allLines.length;
-              const nextLineId = allLines[nextIdx];
-              const mData = allMonitoring[nextLineId];
-              
-              // If we found a line that is RUNNING or has an active config, switch to it
-              // Or if we've looped back to the start, just pick the next one anyway
-              if (mData?.machineStatus === 'RUNNING' || mData?.activeConfig || i === allLines.length) {
-                return nextLineId;
-              }
-            }
-            
-            return currentLine;
+            // Go strictly to the next line in the sequence, wrapping around at the end
+            const nextIdx = (currentIdx + 1) % allLines.length;
+            return allLines[nextIdx];
           });
           return autoCycleInterval;
         }
@@ -293,20 +368,25 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
                           selectedLineId === 'E3-2' ? 'LINE E3 WL+ 4P' :
                           selectedLineId === 'E3-3' ? 'LINE E3 New Cor 4P' :
                           `LINE ${selectedLineId}`;
-  const totalMachineShots = lineData.machineShotTotal || 153538938;
-  const todayMachineShots = lineData.dailyShot || 5485112;
+  const totalMachineShots = lineData.machineShotTotal !== undefined && lineData.machineShotTotal !== null ? lineData.machineShotTotal : null;
+  const todayMachineShots = lineData.dailyShot !== undefined && lineData.dailyShot !== null ? lineData.dailyShot : null;
 
   // Active Die Info from configuration / Die Parts Master
   const activeCfg = lineData.activeConfig;
-  const dieNameDisplay = activeCfg?.dieName || 
-    (selectedLineId === 'E1' ? 'Fin Die E1 (Ø7 PCM Slit)' :
-     selectedLineId === 'E2' ? 'Fin Die E2 (Ø5 GOLD Slit)' :
-     selectedLineId === 'E3-1' ? 'Fin Die E3-1 (Ø7 Slit 3P, PCM)' :
-     selectedLineId === 'E3-2' ? 'Fin Die E3-2 (Ø7 WL+ 4P, GOLD)' :
-     selectedLineId === 'E3-3' ? 'Fin Die E3-3 (Ø7 New Cor 4P, GOLD)' :
-     selectedLineId === 'E4' ? 'Fin Die E4 (Ø5 BARE Slit)' :
-     selectedLineId === 'E5' ? 'Fin Die E5 (Ø5 BARE Slit)' :
-     `Fin Die ${selectedLineId}`);
+  const dieNameDisplay = activeCfg?.dieName || (activeCfg ? `Fin Die ${selectedLineId}` : 'DIE NOT CONFIGURED');
+
+  // Telemetry source & freshness indicators
+  const dataSourceLabel = lineData.dataSource === 'SIMULATION' ? 'SIMULATION' :
+                          lineData.dataSource === 'REAL_PLC' ? 'REAL PLC' :
+                          lineData.dataSource === 'LOCAL_MANUAL' ? 'LOCAL / MANUAL' : 'NO DATA';
+  const freshnessLabel = lineData.dataFreshness === 'REALTIME' ? 'REALTIME' :
+                         lineData.dataFreshness === 'STALE' ? 'STALE DATA' :
+                         lineData.dataFreshness === 'OFFLINE' ? 'CONNECTION LOST' : 'NO DATA';
+  const freshnessColor = lineData.dataFreshness === 'REALTIME' && lineData.dataSource !== 'SIMULATION'
+    ? 'bg-emerald-950/80 border-emerald-500 text-emerald-400'
+    : lineData.dataSource === 'SIMULATION'
+    ? 'bg-amber-950/90 border-amber-500 text-amber-300 animate-pulse'
+    : 'bg-red-950/90 border-red-500 text-red-300 animate-pulse';
 
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-[#000000] text-white select-none overflow-hidden font-sans">
@@ -359,7 +439,7 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
           {/* Box 1: Main Fin Die */}
           <div className="flex items-center gap-2 border-r border-[#333333] pr-3 sm:pr-6 flex-shrink-0">
             <span className="font-black text-[#facc15] text-sm sm:text-base md:text-lg uppercase tracking-wide">
-              MAIN FIN DIE
+              {t.tv.mainFinDie || 'MAIN FIN DIE'}
             </span>
             <span className="font-black text-white text-sm sm:text-base md:text-lg">
               {dieNameDisplay}
@@ -369,20 +449,38 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
           {/* Box 2: Total */}
           <div className="flex items-center gap-2 border-r border-[#333333] pr-3 sm:pr-6 flex-shrink-0">
             <span className="text-xs sm:text-sm text-[#aaaaaa] font-bold">
-              Total
+              {t.tv.total || 'Total'}
             </span>
             <span className="font-mono font-black text-white text-base sm:text-lg md:text-xl tabular-nums">
-              {formatShots(totalMachineShots)}
+              {totalMachineShots !== null ? (
+                formatShots(totalMachineShots)
+              ) : (
+                <span className="text-xs text-slate-500 uppercase">NO DATA</span>
+              )}
             </span>
           </div>
 
           {/* Box 3: Today */}
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 border-r border-[#333333] pr-3 sm:pr-6 flex-shrink-0">
             <span className="text-xs sm:text-sm text-[#aaaaaa] font-bold">
-              Today
+              {t.tv.today || 'Today'}
             </span>
             <span className="font-mono font-black text-white text-base sm:text-lg md:text-xl tabular-nums">
-              {formatShots(todayMachineShots)}
+              {todayMachineShots !== null ? (
+                formatShots(todayMachineShots)
+              ) : (
+                <span className="text-xs text-slate-500 uppercase">NO DATA</span>
+              )}
+            </span>
+          </div>
+
+          {/* Box 4: Telemetry Source & Freshness (Explicit separation of Simulation, Real PLC, Status) */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className={`px-2 py-0.5 rounded text-[10px] sm:text-xs font-mono font-black border ${freshnessColor}`}>
+              {freshnessLabel}
+            </span>
+            <span className="px-2 py-0.5 rounded text-[10px] sm:text-xs font-mono font-bold bg-[#1e232d] border border-[#3e4756] text-slate-300">
+              SRC: {dataSourceLabel}
             </span>
           </div>
         </div>
@@ -391,19 +489,19 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
         <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 ml-auto">
           <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-bold">
             <span className="text-[#888888] font-bold uppercase hidden md:inline mr-0.5 text-[10px] sm:text-xs">
-              SIGNAL STANDARD:
+              {t.tv.signalStandard || 'SIGNAL STANDARD:'}
             </span>
             <span className="px-2 py-0.5 bg-[#00ff00] text-black rounded font-black text-[10px] sm:text-xs whitespace-nowrap" title="Normal: < 70%">
-              Normal (ปกติ / 정상)
+              {t.tv.normal || 'Normal'}
             </span>
             <span className="px-2 py-0.5 bg-[#ffff00] text-black rounded font-black text-[10px] sm:text-xs whitespace-nowrap" title="Warning Replace Count: 70% - 84%">
-              Warning (เตือนเปลี่ยน / 경고)
+              {t.tv.warning || 'Warning'}
             </span>
             <span className="px-2 py-0.5 bg-[#f97316] text-white rounded font-black text-[10px] sm:text-xs whitespace-nowrap" title="Prepare Replace Count: 85% - 99%">
-              Prepare (เตรียมเปลี่ยน / 교체준비)
+              {t.tv.prepare || 'Prepare'}
             </span>
             <span className="px-2 py-0.5 bg-[#ff0000] text-white rounded font-black text-[10px] sm:text-xs whitespace-nowrap" title="Over Life Replace Count: >= 100%">
-              Over Life (เกินอายุ / 수명초과)
+              {t.tv.overLife || 'Over Life'}
             </span>
           </div>
 
@@ -419,7 +517,7 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
               className="px-2 sm:px-2.5 py-1 text-[10px] sm:text-xs font-bold text-slate-300 hover:text-white border border-[#444444] rounded bg-[#181818] hover:bg-[#252525] transition-colors cursor-pointer whitespace-nowrap"
               title="Reset Columns"
             >
-              Auto Width
+              {t.tv.autoWidth || 'Auto Width'}
             </button>
           </div>
         </div>
@@ -538,17 +636,30 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
 
             {/* Table Rows Body: solid background, dynamic flex distribution */}
             <div className="flex-1 flex flex-col justify-between min-h-0 overflow-hidden bg-[#000000]">
-              {items.map((item, idx) => (
-                <TvTableRow
-                  key={item.slotId || item.partCode || idx}
-                  item={item}
-                  idx={idx}
-                  colWidths={colWidths}
-                  onSelectModalItem={setSelectedModalItem}
-                  t={t}
-                  isFullscreen={isFullscreenMode}
-                />
-              ))}
+              {items.length === 0 ? (
+                <div className="flex-1 flex items-center justify-center p-8 bg-[#0a0c10] text-slate-400 font-mono">
+                  <div className="text-center space-y-2">
+                    <p className="text-base sm:text-lg font-bold text-amber-400 uppercase tracking-wider">
+                      NO TOOLING PARTS CONFIGURED FOR {lineDisplayName}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      STATUS: {lineData.machineStatus} • SOURCE: {dataSourceLabel}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                items.map((item) => (
+                  <TvTableRow
+                    key={item.slotId || (item.partCode ? `part-${item.partCode}` : item.stagePunchDie)}
+                    item={item}
+                    idx={0}
+                    colWidths={colWidths}
+                    onSelectModalItem={setSelectedModalItem}
+                    t={t}
+                    isFullscreen={isFullscreenMode}
+                  />
+                ))
+              )}
             </div>
 
           </div>
@@ -608,21 +719,55 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
                 ? 'bg-blue-950/90 border border-blue-400 text-blue-200 shadow-[0_0_12px_rgba(59,130,246,0.7)] animate-pulse' :
               lineData.machineStatus === 'CHANGEOVER'
                 ? 'bg-purple-950/90 border border-purple-400 text-purple-200 shadow-[0_0_12px_rgba(168,85,247,0.7)] animate-pulse' :
+              lineData.machineStatus === 'SIMULATION_ACTIVE'
+                ? 'bg-amber-950/90 border border-amber-500 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.7)] animate-pulse' :
+              lineData.machineStatus === 'CONNECTION_LOST' || lineData.machineStatus === 'NO_DATA'
+                ? 'bg-red-950/90 border border-red-500 text-red-200 shadow-[0_0_12px_rgba(239,68,68,0.7)] animate-pulse' :
+              lineData.machineStatus === 'STALE_DATA'
+                ? 'bg-amber-950/90 border border-amber-400 text-amber-200 animate-pulse' :
+              lineData.machineStatus === 'NOT_CONFIGURED'
+                ? 'bg-slate-900 border border-slate-600 text-slate-300' :
                 'bg-emerald-950/80 border border-emerald-500/50 text-emerald-300'
             }`} title={`Current Line Status: ${lineData.machineStatus}`}>
               <span>
                 {lineData.machineStatus === 'STOPPED' ? '🔴' :
                  lineData.machineStatus === 'IDLE' ? '🟡' :
                  lineData.machineStatus === 'MAINTENANCE' ? '🔧' :
-                 lineData.machineStatus === 'CHANGEOVER' ? '🔄' : '🟢'}
+                 lineData.machineStatus === 'CHANGEOVER' ? '🔄' :
+                 lineData.machineStatus === 'SIMULATION_ACTIVE' ? '⚡' :
+                 lineData.machineStatus === 'CONNECTION_LOST' ? '❌' :
+                 lineData.machineStatus === 'STALE_DATA' ? '⏳' :
+                 lineData.machineStatus === 'NOT_CONFIGURED' ? '⚙️' :
+                 lineData.machineStatus === 'NO_DATA' ? '❓' : '🟢'}
               </span>
               <span className="uppercase tracking-wider">
-                {lineData.machineStatus === 'RUNNING' ? 'RUNNING (กำลังผลิต)' :
-                 lineData.machineStatus === 'STOPPED' ? 'STOPPED (หยุด)' :
-                 lineData.machineStatus === 'IDLE' ? 'IDLE (พักสาย)' :
-                 lineData.machineStatus === 'MAINTENANCE' ? 'MAINTENANCE (ซ่อมบำรุง)' :
-                 lineData.machineStatus === 'CHANGEOVER' ? 'CHANGEOVER (เปลี่ยนรุ่น)' :
-                 lineData.machineStatus}
+                {language === 'TH' ? (
+                  lineData.machineStatus === 'RUNNING' ? 'กำลังผลิต' :
+                  lineData.machineStatus === 'STOPPED' ? 'หยุดทำงาน' :
+                  lineData.machineStatus === 'IDLE' ? 'พักสายผลิต' :
+                  lineData.machineStatus === 'MAINTENANCE' ? 'ซ่อมบำรุง' :
+                  lineData.machineStatus === 'CHANGEOVER' ? 'เปลี่ยนรุ่น' :
+                  lineData.machineStatus === 'SIMULATION_ACTIVE' ? 'จำลองการทำงาน' :
+                  lineData.machineStatus === 'CONNECTION_LOST' ? 'ขาดการเชื่อมต่อ' :
+                  lineData.machineStatus === 'STALE_DATA' ? 'ข้อมูลค้าง' :
+                  lineData.machineStatus === 'NOT_CONFIGURED' ? 'ยังไม่ตั้งค่า' :
+                  lineData.machineStatus === 'NO_DATA' ? 'ไม่มีข้อมูล' :
+                  lineData.machineStatus
+                ) : language === 'KO' ? (
+                  lineData.machineStatus === 'RUNNING' ? '가동 중' :
+                  lineData.machineStatus === 'STOPPED' ? '정지됨' :
+                  lineData.machineStatus === 'IDLE' ? '대기 중' :
+                  lineData.machineStatus === 'MAINTENANCE' ? '보전 작업' :
+                  lineData.machineStatus === 'CHANGEOVER' ? '모델 교체' :
+                  lineData.machineStatus === 'SIMULATION_ACTIVE' ? '시뮬레이션 활성' :
+                  lineData.machineStatus === 'CONNECTION_LOST' ? '통신 끊김' :
+                  lineData.machineStatus === 'STALE_DATA' ? '데이터 지연' :
+                  lineData.machineStatus === 'NOT_CONFIGURED' ? '미설정' :
+                  lineData.machineStatus === 'NO_DATA' ? '데이터 없음' :
+                  lineData.machineStatus
+                ) : (
+                  lineData.machineStatus.replace(/_/g, ' ')
+                )}
               </span>
             </div>
           )}
@@ -665,12 +810,16 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
             {isAutoCycleActive ? (
               <>
                 <RotateCw className="w-4 h-4 animate-spin text-[#00ff00]" />
-                <span className="font-black">AUTO CYCLING ({countdown}s)</span>
+                <span className="font-black">
+                  {language === 'TH' ? `หมุนเวียนอัตโนมัติ (${countdown}s)` : language === 'KO' ? `자동 순환 중 (${countdown}s)` : `AUTO CYCLING (${countdown}s)`}
+                </span>
               </>
             ) : (
               <>
                 <Play className="w-3.5 h-3.5 text-[#00ff00] fill-current" />
-                <span>AUTO CYCLE: OFF</span>
+                <span>
+                  {language === 'TH' ? 'หมุนเวียนอัตโนมัติ: ปิด' : language === 'KO' ? '자동 순환: 꺼짐' : 'AUTO CYCLE: OFF'}
+                </span>
               </>
             )}
           </button>
@@ -725,21 +874,29 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
               <div className="bg-[#242424] p-2.5 rounded border border-[#444444]">
                 <div className="text-gray-400 text-[10px]">LIFE TIME (DAYS)</div>
                 <div className="text-base font-bold text-white mt-0.5">
-                  {selectedModalItem.daysRemainingForecast || 31} Days
+                  {selectedModalItem.daysRemainingForecast !== undefined && selectedModalItem.daysRemainingForecast > 0
+                    ? `${selectedModalItem.daysRemainingForecast} Days`
+                    : selectedModalItem.lifeLimit <= 0
+                    ? 'STANDARD NOT SET'
+                    : 'RATE UNSET'}
                 </div>
               </div>
 
               <div className="bg-[#242424] p-2.5 rounded border border-[#444444]">
                 <div className="text-gray-400 text-[10px]">INSTALL QTY.</div>
                 <div className="text-base font-bold text-white mt-0.5">
-                  {selectedModalItem.installQty} Pcs
+                  {selectedModalItem.installQty > 0 ? `${selectedModalItem.installQty} Pcs` : 'NOT SET'}
                 </div>
               </div>
 
               <div className="bg-[#242424] p-2.5 rounded border border-[#444444]">
                 <div className="text-gray-400 text-[10px]">STOCK QTY.</div>
                 <div className="text-base font-bold text-white mt-0.5">
-                  {selectedModalItem.availableSpare !== undefined ? selectedModalItem.availableSpare : selectedModalItem.backupQty} Pcs
+                  {selectedModalItem.availableSpare !== undefined
+                    ? `${selectedModalItem.availableSpare} Pcs`
+                    : selectedModalItem.backupQty !== undefined
+                    ? `${selectedModalItem.backupQty} Pcs`
+                    : 'NO DATA'}
                 </div>
               </div>
             </div>

@@ -19,13 +19,22 @@
   "tv": {
     "finDieShotCount": "FIN DIE SHOT COUNT",
     "stagePunchDie": "Stage Punch / Die",
-    "replacementCount": "Replacement Count",
+    "replacementCount": "Life Standard (Shots)",
     "shotCount": "Shot Count",
     "progress": "Progress",
     "lifeTime": "Life Time (Days)",
     "installQty": "Install Qty.",
     "stockQty": "Stock Qty.",
-    "orderRequire": "STATUS"
+    "orderRequire": "STATUS",
+    "mainFinDie": "MAIN FIN DIE",
+    "total": "Total",
+    "today": "Today",
+    "signalStandard": "SIGNAL STANDARD:",
+    "normal": "Normal",
+    "warning": "Warning",
+    "prepare": "Prepare",
+    "overLife": "Over Life",
+    "autoWidth": "Auto Width"
   },
   "table": {
     "no": "NO.",

@@ -188,20 +188,28 @@ export const SystemSettingsView: React.FC = () => {
                 <p className="text-[11px] text-slate-400 font-sans mt-0.5">
                   รองรับการเชื่อมต่อกับ PLC หน้าไลน์ผลิต (Modbus TCP / Siemens S7 / OPC UA / MQTT Gateway) เพื่อดึงยอดช็อตสะสมอัตโนมัติ
                 </p>
+                <div className="mt-2 flex items-center gap-2 px-3 py-1.5 bg-amber-950/40 border border-amber-900/50 rounded text-[10px] text-amber-300 font-sans">
+                  <Zap className="w-3 h-3 text-amber-400 animate-pulse" />
+                  <span><strong>SAFETY NOTICE:</strong> Telemetry mode is currently READ-ONLY. Connection to production PLC (192.168.10.50) is restricted for verification phase.</span>
+                </div>
               </div>
 
               <div className="flex items-center gap-2 flex-wrap">
                 <span className={`px-2.5 py-1 rounded text-[10px] font-bold border flex items-center gap-1.5 ${
-                  plcStatus === 'CONNECTED'
+                  plcStatus === 'GATEWAY_ONLINE' || plcStatus === 'CONNECTED'
                     ? 'bg-emerald-950 text-emerald-300 border-emerald-500 animate-pulse'
-                    : plcStatus === 'CONNECTING' || plcStatus === 'RECONNECTING'
+                    : plcStatus === 'GATEWAY_CONNECTING' || plcStatus === 'CONNECTING' || plcStatus === 'RECONNECTING'
                     ? 'bg-amber-950 text-amber-300 border-amber-500'
-                    : plcStatus === 'ERROR'
+                    : plcStatus === 'TEST_SIMULATION_ACTIVE'
+                    ? 'bg-purple-950 text-purple-300 border-purple-500 animate-pulse'
+                    : plcStatus === 'WAITING_FOR_GATEWAY'
+                    ? 'bg-blue-950 text-blue-300 border-blue-500 animate-pulse'
+                    : plcStatus === 'GATEWAY_OFFLINE' || plcStatus === 'ERROR'
                     ? 'bg-rose-950 text-rose-300 border-rose-600'
                     : 'bg-slate-950 text-slate-500 border-slate-800'
                 }`}>
                   <Activity className="w-3 h-3" />
-                  <span>{plcStatus}</span>
+                  <span>{plcStatus.replace(/_/g, ' ')}</span>
                   {pingLatency && <span className="text-slate-400">({pingLatency}ms)</span>}
                 </span>
 
@@ -215,7 +223,11 @@ export const SystemSettingsView: React.FC = () => {
                   }`}
                 >
                   {plcConfig.isAutoPolling ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-                  <span>{plcConfig.isAutoPolling ? 'PAUSE AUTO-POLLING' : 'START AUTO-POLLING'}</span>
+                  <span>
+                    {plcConfig.connectionMode === 'SIMULATION' 
+                      ? (plcConfig.isAutoPolling ? 'STOP TEST SIMULATION' : 'START TEST SIMULATION')
+                      : (plcConfig.isAutoPolling ? 'PAUSE AUTO-POLLING' : 'START AUTO-POLLING')}
+                  </span>
                 </button>
               </div>
             </div>
@@ -236,10 +248,10 @@ export const SystemSettingsView: React.FC = () => {
                     onChange={e => updatePlcConfig({ connectionMode: e.target.value as PLCConnectionMode })}
                     className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1.5 font-mono focus:border-cyan-400 focus:outline-none"
                   >
-                    <option value="SIMULATION">SIMULATION (+10 Pulse / Dummy)</option>
-                    <option value="WEBSOCKET_MQTT">WEBSOCKET / MQTT EDGE GATEWAY</option>
-                    <option value="REST_POLLING">REST API POLLING SERVICE</option>
-                    <option value="MODBUS_TCP">LOCAL BRIDGE / MODBUS TCP</option>
+                    <option value="SIMULATION">SIMULATION (Virtual Pulse Generator - Not Real)</option>
+                    <option value="MODBUS_TCP">REAL PLC: Direct Industrial Modbus TCP (Ethernet)</option>
+                    <option value="WEBSOCKET_MQTT">EDGE GATEWAY: MQTT / WebSocket Broker</option>
+                    <option value="REST_POLLING">BACKEND API: REST Polling Service</option>
                   </select>
                 </div>
 
@@ -609,13 +621,18 @@ export const SystemSettingsView: React.FC = () => {
 
 export const LoginView: React.FC<{ onLoginSuccess: (user: User) => void }> = ({ onLoginSuccess }) => {
   const users = storageService.getUsers();
-  const [selectedUser, setSelectedUser] = useState<User>(users[0]);
+  const defaultUser = users[0] || storageService.getCurrentUser();
+  const [selectedUser, setSelectedUser] = useState<User>(defaultUser);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    storageService.setCurrentUser(selectedUser);
-    onLoginSuccess(selectedUser);
+    if (selectedUser) {
+      storageService.setCurrentUser(selectedUser);
+      onLoginSuccess(selectedUser);
+    }
   };
+
+  const activeUser = selectedUser || defaultUser;
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center p-4">
@@ -643,7 +660,7 @@ export const LoginView: React.FC<{ onLoginSuccess: (user: User) => void }> = ({ 
                   key={u.id}
                   onClick={() => setSelectedUser(u)}
                   className={`p-3 rounded border cursor-pointer transition-all flex items-center justify-between text-xs font-mono ${
-                    selectedUser.id === u.id
+                    activeUser?.id === u.id
                       ? 'bg-cyan-950/70 border-cyan-500 text-cyan-100'
                       : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800/60'
                   }`}
@@ -666,7 +683,7 @@ export const LoginView: React.FC<{ onLoginSuccess: (user: User) => void }> = ({ 
             className="w-full py-3 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded text-sm transition-all shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 cursor-pointer"
           >
             <UserCheck className="w-4 h-4" />
-            <span>ENTER APPLICATION AS {selectedUser.name.toUpperCase()}</span>
+            <span>ENTER APPLICATION AS {(activeUser?.name || 'USER').toUpperCase()}</span>
           </button>
         </form>
       </div>

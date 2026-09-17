@@ -17,7 +17,7 @@
     "systemSettings": "시스템 설정"
   },
   "tv": {
-    "finDieShotCount": "FIN DIE SHOT COUNT (핀 다이 타발 수)",
+    "finDieShotCount": "FIN DIE SHOT COUNT",
     "stagePunchDie": "스테이지 펀치 / 다이",
     "replacementCount": "교체 횟수",
     "shotCount": "샷 수",
@@ -25,7 +25,16 @@
     "lifeTime": "수명 (일)",
     "installQty": "설치 수량",
     "stockQty": "재고 수량",
-    "orderRequire": "STATUS"
+    "orderRequire": "상태",
+    "mainFinDie": "메인 핀 다이",
+    "total": "총 타수",
+    "today": "금일 타수",
+    "signalStandard": "신호 기준:",
+    "normal": "정상",
+    "warning": "경고",
+    "prepare": "준비",
+    "overLife": "수명 초과",
+    "autoWidth": "너비 자동 맞춤"
   },
   "table": {
     "no": "번호",

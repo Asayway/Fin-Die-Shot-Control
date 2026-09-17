@@ -52,21 +52,27 @@ const LINE_COLUMNS: LineColDefinition[] = [
   { id: 'E5', label: 'E5', headerName: 'E5', subName: 'Ø5 Slit' },
 ];
 
-interface InstallQuantityMatrixViewProps {
+interface StockQuantityMatrixViewProps {
   onNavigateToMaster?: () => void;
 }
 
-export const InstallQuantityMatrixView: React.FC<InstallQuantityMatrixViewProps> = ({
+export const StockQuantityMatrixView: React.FC<StockQuantityMatrixViewProps> = ({
   onNavigateToMaster
 }) => {
   const { language } = useLanguage();
   const [lines, setLines] = useState<LineActiveConfiguration[]>([]);
   const [partMasters, setPartMasters] = useState<PartMaster[]>([]);
+  const [monitoringData, setMonitoringData] = useState<Record<string, any>>({});
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedStageFilter, setSelectedStageFilter] = useState<string>('ALL');
   
   const [isEditing, setIsEditing] = useState(false);
+  const [spareStocks, setSpareStocks] = useState<any[]>([]);
   const [editMatrixValues, setEditMatrixValues] = useState<Record<string, number>>({});
+  const [editNoteValues, setEditNoteValues] = useState<Record<string, string>>({});
+  const [editMinValues, setEditMinValues] = useState<Record<string, number>>({});
+  const [editMaxValues, setEditMaxValues] = useState<Record<string, number>>({});
+  const [editSafetyValues, setEditSafetyValues] = useState<Record<string, number>>({});
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
@@ -110,6 +116,8 @@ export const InstallQuantityMatrixView: React.FC<InstallQuantityMatrixViewProps>
   const loadData = () => {
     setLines(storageService.getLineConfigs());
     setPartMasters(storageService.getPartMasters());
+    setMonitoringData(storageService.getLinesMonitoring());
+    setSpareStocks(storageService.getSpareStocks());
   };
 
   useEffect(() => {
@@ -156,8 +164,8 @@ export const InstallQuantityMatrixView: React.FC<InstallQuantityMatrixViewProps>
         const qty = newRowData.quantities[lineId] || 0;
         return {
           ...lineConfig,
-          installedPartQuantities: {
-            ...(lineConfig.installedPartQuantities || {}),
+          stockQuantities: {
+            ...(lineConfig.stockQuantities || {}),
             [finalPartCode]: qty
           }
         };
@@ -241,6 +249,7 @@ export const InstallQuantityMatrixView: React.FC<InstallQuantityMatrixViewProps>
   // Build the live matrix rows
   const matrixRows = useMemo(() => {
     return partMasters.map((pm, index) => {
+      const stkItem = spareStocks.find(s => s.partCode === pm.partCode);
       const rowData: {
         no: number;
         partCode: string;
@@ -250,7 +259,12 @@ export const InstallQuantityMatrixView: React.FC<InstallQuantityMatrixViewProps>
         material?: string;
         maintenanceType?: 'REGRIND' | 'DISPOSE';
         quantities: Record<string, number>;
+        installQuantities: Record<string, number>;
         total: number;
+        stockNote: string;
+        minimumStock: number;
+        maximumStock: number;
+        safetyStockQty: number;
       } = {
         no: index + 1,
         partCode: pm.partCode,
@@ -260,16 +274,40 @@ export const InstallQuantityMatrixView: React.FC<InstallQuantityMatrixViewProps>
         material: (pm as any).material || 'SKD11',
         maintenanceType: (pm as any).maintenanceType || 'REGRIND',
         quantities: {},
-        total: 0
+        installQuantities: {},
+        total: 0,
+        stockNote: pm.stockNote || (stkItem?.note || ''),
+        minimumStock: stkItem?.minimumStock ?? 10,
+        maximumStock: stkItem?.maximumStock ?? 50,
+        safetyStockQty: stkItem?.safetyStockQty ?? (stkItem?.minimumStock ?? 10)
       };
+
+      if (isEditing && editMinValues[pm.partCode] !== undefined) {
+        rowData.minimumStock = editMinValues[pm.partCode];
+      }
+      if (isEditing && editMaxValues[pm.partCode] !== undefined) {
+        rowData.maximumStock = editMaxValues[pm.partCode];
+      }
+      if (isEditing && editSafetyValues[pm.partCode] !== undefined) {
+        rowData.safetyStockQty = editSafetyValues[pm.partCode];
+      }
+      if (isEditing && editNoteValues[pm.partCode] !== undefined) {
+        rowData.stockNote = editNoteValues[pm.partCode];
+      }
 
       let rowTotal = 0;
       LINE_COLUMNS.forEach(col => {
         let val = 0;
+        let installVal = 0;
         const lineConfig = lines.find(l => l.lineId === col.id);
-        if (lineConfig && lineConfig.installedPartQuantities) {
-          val = lineConfig.installedPartQuantities[pm.partCode] || 0;
+        if (lineConfig && lineConfig.stockQuantities) {
+          val = lineConfig.stockQuantities[pm.partCode] || 0;
         }
+        if (lineConfig && lineConfig.installedPartQuantities) {
+          installVal = lineConfig.installedPartQuantities[pm.partCode] || 0;
+        }
+        
+        rowData.installQuantities[col.id] = installVal;
 
         // If in edit mode and user modified this cell, reflect the edit value
         if (isEditing) {
@@ -286,7 +324,7 @@ export const InstallQuantityMatrixView: React.FC<InstallQuantityMatrixViewProps>
       rowData.total = rowTotal;
       return rowData;
     });
-  }, [partMasters, lines, isEditing, editMatrixValues]);
+  }, [partMasters, lines, spareStocks, isEditing, editMatrixValues, editNoteValues, editMinValues, editMaxValues, editSafetyValues, monitoringData]);
 
   // Filtered rows
   const filteredRows = useMemo(() => {
@@ -326,12 +364,26 @@ export const InstallQuantityMatrixView: React.FC<InstallQuantityMatrixViewProps>
   // Enter Edit Mode
   const handleStartEdit = () => {
     const currentValues: Record<string, number> = {};
+    const currentMin: Record<string, number> = {};
+    const currentMax: Record<string, number> = {};
+    const currentSafety: Record<string, number> = {};
+    const currentNote: Record<string, string> = {};
+
     matrixRows.forEach(row => {
       LINE_COLUMNS.forEach(col => {
         currentValues[getCellKey(row.partCode, col.id)] = row.quantities[col.id] || 0;
       });
+      currentMin[row.partCode] = row.minimumStock;
+      currentMax[row.partCode] = row.maximumStock;
+      currentSafety[row.partCode] = row.safetyStockQty;
+      currentNote[row.partCode] = row.stockNote;
     });
+
     setEditMatrixValues(currentValues);
+    setEditMinValues(currentMin);
+    setEditMaxValues(currentMax);
+    setEditSafetyValues(currentSafety);
+    setEditNoteValues(currentNote);
     setIsEditing(true);
     setHasUnsavedChanges(false);
   };
@@ -355,6 +407,10 @@ export const InstallQuantityMatrixView: React.FC<InstallQuantityMatrixViewProps>
     }
     setIsEditing(false);
     setEditMatrixValues({});
+    setEditMinValues({});
+    setEditMaxValues({});
+    setEditSafetyValues({});
+    setEditNoteValues({});
     setHasUnsavedChanges(false);
   };
 
@@ -413,10 +469,39 @@ export const InstallQuantityMatrixView: React.FC<InstallQuantityMatrixViewProps>
   // Save All Changes to Database
   const handleSaveMatrix = () => {
     try {
+      // 1. Perform validation for Min <= Max and Safety <= Max
+      const keys = Object.keys(editMinValues);
+      for (const pCode of keys) {
+        const minVal = editMinValues[pCode];
+        const maxVal = editMaxValues[pCode] !== undefined ? editMaxValues[pCode] : 9999;
+        const safetyVal = editSafetyValues[pCode] !== undefined ? editSafetyValues[pCode] : 0;
+        const pm = partMasters.find(p => p.partCode === pCode);
+        const name = pm ? pm.partName : pCode;
+
+        if (minVal < 0 || maxVal < 0 || safetyVal < 0) {
+          alert(language === 'TH' ? 'ค่าสต็อกต้องไม่ติดลบ' : 'Stock values cannot be negative');
+          return;
+        }
+        if (minVal > maxVal) {
+          alert(language === 'TH' 
+            ? `พาร์ท ${name}: ค่าสต็อกขั้นต่ำ (Min: ${minVal}) ต้องไม่มากกว่าสต็อกสูงสุด (Max: ${maxVal})` 
+            : `Part ${name}: Min Stock (${minVal}) cannot be greater than Max Stock (${maxVal})`
+          );
+          return;
+        }
+        if (safetyVal > maxVal) {
+          alert(language === 'TH' 
+            ? `พาร์ท ${name}: ค่าสต็อกเพื่อความปลอดภัย (Safety: ${safetyVal}) ต้องไม่มากกว่าสต็อกสูงสุด (Max: ${maxVal})` 
+            : `Part ${name}: Safety Stock (${safetyVal}) cannot be greater than Max Stock (${maxVal})`
+          );
+          return;
+        }
+      }
+
       const currentConfigs = storageService.getLineConfigs();
       const updatedConfigs = currentConfigs.map(lineConfig => {
         const lineId = lineConfig.lineId;
-        const newQuantities: Record<string, number> = { ...(lineConfig.installedPartQuantities || {}) };
+        const newQuantities: Record<string, number> = { ...(lineConfig.stockQuantities || {}) };
 
         partMasters.forEach(pm => {
           const key = getCellKey(pm.partCode, lineId);
@@ -427,21 +512,97 @@ export const InstallQuantityMatrixView: React.FC<InstallQuantityMatrixViewProps>
 
         return {
           ...lineConfig,
-          installedPartQuantities: newQuantities
+          stockQuantities: newQuantities
         };
       });
 
       storageService.saveLineConfigs(updatedConfigs);
+
+      // Save Notes to PartMasters
+      const updatedParts = partMasters.map(pm => {
+        if (editNoteValues[pm.partCode] !== undefined) {
+          return { ...pm, stockNote: editNoteValues[pm.partCode] };
+        }
+        return pm;
+      });
+      storageService.savePartMasters(updatedParts);
+
+      // Save Stock limits to SpareStockItem
+      const currentStocks = storageService.getSpareStocks();
+      const updatedStocks = currentStocks.map(stk => {
+        const pCode = stk.partCode;
+        const minVal = editMinValues[pCode] !== undefined ? editMinValues[pCode] : stk.minimumStock;
+        const maxVal = editMaxValues[pCode] !== undefined ? editMaxValues[pCode] : stk.maximumStock;
+        const safetyVal = editSafetyValues[pCode] !== undefined ? editSafetyValues[pCode] : (stk.safetyStockQty ?? stk.minimumStock);
+        const noteVal = editNoteValues[pCode] !== undefined ? editNoteValues[pCode] : (stk.note || '');
+
+        // Sum up total stock quantity across all lines
+        let totalQty = 0;
+        LINE_COLUMNS.forEach(col => {
+          const key = getCellKey(pCode, col.id);
+          if (editMatrixValues[key] !== undefined) {
+            totalQty += editMatrixValues[key];
+          } else {
+            const lineConfig = currentConfigs.find(l => l.lineId === col.id);
+            if (lineConfig && lineConfig.stockQuantities) {
+              totalQty += lineConfig.stockQuantities[pCode] || 0;
+            }
+          }
+        });
+
+        const reserved = stk.reservedQuantity || 0;
+        const quarantine = stk.quarantineQuantity || 0;
+        const available = Math.max(0, totalQty - reserved - quarantine);
+        const requiredPerFull = stk.requiredQuantityPerFullReplacement || 1;
+
+        let stockStatus: any = 'AVAILABLE';
+        if (available === 0) stockStatus = 'NO_STOCK';
+        else if (available < requiredPerFull) stockStatus = 'LOW_STOCK';
+        else if (available <= minVal) stockStatus = 'MINIMUM';
+
+        let combinedRisk: any = 'NORMAL';
+        if (stk.hasDeliveryRisk) {
+          combinedRisk = 'DELIVERY RISK';
+        } else if (available === 0) {
+          combinedRisk = 'STOP RISK';
+        } else if (available < requiredPerFull) {
+          combinedRisk = 'CRITICAL SUPPLY';
+        } else if (available <= safetyVal) {
+          combinedRisk = 'WARNING';
+        }
+
+        return {
+          ...stk,
+          onHandQuantity: totalQty,
+          availableQuantity: available,
+          minimumStock: minVal,
+          maximumStock: maxVal,
+          safetyStockQty: safetyVal,
+          safetyStockMin: minVal,
+          note: noteVal,
+          stockStatus,
+          combinedRisk
+        };
+      });
+
+      storageService.saveSpareStocksList(updatedStocks);
+
       storageService.addAuditLog(
-        'CONFIGURATION',
-        `Batch updated Fin Die Installed Quantities Matrix across ${partMasters.length} parts and 7 lines`,
-        `อัปเดตตารางจำนวนติดตั้งชิ้นส่วนแม่พิมพ์แยกตามสายการผลิต (E1-E5) เรียบร้อยแล้ว`
+        'STOCK',
+        `Batch updated Stock Matrix and safety limits across ${partMasters.length} parts and 7 lines`,
+        `อัปเดตตารางจำนวนสต็อกและเกณฑ์ควบคุมความปลอดภัยเรียบร้อยแล้ว`
       );
 
       setIsEditing(false);
       setHasUnsavedChanges(false);
-      setSaveSuccessMsg(`บันทึกจำนวนติดตั้ง ${partMasters.length} รายการลงในฐานข้อมูลสำเร็จแล้ว`);
+      setEditMatrixValues({});
+      setEditMinValues({});
+      setEditMaxValues({});
+      setEditSafetyValues({});
+      setEditNoteValues({});
+      setSaveSuccessMsg(`บันทึกจำนวนสต็อกและเกณฑ์ความปลอดภัย ${partMasters.length} รายการสำเร็จแล้ว`);
       setTimeout(() => setSaveSuccessMsg(null), 4000);
+      loadData();
     } catch (err: any) {
       alert(`เกิดข้อผิดพลาดในการบันทึก: ${err.message}`);
     }
@@ -475,6 +636,15 @@ export const InstallQuantityMatrixView: React.FC<InstallQuantityMatrixViewProps>
   return (
     <div className="space-y-3.5 font-sans text-white animate-fadeIn pb-8">
       
+      {/* Note Options Datalist */}
+      <datalist id="note-options">
+        <option value="รอของเข้า (Waiting for PO)" />
+        <option value="ของมีปัญหา/รอเคลม (Claim/Quarantine)" />
+        <option value="ยืมจาก Line อื่น (Borrowed)" />
+        <option value="ปรับปรุงสต็อก (Stock Adjusted)" />
+        <option value="ส่งซ่อม (Sent for Repair)" />
+      </datalist>
+
       {/* Alert Banner for Success */}
       {saveSuccessMsg && (
         <div className="bg-[#111111] border border-[#00FF00] text-[#00FF00] px-3 py-2 flex items-center justify-between shadow-lg">
@@ -653,15 +823,15 @@ export const InstallQuantityMatrixView: React.FC<InstallQuantityMatrixViewProps>
                 </th>
                 <th 
                   colSpan={8} 
-                  className="sticky top-0 z-20 bg-[#3a3a4a] text-[#00FF00] font-black py-1.5 px-1.5 border-b border-r border-[#666666] text-center uppercase tracking-wider text-[11px] shadow-xs"
+                  className="sticky top-0 z-20 bg-[#2a3a2a] text-[#00FF7F] font-black py-1.5 px-1.5 border-b border-r border-[#666666] text-center uppercase tracking-wider text-[11px] shadow-xs"
                 >
-                  2. INSTALL QUANTITY BY LINE (EA)
+                  2. STOCK QUANTITY BY LINE (EA)
                 </th>
                 <th 
-                  colSpan={1} 
-                  className="sticky top-0 z-20 bg-[#444455] text-[#FFCC00] font-black py-1.5 px-1.5 border-b border-[#666666] text-center uppercase tracking-wider text-[11px] shadow-xs w-20"
+                  colSpan={2} 
+                  className="sticky top-0 z-20 bg-[#444455] text-[#FFCC00] font-black py-1.5 px-1.5 border-b border-[#666666] text-center uppercase tracking-wider text-[11px] shadow-xs w-32"
                 >
-                  3. ACTIONS
+                  3. REMARKS & ACTIONS
                 </th>
               </tr>
 
@@ -683,43 +853,43 @@ export const InstallQuantityMatrixView: React.FC<InstallQuantityMatrixViewProps>
                 </th>
 
                 {/* Col: E1 */}
-                <th className="sticky top-[27px] z-20 py-0.5 px-0.5 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00]">
+                <th className="sticky top-[27px] z-20 py-0.5 px-0.5 text-center border-b border-r border-[#666666] bg-[#3a4a3a] text-[#00FF7F]">
                   <div className="font-bold text-white text-[11px]">E1</div>
                   <div className="text-[8px] text-slate-300 font-normal leading-tight">Ø7 Slit</div>
                 </th>
 
                 {/* Col: E2 */}
-                <th className="sticky top-[27px] z-20 py-0.5 px-0.5 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00]">
+                <th className="sticky top-[27px] z-20 py-0.5 px-0.5 text-center border-b border-r border-[#666666] bg-[#3a4a3a] text-[#00FF7F]">
                   <div className="font-bold text-white text-[11px]">E2</div>
                   <div className="text-[8px] text-slate-300 font-normal leading-tight">Ø5 Slit</div>
                 </th>
 
                 {/* Col: E3-1 */}
-                <th className="sticky top-[27px] z-20 py-0.5 px-0.5 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00]">
+                <th className="sticky top-[27px] z-20 py-0.5 px-0.5 text-center border-b border-r border-[#666666] bg-[#3a4a3a] text-[#00FF7F]">
                   <div className="font-bold text-white text-[11px]">E3-1</div>
                   <div className="text-[8px] text-slate-300 font-normal leading-tight">Slit 3P</div>
                 </th>
 
                 {/* Col: E3-2 */}
-                <th className="sticky top-[27px] z-20 py-0.5 px-0.5 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00]">
+                <th className="sticky top-[27px] z-20 py-0.5 px-0.5 text-center border-b border-r border-[#666666] bg-[#3a4a3a] text-[#00FF7F]">
                   <div className="font-bold text-white text-[11px]">E3-2</div>
                   <div className="text-[8px] text-slate-300 font-normal leading-tight">WL+ 4P</div>
                 </th>
 
                 {/* Col: E3-3 */}
-                <th className="sticky top-[27px] z-20 py-0.5 px-0.5 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00]">
+                <th className="sticky top-[27px] z-20 py-0.5 px-0.5 text-center border-b border-r border-[#666666] bg-[#3a4a3a] text-[#00FF7F]">
                   <div className="font-bold text-white text-[11px]">E3-3</div>
                   <div className="text-[8px] text-slate-300 font-normal leading-tight">New Cor 4P</div>
                 </th>
 
                 {/* Col: E4 */}
-                <th className="sticky top-[27px] z-20 py-0.5 px-0.5 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00]">
+                <th className="sticky top-[27px] z-20 py-0.5 px-0.5 text-center border-b border-r border-[#666666] bg-[#3a4a3a] text-[#00FF7F]">
                   <div className="font-bold text-white text-[11px]">E4</div>
                   <div className="text-[8px] text-slate-300 font-normal leading-tight">Ø5 Slit</div>
                 </th>
 
                 {/* Col: E5 */}
-                <th className="sticky top-[27px] z-20 py-0.5 px-0.5 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00]">
+                <th className="sticky top-[27px] z-20 py-0.5 px-0.5 text-center border-b border-r border-[#666666] bg-[#3a4a3a] text-[#00FF7F]">
                   <div className="font-bold text-white text-[11px]">E5</div>
                   <div className="text-[8px] text-slate-300 font-normal leading-tight">Ø5 Slit</div>
                 </th>
@@ -727,6 +897,11 @@ export const InstallQuantityMatrixView: React.FC<InstallQuantityMatrixViewProps>
                 {/* Col: Total */}
                 <th className="sticky top-[27px] z-20 py-1 px-1 w-14 text-center bg-[#444455] text-[#FFCC00] font-bold border-b border-r border-[#666666]">
                   Total
+                </th>
+
+                {/* Col: Notes */}
+                <th className="sticky top-[27px] z-20 py-1 px-1 min-w-[150px] text-left bg-[#444455] text-white font-bold border-b border-r border-[#666666]">
+                  Notes / Remarks
                 </th>
 
                 {/* Col: Actions */}
@@ -826,10 +1001,19 @@ export const InstallQuantityMatrixView: React.FC<InstallQuantityMatrixViewProps>
                 </tr>
               ) : (
                 filteredRows.map((row) => {
+                  const isOutOfStock = row.total === 0;
+                  const isBelowSafety = row.total <= row.safetyStockQty;
+                  let rowBgClass = "bg-[#1e1e1e] hover:bg-[#282828]";
+                  if (isOutOfStock) {
+                    rowBgClass = "bg-[#331118] hover:bg-[#3d1921] transition-all";
+                  } else if (isBelowSafety) {
+                    rowBgClass = "bg-[#2e2211] hover:bg-[#382b18] transition-all";
+                  }
+
                   return (
                     <tr 
                       key={row.partCode} 
-                      className="bg-[#1e1e1e] hover:bg-[#282828] transition-colors border-b border-[#444444]"
+                      className={`${rowBgClass} border-b border-[#444444]`}
                     >
                       {/* Col 1: No */}
                       <td className="py-1 px-2 text-center text-slate-400 font-bold border-r border-[#444444]">
@@ -849,16 +1033,146 @@ export const InstallQuantityMatrixView: React.FC<InstallQuantityMatrixViewProps>
                           <span className="font-bold text-white text-xs uppercase hover:text-[#00FF00] transition-colors block">
                             {row.partName}
                           </span>
+                          
+                          {isEditing ? (
+                            <div className="flex flex-col gap-1 mt-1.5 p-1 bg-[#111111] rounded border border-[#333333] max-w-[190px]">
+                              <div className="flex items-center justify-between gap-1 text-[10px] font-mono">
+                                <span className="text-amber-400 font-bold">Safety:</span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={row.safetyStockQty}
+                                  onChange={(e) => {
+                                    const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                    setEditSafetyValues(prev => ({
+                                      ...prev,
+                                      [row.partCode]: val
+                                    }));
+                                    setHasUnsavedChanges(true);
+                                  }}
+                                  className="w-14 bg-[#1e1e1e] border border-[#555555] text-amber-300 text-center text-[10px] py-0.5 focus:border-amber-400 focus:outline-none font-bold"
+                                />
+                              </div>
+                              <div className="flex items-center justify-between gap-1 text-[10px] font-mono">
+                                <span className="text-slate-300 font-bold">Min:</span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={row.minimumStock}
+                                  onChange={(e) => {
+                                    const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                    setEditMinValues(prev => ({
+                                      ...prev,
+                                      [row.partCode]: val
+                                    }));
+                                    setHasUnsavedChanges(true);
+                                  }}
+                                  className="w-14 bg-[#1e1e1e] border border-[#555555] text-slate-300 text-center text-[10px] py-0.5 focus:border-cyan-400 focus:outline-none font-bold"
+                                />
+                              </div>
+                              <div className="flex items-center justify-between gap-1 text-[10px] font-mono">
+                                <span className="text-slate-300 font-bold">Max:</span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={row.maximumStock}
+                                  onChange={(e) => {
+                                    const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                    setEditMaxValues(prev => ({
+                                      ...prev,
+                                      [row.partCode]: val
+                                    }));
+                                    setHasUnsavedChanges(true);
+                                  }}
+                                  className="w-14 bg-[#1e1e1e] border border-[#555555] text-slate-300 text-center text-[10px] py-0.5 focus:border-cyan-400 focus:outline-none font-bold"
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5 mt-1 font-mono text-[10px]">
+                              <span className={`px-1 py-0.5 rounded text-[9px] font-bold ${
+                                row.total === 0 
+                                  ? 'bg-red-950 text-red-400 border border-red-800' 
+                                  : row.total <= row.safetyStockQty 
+                                    ? 'bg-amber-950/80 text-amber-400 border border-amber-800/80 animate-pulse' 
+                                    : 'bg-[#161b22] text-slate-400 border border-[#30363d]'
+                              }`}>
+                                Safety: {row.safetyStockQty}
+                              </span>
+                              <span className="text-slate-600">|</span>
+                              <span className="text-slate-400">Min: {row.minimumStock}</span>
+                              <span className="text-slate-600">|</span>
+                              <span className="text-slate-400">Max: {row.maximumStock}</span>
+                            </div>
+                          )}
                         </div>
                       </td>
 
                       {/* Col 4 - 10: E1 to E5 Line Quantities */}
                       {LINE_COLUMNS.map(col => {
                         const qty = row.quantities[col.id] || 0;
+                        const installVal = row.installQuantities[col.id] || 0;
+                        
+                        // Check Predictive Demand (Is this part about to expire on this line?)
+                        let isHighRisk = false;
+                        let usagePct = 0;
+                        if (monitoringData && monitoringData[col.id]) {
+                           const liveItems = monitoringData[col.id].items || [];
+                           const liveItem = liveItems.find((i: any) => i.partCode === row.partCode);
+                           if (liveItem) {
+                              usagePct = liveItem.usagePercent || 0;
+                              if (usagePct >= 90) {
+                                 isHighRisk = true;
+                              }
+                           }
+                        }
+
+                        // Calculate Alert Status
+                        let statusColor = 'text-slate-500 bg-[#1a1a1a] border-[#555555]'; // None
+                        let alertTitle = `ต้องการติดตั้ง: ${installVal} ชิ้น`;
+
+                        if (installVal > 0) {
+                          if (qty === 0) {
+                            statusColor = 'text-white bg-[#C40045] border-red-500 animate-pulse'; // Critical
+                            alertTitle = `วิกฤต! สต็อก 0 ชิ้น (ต้องการติดตั้ง: ${installVal} ชิ้น)`;
+                          } else if (qty < installVal) {
+                            statusColor = 'text-black bg-[#FFCC00] border-yellow-500'; // Warning
+                            alertTitle = `แจ้งเตือน: สต็อกไม่พอเปลี่ยนยกชุด (มี: ${qty} / ต้องการ: ${installVal})`;
+                          } else if (isHighRisk) {
+                            statusColor = 'text-white bg-[#FF6600] border-[#FF9900] animate-pulse'; // Predictive Demand Risk
+                            alertTitle = `แจ้งเตือนล่วงหน้า! อะไหล่บน Line ${col.id} ถูกใช้งานไปแล้ว ${usagePct.toFixed(0)}% กำลังจะต้องเปลี่ยนเร็วๆ นี้`;
+                          } else {
+                            statusColor = 'text-[#00FF00] bg-[#111111] border-[#00FF00]'; // Safe
+                            alertTitle = `ปลอดภัย: สต็อกมีเพียงพอ (มี: ${qty} / ต้องการ: ${installVal})`;
+                          }
+                        } else if (qty > 0) {
+                           statusColor = 'text-[#00FF7F] bg-[#111111] border-[#00FF7F]'; // Has stock but no install
+                        }
+
+                        // Determine Text Color for View Mode
+                        let viewTextColor = 'text-slate-500';
+                        if (installVal > 0) {
+                          if (qty === 0) viewTextColor = 'text-[#C40045]';
+                          else if (qty < installVal) viewTextColor = 'text-[#FFCC00]';
+                          else if (isHighRisk) viewTextColor = 'text-[#FF9900]';
+                          else viewTextColor = 'text-[#00FF00]';
+                        } else if (qty > 0) {
+                           viewTextColor = 'text-[#00FF7F]';
+                        }
+
+                        // Highlight background in View Mode if critical or warning
+                        let viewBg = '';
+                        if (!isEditing && installVal > 0) {
+                           if (qty === 0) viewBg = 'bg-[#400016] animate-pulse';
+                           else if (qty < installVal) viewBg = 'bg-[#332800]';
+                           else if (isHighRisk) viewBg = 'bg-[#4a1c00] animate-pulse';
+                        }
+
                         return (
                           <td 
                             key={col.id} 
-                            className="py-1 px-0.5 text-center border-r border-[#444444] font-mono"
+                            className={`py-1 px-0.5 text-center border-r border-[#444444] font-mono transition-colors ${viewBg}`}
+                            title={!isEditing ? alertTitle : undefined}
                           >
                             {isEditing ? (
                               <input
@@ -871,14 +1185,13 @@ export const InstallQuantityMatrixView: React.FC<InstallQuantityMatrixViewProps>
                                   const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10) || 0;
                                   handleCellChange(row.partCode, col.id, val);
                                 }}
-                                className={`w-full py-0.5 text-center text-xs font-bold border focus:outline-none ${
-                                  qty > 0 
-                                    ? 'bg-[#111111] text-[#00FF00] border-[#00FF00]' 
-                                    : 'bg-[#1a1a1a] text-slate-500 border-[#555555]'
-                                }`}
+                                className={`w-full py-0.5 text-center text-xs font-bold border focus:outline-none ${statusColor}`}
+                                title={alertTitle}
                               />
                             ) : (
-                              <span className={`font-bold text-xs ${qty > 0 ? 'text-[#00FF00] font-black' : 'text-slate-500'}`}>
+                              <span 
+                                className={`font-bold text-xs ${viewTextColor} ${qty > 0 || installVal > 0 ? 'font-black' : ''}`}
+                              >
                                 {qty > 0 ? qty : '-'}
                               </span>
                             )}
@@ -893,7 +1206,30 @@ export const InstallQuantityMatrixView: React.FC<InstallQuantityMatrixViewProps>
                         </span>
                       </td>
 
-                      {/* Col 12: Actions (Edit & Delete) */}
+                      {/* Col 12: Notes / Remarks */}
+                      <td className="py-1 px-2 text-left bg-[#1a1a1a] border-r border-[#444444]">
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            value={row.stockNote}
+                            onChange={(e) => {
+                              setEditNoteValues(prev => ({
+                                ...prev,
+                                [row.partCode]: e.target.value
+                              }));
+                            }}
+                            className="w-full px-1.5 py-0.5 bg-[#111111] border border-[#555555] text-slate-200 text-xs focus:border-cyan-500 focus:outline-none"
+                            placeholder="ระบุหมายเหตุ..."
+                            list="note-options"
+                          />
+                        ) : (
+                          <span className="text-[10px] text-slate-300 line-clamp-1" title={row.stockNote}>
+                            {row.stockNote || '-'}
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Col 13: Actions (Edit & Delete) */}
                       <td className="py-1 px-2 text-center">
                         <div className="flex items-center justify-center gap-1.5">
                           <button

@@ -13,7 +13,7 @@ const ShotEntryView = React.lazy(() => import('./views/ShotEntryView').then(m =>
 const ReplacementEntryView = React.lazy(() => import('./views/ReplacementEntryView').then(m => ({ default: m.ReplacementEntryView })));
 const UnifiedToolingMasterView = React.lazy(() => import('./views/UnifiedToolingMasterView').then(m => ({ default: m.UnifiedToolingMasterView })));
 const SystemSettingsView = React.lazy(() => import('./views/SystemSettingsView').then(m => ({ default: m.SystemSettingsView })));
-const LoginView = React.lazy(() => import('./views/SystemSettingsView').then(m => ({ default: m.LoginView })));
+const LoginView = React.lazy(() => import('./views/LoginView').then(m => ({ default: m.LoginView })));
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User>(storageService.getCurrentUser());
@@ -76,7 +76,6 @@ export default function App() {
   const renderActiveView = () => {
     switch (activeRoute) {
       case 'tv-monitoring':
-      case 'shot-entry':
         return (
           <TvDashboardView
             initialLineId={targetLineId}
@@ -84,6 +83,8 @@ export default function App() {
             onToggleFullscreen={handleToggleFullscreen}
           />
         );
+      case 'shot-entry':
+        return <ShotEntryView initialLineId={targetLineId} />;
       case 'replacement-entry':
       case 'lock-position':
       case 'die-layout':

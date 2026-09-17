@@ -49,16 +49,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {
           id: 'tv-monitoring',
           label: t('sidebar.tvDashboard', { defaultValue: 'TV Dashboard' }),
-          icon: Tv,
-          badge: 'LIVE',
-          badgeColor: 'bg-green-950 text-green-300 border-green-500'
+          icon: Tv
         },
         {
           id: 'replacement-entry',
           label: t('sidebar.partReplacement', { defaultValue: 'Part Replacement' }),
-          icon: Wrench,
-          badge: '2D Die',
-          badgeColor: 'bg-cyan-950 text-cyan-300 border-cyan-500'
+          icon: Wrench
         }
       ]
     },
@@ -68,9 +64,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {
           id: 'unified-tooling-setup',
           label: t('sidebar.dieAndPartMaster', { defaultValue: 'Die & Part Master' }),
-          icon: Database,
-          badge: 'HUB',
-          badgeColor: 'bg-cyan-950 text-cyan-300 border-cyan-500'
+          icon: Database
         }
       ]
     },

@@ -1220,19 +1220,19 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
                 isHmi ? 'text-green-500/80' : 'text-slate-400'
               }`}>
                 <div className="flex items-center gap-1">
-                  <Calendar className={`w-3 h-3 ${isHmi ? 'text-green-400' : 'text-cyan-400'}`} />
-                  <span>Date:</span>
+                  <Calendar className={`w-3 h-3 ${isHmi ? 'text-green-300' : 'text-white'}`} />
+                  <span className="text-white">Date:</span>
                   <input
                     type="date"
                     disabled={isLineStopped}
                     value={productionDate}
                     onChange={e => setProductionDate(e.target.value)}
-                    className={`rounded px-1.5 py-0.5 text-[11px] font-mono border ${
+                    className={`rounded px-1.5 py-0.5 text-[11px] font-mono border [color-scheme:dark] ${
                       isLineStopped
                         ? 'opacity-40 cursor-not-allowed border-slate-800 text-slate-600 bg-slate-950'
                         : isHmi 
-                        ? 'bg-black border-green-800 text-green-300' 
-                        : 'bg-slate-950 border-slate-700 text-slate-200'
+                        ? 'bg-black border-green-700 text-green-300' 
+                        : 'bg-slate-950 border-slate-600 text-white'
                     }`}
                   />
                 </div>

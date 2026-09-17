@@ -182,19 +182,19 @@ export const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
         <div className={`flex items-center gap-1.5 p-1 rounded-md border transition-all ${
           hasFilter
             ? isHmi
-              ? 'bg-zinc-950 border-green-500 shadow-sm ring-1 ring-green-500/40'
-              : 'bg-slate-950 border-cyan-500 shadow-sm ring-1 ring-cyan-500/40'
+              ? 'bg-zinc-950 border-green-400 shadow-sm ring-1 ring-green-400/50'
+              : 'bg-slate-950 border-cyan-400 shadow-sm ring-1 ring-cyan-400/50'
             : isHmi
-            ? 'bg-zinc-900/90 border-zinc-800'
-            : 'bg-slate-900/90 border-slate-700/80 hover:border-slate-600'
+            ? 'bg-zinc-900/90 border-zinc-700'
+            : 'bg-slate-900/90 border-slate-600 hover:border-slate-500'
         }`}>
           <div className="flex items-center gap-1 px-1 py-0.5 text-xs font-mono font-bold">
             <Calendar className={`w-3.5 h-3.5 flex-shrink-0 ${
               hasFilter 
-                ? isHmi ? 'text-green-400 animate-pulse' : 'text-cyan-400 animate-pulse'
-                : 'text-slate-400'
+                ? isHmi ? 'text-green-300 animate-pulse' : 'text-cyan-300 animate-pulse'
+                : 'text-white'
             }`} />
-            <span className="hidden sm:inline font-thai text-[10.5px] text-slate-300">ช่วงวันที่:</span>
+            <span className="hidden sm:inline font-thai text-[10.5px] text-white">ช่วงวันที่:</span>
           </div>
 
           {/* Start Date Input */}
@@ -203,16 +203,16 @@ export const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
               type="date"
               value={startDate}
               onChange={(e) => handleStartDateChange(e.target.value)}
-              className={`bg-slate-900 border text-[11px] font-mono font-bold rounded px-1.5 py-0.5 outline-none transition-all h-7 ${
+              className={`bg-slate-900 border text-[11px] font-mono font-bold rounded px-1.5 py-0.5 outline-none transition-all h-7 [color-scheme:dark] ${
                 isHmi
-                  ? 'border-green-800 focus:border-green-400 text-green-300'
-                  : 'border-slate-700 focus:border-cyan-400 text-slate-100'
+                  ? 'border-green-700 focus:border-green-400 text-green-300'
+                  : 'border-slate-600 focus:border-cyan-400 text-white'
               }`}
               title="วันเริ่มต้น (Start Date)"
             />
           </div>
 
-          <span className="text-slate-500 text-[11px] font-mono font-bold">-</span>
+          <span className="text-slate-400 text-[11px] font-mono font-bold">-</span>
 
           {/* End Date Input */}
           <div className="relative flex items-center">
@@ -220,10 +220,10 @@ export const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
               type="date"
               value={endDate}
               onChange={(e) => handleEndDateChange(e.target.value)}
-              className={`bg-slate-900 border text-[11px] font-mono font-bold rounded px-1.5 py-0.5 outline-none transition-all h-7 ${
+              className={`bg-slate-900 border text-[11px] font-mono font-bold rounded px-1.5 py-0.5 outline-none transition-all h-7 [color-scheme:dark] ${
                 isHmi
-                  ? 'border-green-800 focus:border-green-400 text-green-300'
-                  : 'border-slate-700 focus:border-cyan-400 text-slate-100'
+                  ? 'border-green-700 focus:border-green-400 text-green-300'
+                  : 'border-slate-600 focus:border-cyan-400 text-white'
               }`}
               title="วันสิ้นสุด (End Date)"
             />

@@ -117,16 +117,19 @@ class GatewayService {
       }
     });
 
+    const isSimulation = config.connectionMode === 'SIMULATION';
+    
     const updated: GatewayStatusInfo = {
       ...currentStatus,
-      connectionMode: config.connectionMode || 'SIMULATION',
-      isOnline: this.isRunning && activeLinesCount > 0,
+      connectionMode: config.connectionMode || 'REST_API_GATEWAY',
+      isOnline: this.isRunning && (activeLinesCount > 0 || isSimulation),
       lastHeartbeat: new Date().toISOString(),
-      latencyMs: config.connectionMode === 'SIMULATION' ? 4 : Math.round(12 + Math.random() * 8),
+      latencyMs: isSimulation ? 4 : Math.round(12 + Math.random() * 8),
       connectedLinesCount: activeLinesCount,
       totalLinesCount: 7,
       readOnlyEnforced: true,
-      syncStatus: activeLinesCount === 7 ? 'SYNCED' : (activeLinesCount > 0 ? 'SYNCING' : 'OFFLINE')
+      syncStatus: activeLinesCount === 7 ? 'SYNCED' : (activeLinesCount > 0 ? 'SYNCING' : 'OFFLINE'),
+      gatewayStatus: activeLinesCount > 0 ? 'GATEWAY_ONLINE' : 'WAITING_FOR_GATEWAY'
     };
 
     storageService.saveGatewayStatus(updated);
@@ -140,13 +143,18 @@ class GatewayService {
   private tick() {
     if (!this.isRunning) return;
     const config = storageService.getPLCConfig();
-    const mode: GatewayConnectionMode = config.connectionMode || 'SIMULATION';
+    
+    // Only process if auto polling is explicitly enabled by user
+    if (!config.isAutoPolling) return;
+
+    const mode: GatewayConnectionMode = config.connectionMode || 'REST_API_GATEWAY';
 
     switch (mode) {
       case 'SIMULATION':
         this.processSimulationTick();
         break;
       case 'EDGE_MQTT':
+      case 'EDGE_GATEWAY_MQTT':
         this.processEdgeMqttTick();
         break;
       case 'REST_API_GATEWAY':
@@ -156,7 +164,7 @@ class GatewayService {
         this.processLocalBridgeTick();
         break;
       default:
-        this.processSimulationTick();
+        // By default, do nothing if not configured
         break;
     }
   }
@@ -296,8 +304,8 @@ class GatewayService {
         return;
       }
 
-      // Check operational status - User requested: shots apply ONLY to lines that are opened as NORMAL (RUNNING)
-      if (lineData.machineStatus !== 'RUNNING') {
+      // Check operational status - User requested: shots apply ONLY to lines that are opened as NORMAL (RUNNING) or SIMULATION_ACTIVE
+      if (lineData.machineStatus !== 'RUNNING' && lineData.machineStatus !== 'SIMULATION_ACTIVE') {
         return; 
       }
 
@@ -306,6 +314,8 @@ class GatewayService {
       lineData.dailyShot = (lineData.dailyShot || 0) + item.shotDelta;
       lineData.monthlyShot = (lineData.monthlyShot || 0) + item.shotDelta;
       lineData.lastUpdate = item.gatewayTimestamp.replace('T', ' ').substring(0, 19);
+      lineData.dataSource = batch.connectionMode === 'SIMULATION' ? 'SIMULATION' : 'REAL_PLC';
+      lineData.dataFreshness = 'REALTIME';
 
       // Update parts installed on this line
       if (lineData.items && lineData.activeConfig) {
@@ -386,25 +396,30 @@ class GatewayService {
     const config = storageService.getPLCConfig();
     const source = sourceOverride || (config.connectionMode === 'SIMULATION' ? 'SIMULATION' : 'PLC');
 
+    // 1. Simulation Check
     if (source === 'SIMULATION' || config.connectionMode === 'SIMULATION') {
+      const isActive = config.isAutoPolling;
       return {
-        label: 'SIMULATION',
-        status: 'SIMULATION' as const,
+        label: isActive ? 'SIMULATION ACTIVE' : 'SIMULATION DISABLED',
+        status: isActive ? 'TEST_SIMULATION_ACTIVE' : 'SIMULATION_DISABLED',
         color: 'purple',
-        badgeClass: 'bg-purple-950/80 text-purple-300 border border-purple-500/40 shadow-sm shadow-purple-950/50',
-        indicatorClass: 'bg-purple-400 animate-pulse',
-        description: 'Virtual Pulse Simulation Driver'
+        badgeClass: isActive 
+          ? 'bg-purple-950/80 text-purple-300 border border-purple-500/40 shadow-sm shadow-purple-950/50' 
+          : 'bg-slate-900/80 text-slate-400 border border-slate-700/40',
+        indicatorClass: isActive ? 'bg-purple-400 animate-pulse' : 'bg-slate-600',
+        description: isActive ? 'Virtual Pulse Simulation Driver' : 'Simulation driver is paused'
       };
     }
 
+    // 2. Waiting for Gateway Check (No data received yet)
     if (!lastUpdateString) {
       return {
-        label: 'OFFLINE',
-        status: 'OFFLINE' as const,
-        color: 'red',
-        badgeClass: 'bg-rose-950/80 text-rose-300 border border-rose-500/40 shadow-sm shadow-rose-950/50',
-        indicatorClass: 'bg-rose-500',
-        description: 'No telemetry signal received'
+        label: 'WAITING FOR GATEWAY',
+        status: 'WAITING_FOR_GATEWAY',
+        color: 'blue',
+        badgeClass: 'bg-blue-950/80 text-blue-300 border border-blue-500/40 animate-pulse',
+        indicatorClass: 'bg-blue-400',
+        description: 'Waiting for telemetry transmission from Edge Gateway'
       };
     }
 
@@ -412,28 +427,35 @@ class GatewayService {
     const now = Date.now();
     const ageMs = isNaN(lastTime) ? 999999 : (now - lastTime);
 
+    // 3. Live PLC Data Check
     if (ageMs < 5000) {
       return {
         label: 'PLC LIVE',
-        status: 'LIVE' as const,
+        status: 'GATEWAY_ONLINE',
         color: 'green',
         badgeClass: 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 shadow-sm shadow-emerald-950/50',
         indicatorClass: 'bg-emerald-400 animate-ping',
         description: 'Edge Gateway Modbus/MQTT Connected'
       };
-    } else if (ageMs < 30000) {
+    } 
+    
+    // 4. Delayed Data Check
+    else if (ageMs < 30000) {
       return {
-        label: 'DELAYED',
-        status: 'DELAYED' as const,
+        label: 'STALE DATA',
+        status: 'STALE_DATA',
         color: 'yellow',
         badgeClass: 'bg-amber-950/80 text-amber-300 border border-amber-500/40 shadow-sm shadow-amber-950/50',
         indicatorClass: 'bg-amber-400',
-        description: `Heartbeat delayed (${Math.round(ageMs / 1000)}s ago)`
+        description: `Telemetry delayed (${Math.round(ageMs / 1000)}s ago)`
       };
-    } else {
+    } 
+    
+    // 5. Offline Check
+    else {
       return {
-        label: 'OFFLINE',
-        status: 'OFFLINE' as const,
+        label: 'GATEWAY OFFLINE',
+        status: 'GATEWAY_OFFLINE',
         color: 'red',
         badgeClass: 'bg-rose-950/80 text-rose-300 border border-rose-500/40 shadow-sm shadow-rose-950/50',
         indicatorClass: 'bg-rose-500',
