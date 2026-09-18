@@ -1103,6 +1103,7 @@ export interface SystemSettings {
   theme: AppTheme;
   enableSoundAlerts: boolean;
   tvAutoCycleIntervalSec: number; // 15
+  stageDisplayMode?: 'DETAILED' | 'COMPACT';
 }
 
 export type PositionLockStatus = 

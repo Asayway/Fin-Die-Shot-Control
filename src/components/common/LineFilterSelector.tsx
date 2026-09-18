@@ -40,10 +40,10 @@ export const LineFilterSelector: React.FC<LineFilterSelectorProps> = ({
         <button
           type="button"
           onClick={() => onSelectLine('ALL')}
-          className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold transition-all flex items-center gap-1 border whitespace-nowrap active:scale-95 cursor-pointer ${
+          className={`liquid-pill px-2.5 py-1 rounded-full text-[11px] font-mono font-bold transition-all flex items-center gap-1.5 border whitespace-nowrap active:scale-95 cursor-pointer ${
             selectedLine === 'ALL'
-              ? 'bg-cyan-400 text-slate-950 border-cyan-200 shadow-sm ring-1 ring-cyan-300 font-bold'
-              : 'bg-slate-900/90 hover:bg-slate-800 text-slate-300 border-slate-700/80 hover:text-white'
+              ? 'bg-gradient-to-r from-cyan-400 to-blue-500 text-slate-950 border-none shadow-[0_0_12px_rgba(6,182,212,0.4)] font-black'
+              : 'bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 border-white/10 hover:text-white'
           }`}
         >
           <Layers className="w-3 h-3 opacity-80" />
@@ -71,10 +71,10 @@ export const LineFilterSelector: React.FC<LineFilterSelectorProps> = ({
             key={line}
             type="button"
             onClick={() => onSelectLine(line)}
-            className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold transition-all flex items-center gap-1 border whitespace-nowrap active:scale-95 cursor-pointer ${
+            className={`liquid-pill px-2.5 py-1 rounded-full text-[11px] font-mono font-bold transition-all flex items-center gap-1.5 border whitespace-nowrap active:scale-95 cursor-pointer ${
               isSelected
-                ? 'bg-cyan-400 text-slate-950 border-cyan-200 shadow-sm ring-1 ring-cyan-300 font-bold'
-                : 'bg-slate-900/90 hover:bg-slate-800 text-slate-200 border-slate-700/90'
+                ? 'bg-gradient-to-r from-cyan-400 to-blue-500 text-slate-950 border-none shadow-[0_0_12px_rgba(6,182,212,0.4)] font-black'
+                : 'bg-white/[0.04] hover:bg-white/[0.08] text-slate-200 border-white/10'
             }`}
           >
             {showStatusDot && (
@@ -96,10 +96,10 @@ export const LineFilterSelector: React.FC<LineFilterSelectorProps> = ({
 
             {showShortTag && (
               <span
-                className={`text-[9.5px] px-1 py-0 rounded font-mono ${
+                className={`text-[9.5px] px-1.5 py-0.5 rounded-full font-mono ${
                   isSelected
-                    ? 'bg-slate-950 text-cyan-300 font-bold'
-                    : 'bg-slate-800 text-slate-400'
+                    ? 'bg-black/40 text-cyan-300 font-bold border border-cyan-400/40'
+                    : 'bg-white/10 text-slate-400'
                 }`}
               >
                 {info.shortTag || line}

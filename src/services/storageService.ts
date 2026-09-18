@@ -267,33 +267,75 @@ class StorageService {
   ): LineLiveMonitoringData {
     const standards = INITIAL_PART_LIFE_STANDARDS;
     const stocks = INITIAL_SPARE_STOCKS;
+    const partMasters = INITIAL_PART_MASTERS;
 
-    const baseItems = INITIAL_LIVE_DATA_E1.items.map((item, idx) => {
-      const currentShotRatio = [0.45, 0.62, 0.78, 0.88, 0.55, 0.12, 0.12, 0.70, 0.65, 0.08, 0.52, 0.07][idx % 12];
-      const curShot = Math.round((item.lifeLimit || 100000000) * currentShotRatio);
-      const lastChange = Math.max(0, totalShots - curShot);
+    const installedMap = config?.installedPartQuantities || {};
+    const installedCodes = Object.keys(installedMap).filter(code => (installedMap[code] || 0) > 0);
 
-      return calculatePartMetrics(
-        {
-          slotId: `SLOT-${lineId}-${idx + 1}`,
-          partCode: item.partCode,
-          partName: item.partName,
-          stagePunchDie: item.stagePunchDie,
-          position: item.position,
-          installQty: item.installQty,
-          backupQty: item.backupQty,
-          usedShot: curShot,
-          currentShot: curShot,
-          shotAtLastChange: lastChange,
-          lastChangeShot: lastChange,
-          regrindCount: item.regrindCount,
-          totalMmGround: item.totalMmGround
-        },
-        config,
-        standards,
-        stocks
-      );
-    });
+    let baseItems: PartLiveTrackingItem[] = [];
+
+    if (installedCodes.length > 0) {
+      baseItems = installedCodes.map((code, idx) => {
+        const pm = partMasters.find(p => p.partCode === code);
+        const std = standards.find(s => s.configKey?.partCode === code || s.partName === pm?.partName || s.stagePunchDie === pm?.stageName);
+        const stock = stocks.find(s => s.partCode === code || s.partName === pm?.partName);
+        const installQty = installedMap[code] || (pm ? 1 : 0);
+        const lifeLimit = std?.lifeLimitShots || 15000000;
+        
+        const currentShotRatio = [0.45, 0.62, 0.78, 0.88, 0.55, 0.12, 0.35, 0.70, 0.65, 0.08, 0.52, 0.07][idx % 12];
+        const curShot = Math.round(lifeLimit * currentShotRatio);
+        const lastChange = Math.max(0, totalShots - curShot);
+
+        return calculatePartMetrics(
+          {
+            slotId: `SLOT-${lineId}-${code}`,
+            partCode: code,
+            partName: pm?.partName || `Part ${code}`,
+            stagePunchDie: pm?.stageName || 'Die Stage',
+            position: pm?.stageName || 'ALL',
+            installQty: installQty,
+            backupQty: stock?.availableQuantity ?? 10,
+            usedShot: curShot,
+            currentShot: curShot,
+            shotAtLastChange: lastChange,
+            lastChangeShot: lastChange,
+            regrindCount: idx % 3,
+            totalMmGround: (idx % 3) * 0.2,
+            lifeLimit: lifeLimit
+          },
+          config,
+          standards,
+          stocks
+        );
+      });
+    } else {
+      baseItems = INITIAL_LIVE_DATA_E1.items.map((item, idx) => {
+        const currentShotRatio = [0.45, 0.62, 0.78, 0.88, 0.55, 0.12, 0.12, 0.70, 0.65, 0.08, 0.52, 0.07][idx % 12];
+        const curShot = Math.round((item.lifeLimit || 100000000) * currentShotRatio);
+        const lastChange = Math.max(0, totalShots - curShot);
+
+        return calculatePartMetrics(
+          {
+            slotId: `SLOT-${lineId}-${idx + 1}`,
+            partCode: item.partCode,
+            partName: item.partName,
+            stagePunchDie: item.stagePunchDie,
+            position: item.position,
+            installQty: item.installQty,
+            backupQty: item.backupQty,
+            usedShot: curShot,
+            currentShot: curShot,
+            shotAtLastChange: lastChange,
+            lastChangeShot: lastChange,
+            regrindCount: item.regrindCount,
+            totalMmGround: item.totalMmGround
+          },
+          config,
+          standards,
+          stocks
+        );
+      });
+    }
 
     return {
       lineId,

@@ -744,7 +744,8 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   shift2Start: '20:00',
   theme: 'dark',
   enableSoundAlerts: true,
-  tvAutoCycleIntervalSec: 15
+  tvAutoCycleIntervalSec: 15,
+  stageDisplayMode: 'DETAILED'
 };
 
 export const DEFAULT_PLC_CONFIG: PLCConfig = {

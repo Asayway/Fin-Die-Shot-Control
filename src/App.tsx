@@ -136,7 +136,7 @@ export default function App() {
   }
 
   return (
-    <div className="h-screen max-h-screen overflow-hidden flex flex-col transition-colors duration-200 theme-dark bg-[#000000] text-slate-100 font-sans selection:bg-cyan-500 selection:text-slate-950">
+    <div className="h-screen max-h-screen overflow-hidden flex flex-col ios-spring theme-dark liquid-backdrop text-slate-100 font-sans selection:bg-cyan-500 selection:text-slate-950">
       {/* Top Header */}
       <Header
         currentUser={currentUser}
@@ -152,9 +152,9 @@ export default function App() {
         onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
-      {/* Main Shell: Sidebar + Content */}
-      <div className="flex-1 flex overflow-hidden min-h-0 relative bg-[#000000]">
-        {/* Sidebar - Locked firmly in place */}
+      {/* Main Shell: Floating Sidebar + Glass Viewport */}
+      <div className="flex-1 flex overflow-hidden min-h-0 relative">
+        {/* Sidebar - Detached Floating Glass Island */}
         <Sidebar
           activeRoute={activeRoute}
           onNavigate={handleNavigate}
@@ -165,8 +165,8 @@ export default function App() {
         />
 
         {/* Content Body - Independent scrollable view container */}
-        <main className={`flex-1 min-h-0 ${activeRoute === 'tv-monitoring' ? 'overflow-hidden p-0 bg-[#000000] flex flex-col' : 'overflow-y-auto p-2 sm:p-2.5 lg:p-3 custom-scrollbar'} transition-all duration-300 w-full bg-[#000000] text-slate-100`}>
-          <div className={`w-full ${activeRoute === 'tv-monitoring' ? 'h-full flex-1 flex flex-col overflow-hidden' : 'pb-4'}`}>
+        <main className={`flex-1 min-h-0 ${activeRoute === 'tv-monitoring' ? 'overflow-hidden p-0 flex flex-col' : 'overflow-y-auto p-2 sm:p-3 lg:p-3.5 custom-scrollbar'} transition-all duration-300 w-full text-slate-100`}>
+          <div className={`w-full ${activeRoute === 'tv-monitoring' ? 'h-full flex-1 flex flex-col overflow-hidden' : 'pb-6'}`}>
             <ErrorBoundary>
               <Suspense fallback={<ViewSkeleton />}>
                 {renderActiveView()}

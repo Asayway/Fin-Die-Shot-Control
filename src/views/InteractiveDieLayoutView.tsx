@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { DateRangeFilter, isDateInSelectedRange } from '../components/common/DateRangeFilter';
 import {
@@ -56,7 +56,8 @@ export type PinStatus = 'normal' | 'warning' | 'broken';
 
 export interface DiePinItem {
   id: string; // e.g. E1-s-burr-P-03
-  pinCode: string; // e.g. Col 12 (2nd) or Blade No. 12
+  seqNo: number; // Sequential 1 to N number across the entire stage (e.g. 1-180)
+  pinCode: string; // e.g. No. 12 (Col 12, 1st)
   stageId: string; // s-burr, s-pierce, s-iron, etc.
   stageName: string; // BURRING PUNCH STAGE
   stageCategory: 'PUNCH_MATRIX' | 'DIE_SEGMENT' | 'BLADE' | 'CUTOFF' | 'SIDECUT';
@@ -81,6 +82,11 @@ export interface DiePinItem {
   lastTechnician?: string;
   historyLogs: PinHistoryEntry[];
 }
+
+export const getCleanStageName = (name: string): string => {
+  if (!name) return '';
+  return name.replace(/\s+STAGE\b/gi, '').trim();
+};
 
 export interface PinHistoryEntry {
   id: string;
@@ -157,24 +163,27 @@ const generateBasePins = (lineId: ProductionLineId, machineShot: number): DiePin
   stages.forEach(stage => {
     for (let r = 1; r <= stage.rows; r++) {
       for (let c = 1; c <= stage.cols; c++) {
+        // Sequential 1 to N number across the entire stage block (e.g. 1-180, 1-204, 1-8, 1-4)
+        const seqNo = (r - 1) * stage.cols + c;
+
         let rowLabel = '1st';
-        let pinCode = `Col ${c} (1st)`;
+        let pinCode = `No. ${seqNo} (Col ${c}, 1st)`;
 
         if (stage.gridType === 'GRID_PINS') {
           rowLabel = r === 1 ? '1st' : r === 2 ? '2nd' : '3rd';
-          pinCode = `Col ${c} (${rowLabel})`;
+          pinCode = `No. ${seqNo} (Col ${c}, ${rowLabel})`;
         } else if (stage.gridType === 'DIE_SEGMENTS') {
           rowLabel = r === 1 ? 'DIE A' : 'DIE B';
-          pinCode = `SLIT ${rowLabel} (Sheet ${c})`;
+          pinCode = `No. ${seqNo} (Sheet ${c}, ${rowLabel})`;
         } else if (stage.gridType === 'ROW_BLADES') {
           rowLabel = 'BLADE';
-          pinCode = `Blade No. ${c}`;
+          pinCode = `No. ${seqNo} (Blade ${c})`;
         } else if (stage.gridType === 'CUT_OFF') {
           rowLabel = r === 1 ? 'UPPER' : 'DOWN';
-          pinCode = `CUT OFF ${rowLabel} (No. ${c})`;
+          pinCode = `No. ${seqNo} (Cut Off ${rowLabel} #${c})`;
         } else if (stage.gridType === 'SIDE_CUT') {
           rowLabel = r === 1 ? 'UPPER' : 'DOWN';
-          pinCode = `SIDE CUT ${rowLabel} (No. ${c})`;
+          pinCode = `No. ${seqNo} (Side Cut ${rowLabel} #${c})`;
         }
 
         const pinId = `${lineId}-${stage.stageId}-R${r}-C${c}`;
@@ -214,6 +223,7 @@ const generateBasePins = (lineId: ProductionLineId, machineShot: number): DiePin
 
         generatedPins.push({
           id: pinId,
+          seqNo,
           pinCode,
           stageId: stage.stageId,
           stageName: stage.stageName,
@@ -302,8 +312,9 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
   // Toolroom Secure PIN Modal States
   // Removed per user request
   
-  // Per-Stage Accordion Expand/Collapse Map (stages with warnings/broken start expanded automatically)
+  // Per-Stage Accordion Expand/Collapse Map (user can expand/collapse any stage freely)
   const [expandedStages, setExpandedStages] = useState<Record<string, boolean>>({});
+  const lineInitializedRef = useRef<string>('');
 
   // Operator Action Modal State (Enforcing Mandatory Latest Machine Shot Reading)
   const [selectedPin, setSelectedPin] = useState<DiePinItem | null>(null);
@@ -344,7 +355,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
   }, [selectedLineId]);
 
   // Load pins for current line: generated in memory + merged with compact user overrides
-  const loadLinePins = () => {
+  const loadLinePins = (isLineChange = false) => {
     cleanUpAllLegacyPinBlobs();
 
     const lineMonitoring = storageService.getLineMonitoring(selectedLineId);
@@ -366,25 +377,32 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
       return {
         ...pin,
         ...override,
+        seqNo: pin.seqNo, // Always guarantee sequential pin number
         status: mappedStatus || pin.status
       };
     });
 
     setPins(merged);
 
-    // Automatically expand any stages that have Warning or Broken pins
-    const initialExpanded: Record<string, boolean> = {};
-    const lineStages = getLineStageConfigs(selectedLineId);
-    lineStages.forEach(stage => {
-      const hasIssues = merged.some(p => p.stageId === stage.stageId && (p.status === 'warning' || p.status === 'broken'));
-      initialExpanded[stage.stageId] = hasIssues;
-    });
-    setExpandedStages(initialExpanded);
+    // ONLY initialize accordion expand/collapse when line changes, NEVER on background 3-second live pulses
+    if (isLineChange || lineInitializedRef.current !== selectedLineId) {
+      lineInitializedRef.current = selectedLineId;
+      const initialExpanded: Record<string, boolean> = {};
+      const lineStages = getLineStageConfigs(selectedLineId);
+      // Default: Expand all stages on line load so the technician can see all stages cleanly
+      lineStages.forEach(stage => {
+        initialExpanded[stage.stageId] = true;
+      });
+      setExpandedStages(initialExpanded);
+    }
   };
 
   useEffect(() => {
-    loadLinePins();
-    const unsub = storageService.subscribe(loadLinePins);
+    loadLinePins(true);
+    const unsub = storageService.subscribe(() => {
+      // Periodic background updates only refresh metrics without resetting user's accordion toggles
+      loadLinePins(false);
+    });
     return () => unsub();
   }, [selectedLineId]);
 
@@ -555,15 +573,21 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
     setSelectedPin(pin);
   };
 
-  // Toggle stage accordion
-  const toggleStageExpand = (stageId: string) => {
-    setExpandedStages(prev => ({
-      ...prev,
-      [stageId]: !prev[stageId]
-    }));
+  // Toggle stage accordion cleanly with event isolation
+  const toggleStageExpand = (stageId: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    setExpandedStages(prev => {
+      const current = prev[stageId] !== undefined ? prev[stageId] : true;
+      return {
+        ...prev,
+        [stageId]: !current
+      };
+    });
   };
 
-  // Expand all or collapse all stages
+  // Expand all or collapse all stages reliably across all lines and stages
   const handleToggleAllStages = (expand: boolean) => {
     const next: Record<string, boolean> = {};
     activeStageConfigs.forEach(s => {
@@ -906,21 +930,18 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
       {/* ======================================================== */}
       {/* 1. TOP BAR: LINE SELECTOR + UNIFIED 1-BLOCK BADGE + KPIS */}
       {/* ======================================================== */}
-      <div className="sticky top-[-1rem] lg:top-[-1.5rem] z-30 backdrop-blur-md rounded-xl p-3 shadow-xl space-y-3 border bg-[#0E172A]/95 border-slate-800/90">
+      <div className="sticky top-[-1rem] lg:top-[-1.5rem] z-30 backdrop-blur-2xl rounded-2xl lg:rounded-3xl p-3.5 sm:p-4 shadow-2xl space-y-3.5 border border-white/10 liquid-glass-card">
         {/* Row 1: Line Selector & Mode Switch */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-slate-800/80">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-2.5 border-b border-white/10">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-cyan-950/90 border border-cyan-500/80 flex items-center justify-center shadow-md">
-              <Layers className="w-5 h-5 text-cyan-400" />
+            <div className="w-10 h-10 rounded-2xl bg-cyan-950/80 border border-cyan-400/50 flex items-center justify-center shadow-[0_0_15px_rgba(6,182,212,0.3)]">
+              <Layers className="w-5 h-5 text-cyan-300" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-base sm:text-lg font-bold text-white font-mono tracking-tight uppercase">
-                  DIE STAGES & 1-BLOCK MATRIX
+                <h1 className="text-base sm:text-lg font-black text-white font-mono tracking-tight uppercase">
+                  DIE STAGES 2D MATRIX
                 </h1>
-                <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-cyan-950 text-cyan-300 border border-cyan-600 font-mono">
-                  1 STAGE = 1 BLOCK UNIFIED
-                </span>
               </div>
               <div className="text-xs text-slate-400 font-thai">
                 ผังแม่พิมพ์เต็มชุดตามใบตรวจสอบแม่พิมพ์จริง (บันทึก Shot ล่าสุดของเครื่องทุกครั้งก่อนเปลี่ยน)
@@ -930,14 +951,14 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
 
           <div className="flex items-center gap-2">
             {/* View Mode Switcher */}
-            <div className="flex bg-slate-900/90 p-1 rounded-lg border border-slate-800">
+            <div className="flex bg-black/40 p-1 rounded-2xl border border-white/10">
               <button
                 type="button"
                 onClick={() => setViewMode('DIE_LAYOUT')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-mono font-bold transition-all ${
+                className={`liquid-pill flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-mono font-bold transition-all active:scale-95 ${
                   viewMode === 'DIE_LAYOUT'
-                    ? 'bg-cyan-600 text-white shadow-md'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                    ? 'bg-gradient-to-r from-cyan-400 to-blue-500 text-slate-950 border-none shadow-[0_0_12px_rgba(6,182,212,0.4)] font-black'
+                    : 'text-slate-300 hover:text-white bg-transparent border-transparent'
                 }`}
               >
                 <GridIcon className="w-3.5 h-3.5" />
@@ -947,10 +968,10 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
               <button
                 type="button"
                 onClick={() => setViewMode('MASTER_HISTORY')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-mono font-bold transition-all ${
+                className={`liquid-pill flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-mono font-bold transition-all active:scale-95 ${
                   viewMode === 'MASTER_HISTORY'
-                    ? 'bg-cyan-600 text-white shadow-md'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                    ? 'bg-gradient-to-r from-cyan-400 to-blue-500 text-slate-950 border-none shadow-[0_0_12px_rgba(6,182,212,0.4)] font-black'
+                    : 'text-slate-300 hover:text-white bg-transparent border-transparent'
                 }`}
               >
                 <Clock className="w-3.5 h-3.5" />
@@ -972,19 +993,19 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
           )}
 
           {/* 3 Industrial Status Counters */}
-          <div className="flex items-center gap-2 text-xs font-mono">
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/80 border border-emerald-500/40 text-emerald-300">
-              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+          <div className="flex items-center gap-2 text-xs font-mono flex-wrap">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 shadow-sm">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]"></span>
               <span>NORMAL / ACTIVE: <b>{stats.normal}</b> ({stats.total > 0 ? Math.round((stats.normal / stats.total) * 100) : 100}%)</span>
             </div>
 
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-950/80 border border-amber-500/40 text-amber-300">
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-950/60 border border-amber-500/40 text-amber-300 shadow-sm">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shadow-[0_0_6px_rgba(251,191,36,0.8)]"></span>
               <span>WARNING: <b>{stats.warning}</b></span>
             </div>
 
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-950/80 border border-rose-500/40 text-rose-300">
-              <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose-950/60 border border-rose-500/40 text-rose-300 shadow-sm">
+              <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse shadow-[0_0_6px_rgba(244,63,94,0.8)]"></span>
               <span>BROKEN: <b>{stats.broken}</b></span>
             </div>
           </div>
@@ -994,14 +1015,14 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
       {/* Toast Feedback Notification */}
       {feedback && (
         <div
-          className={`p-3 rounded-xl border flex items-center justify-between gap-3 text-xs font-mono font-bold animate-fadeIn shadow-lg ${
+          className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 text-xs font-mono font-bold animate-fadeIn shadow-2xl ${
             feedback.type === 'success'
-              ? 'bg-emerald-950/90 border-emerald-500 text-emerald-300'
+              ? 'bg-emerald-950/90 border-emerald-500/60 text-emerald-300'
               : feedback.type === 'error'
-              ? 'bg-rose-950/90 border-rose-500 text-rose-300'
+              ? 'bg-rose-950/90 border-rose-500/60 text-rose-300'
               : feedback.type === 'warning'
-              ? 'bg-amber-950/90 border-amber-500 text-amber-300'
-              : 'bg-cyan-950/90 border-cyan-500 text-cyan-300'
+              ? 'bg-amber-950/90 border-amber-500/60 text-amber-300'
+              : 'bg-cyan-950/90 border-cyan-500/60 text-cyan-300'
           }`}
         >
           <div className="flex items-center gap-2">
@@ -1011,7 +1032,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
             {feedback.type === 'info' && <Info className="w-4 h-4 text-cyan-400" />}
             <span>{feedback.message}</span>
           </div>
-          <button type="button" onClick={() => setFeedback(null)} className="text-slate-400 hover:text-white">
+          <button type="button" onClick={() => setFeedback(null)} className="text-slate-400 hover:text-white cursor-pointer">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -1023,17 +1044,17 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
       {viewMode === 'DIE_LAYOUT' && (
         <div className="space-y-4">
           {/* Controls: Search, Stage Filter, Status Filter & Expand/Collapse All */}
-          <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="liquid-glass-card rounded-2xl p-3 sm:p-3.5 flex flex-wrap items-center justify-between gap-3 border border-white/10 shadow-lg">
             <div className="flex flex-wrap items-center gap-2.5 flex-1 min-w-[280px]">
               {/* Search */}
               <div className="relative flex-1 min-w-[180px] max-w-xs">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   placeholder="ค้นหาตำแหน่ง, พันช์, ใบมีด..."
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 font-mono focus:outline-none focus:border-cyan-400"
+                  className="liquid-input w-full rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 font-mono focus:outline-none focus:border-cyan-400"
                 />
               </div>
 
@@ -1041,11 +1062,11 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
               <select
                 value={selectedStageFilter}
                 onChange={e => setSelectedStageFilter(e.target.value)}
-                className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-300 focus:outline-none focus:border-cyan-400"
+                className="liquid-input bg-[#090d16] border border-white/20 rounded-xl px-3 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-cyan-400 cursor-pointer shadow-md"
               >
-                <option value="ALL">ทุก STAGE (All 9 Stages)</option>
+                <option value="ALL" className="bg-[#090d16] text-white font-bold py-1.5">ทุก STAGE (All 9 Stages)</option>
                 {activeStageConfigs.map(s => (
-                  <option key={s.stageId} value={s.stageId}>
+                  <option key={s.stageId} value={s.stageId} className="bg-[#090d16] text-slate-100 py-1">
                     {s.shortName}
                   </option>
                 ))}
@@ -1055,21 +1076,21 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
               <select
                 value={selectedStatusFilter}
                 onChange={e => setSelectedStatusFilter(e.target.value)}
-                className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-300 focus:outline-none focus:border-cyan-400"
+                className="liquid-input bg-[#090d16] border border-white/20 rounded-xl px-3 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-cyan-400 cursor-pointer shadow-md"
               >
-                <option value="ALL">สถานะทั้งหมด</option>
-                <option value="normal">ปกติ (Active)</option>
-                <option value="warning">เฝ้าระวัง (Warning)</option>
-                <option value="broken">ชำรุด (Broken)</option>
+                <option value="ALL" className="bg-[#090d16] text-white font-bold py-1.5">สถานะทั้งหมด</option>
+                <option value="normal" className="bg-[#090d16] text-emerald-300 py-1">● ปกติ (Active)</option>
+                <option value="warning" className="bg-[#090d16] text-amber-300 py-1">▲ เฝ้าระวัง (Warning)</option>
+                <option value="broken" className="bg-[#090d16] text-rose-300 py-1">✖ ชำรุด (Broken)</option>
               </select>
             </div>
 
-            {/* Expand / Collapse All */}
+            {/* Expand / Collapse All Controls */}
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => handleToggleAllStages(true)}
-                className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] font-mono font-bold text-slate-300 border border-slate-700 flex items-center gap-1"
+                className="liquid-pill px-3 py-1.5 text-xs font-mono font-bold text-cyan-300 bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 flex items-center gap-1.5 active:scale-95 transition-all shadow-sm"
               >
                 <ChevronDown className="w-3.5 h-3.5 text-cyan-400" />
                 <span>กางทุก Stage</span>
@@ -1077,7 +1098,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
               <button
                 type="button"
                 onClick={() => handleToggleAllStages(false)}
-                className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] font-mono font-bold text-slate-300 border border-slate-700 flex items-center gap-1"
+                className="liquid-pill px-3 py-1.5 text-xs font-mono font-bold text-slate-300 bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 flex items-center gap-1.5 active:scale-95 transition-all shadow-sm"
               >
                 <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
                 <span>ย่อทั้งหมด</span>
@@ -1090,122 +1111,64 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
             .filter(stage => selectedStageFilter === 'ALL' || stage.stageId === selectedStageFilter)
             .map(stage => {
               const summary = stageSummaries.find(s => s.stage.stageId === stage.stageId);
-              const isExpanded = expandedStages[stage.stageId] ?? summary?.hasIssues ?? true;
+              const isExpanded = expandedStages[stage.stageId] !== undefined ? expandedStages[stage.stageId] : true;
               const allStagePins = pins.filter(p => p.stageId === stage.stageId);
 
               return (
                 <div
                   key={stage.stageId}
-                  className={`bg-[#0D1527] border rounded-2xl overflow-hidden transition-all duration-200 ${
+                  className={`liquid-glass-card rounded-2xl overflow-hidden transition-all duration-300 ${
                     summary?.broken && summary.broken > 0
-                      ? 'border-rose-500/80 shadow-[0_0_15px_rgba(244,63,94,0.15)]'
+                      ? 'border-rose-500/60 shadow-[0_0_25px_rgba(244,63,94,0.2)] ring-1 ring-rose-500/30'
                       : summary?.warning && summary.warning > 0
-                      ? 'border-amber-500/70 shadow-[0_0_15px_rgba(251,191,36,0.1)]'
-                      : 'border-slate-800/90 hover:border-slate-700'
+                      ? 'border-amber-500/50 shadow-[0_0_20px_rgba(251,191,36,0.15)] ring-1 ring-amber-500/20'
+                      : 'border-white/10 hover:border-white/20'
                   }`}
                 >
-                  {/* Stage Accordion Header (Click to Expand / Collapse) */}
+                  {/* Stage Accordion Header (Left: Stage Name ONLY; Right: Collapse/Expand Pill) */}
                   <div
                     onClick={() => toggleStageExpand(stage.stageId)}
-                    className="p-3.5 sm:p-4 bg-slate-900/60 hover:bg-slate-900/90 cursor-pointer flex flex-wrap items-center justify-between gap-3 select-none"
+                    className="p-4 bg-white/[0.03] hover:bg-white/[0.06] cursor-pointer flex items-center justify-between gap-3 select-none transition-colors border-b border-white/[0.06]"
                   >
                     <div className="flex items-center gap-3">
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-mono font-bold text-xs border ${
-                        summary?.broken && summary.broken > 0
-                          ? 'bg-rose-950 text-rose-300 border-rose-500'
-                          : summary?.warning && summary.warning > 0
-                          ? 'bg-amber-950 text-amber-300 border-amber-500'
-                          : 'bg-cyan-950 text-cyan-300 border-cyan-600'
-                      }`}>
-                        {stage.shortName.slice(0, 3)}
-                      </div>
-
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h2 className="text-sm sm:text-base font-bold text-white font-mono tracking-wide">
-                            {stage.stageName}
-                          </h2>
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-950 text-cyan-300 border border-cyan-700 font-mono">
-                            1 BLOCK UNIFIED
-                          </span>
-                        </div>
-                        <div className="text-xs text-slate-400 font-thai flex flex-wrap items-center gap-2 mt-0.5">
-                          <span>{stage.partName} ({stage.drawingNo})</span>
-                          <span>•</span>
-                          <span className="text-slate-300 font-mono">
-                            {stage.cols} {stage.gridType === 'ROW_BLADES' ? 'Blades' : stage.gridType === 'DIE_SEGMENTS' ? 'Sheets' : 'Cols'} × {stage.rows} {stage.rows === 1 ? 'Set' : 'Rows'} = {stage.totalPins} EA
-                          </span>
-                        </div>
-                      </div>
+                      <h2 className="text-base sm:text-lg font-black text-white font-mono tracking-wide drop-shadow-sm">
+                        {getCleanStageName(stage.stageName)}
+                      </h2>
                     </div>
 
-                    {/* Right summary metrics */}
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-2 text-xs font-mono">
-                        <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700">
-                          Active: {summary?.normal || 0} / {stage.totalPins} ({summary?.activePercent || 100}%)
-                        </span>
-
-                        {summary?.warning ? summary.warning > 0 ? (
-                          <span className="px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-500 animate-pulse font-bold">
-                            Warning: {summary.warning}
-                          </span>
-                        ) : null : null}
-
-                        {summary?.broken ? summary.broken > 0 ? (
-                          <span className="px-2 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-500 animate-pulse font-bold">
-                            Broken: {summary.broken}
-                          </span>
-                        ) : null : null}
-
-                        <span className="text-[11px] text-slate-400 font-mono hidden sm:inline-block">
-                          Avg: {formatShots(summary?.avgShots || 0)} shots ({summary?.avgShotPercent || 0}%)
-                        </span>
-                      </div>
-
-                      {/* Expand / Collapse Icon */}
-                      <div className="flex items-center gap-1 text-xs font-mono font-bold px-2.5 py-1.5 rounded-lg bg-slate-800 text-slate-300 border border-slate-700">
-                        <span>{isExpanded ? 'ย่อผัง' : 'กาง 1-Block Grid'}</span>
-                        {isExpanded ? (
-                          <ChevronUp className="w-4 h-4 text-cyan-400" />
-                        ) : (
-                          <ChevronDown className="w-4 h-4 text-cyan-400" />
-                        )}
-                      </div>
-                    </div>
+                    {/* Dedicated Expand / Collapse Button with Isolated Click Event */}
+                    <button
+                      type="button"
+                      onClick={(e) => toggleStageExpand(stage.stageId, e)}
+                      className="liquid-pill px-3.5 py-1.5 text-xs font-mono font-bold text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-400/30 flex items-center gap-1.5 active:scale-95 transition-all shadow-sm"
+                    >
+                      <span>{isExpanded ? 'ย่อผัง' : 'กางผัง'}</span>
+                      {isExpanded ? (
+                        <ChevronUp className="w-4 h-4 text-cyan-400" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4 text-cyan-400" />
+                      )}
+                    </button>
                   </div>
 
                   {/* ======================================================== */}
-                  {/* UNIFIED 1-BLOCK 2D DIE PIN GRID CONTAINER */}
+                  {/* 2D DIE PIN GRID CONTAINER */}
                   {/* ======================================================== */}
                   {isExpanded && (
-                    <div className="p-3.5 pt-0 border-t border-slate-800/80 space-y-3 animate-fadeIn">
-                      <div className="flex flex-wrap items-center justify-between gap-3 text-xs font-mono text-slate-400 pt-3">
-                        <div className="flex flex-wrap items-center gap-3">
-                          <span className="text-cyan-300 font-bold flex items-center gap-1">
-                            <GridIcon className="w-3.5 h-3.5" />
-                            1 Stage = 1 Block Unified ({stage.cols} {stage.gridType === 'ROW_BLADES' ? 'Blades' : 'Columns'} × {stage.rows} Rows = {stage.totalPins} EA)
-                          </span>
-                          <span className="text-slate-400 text-[11px]">
-                            คลิกตำแหน่งเพื่อบันทึกการเปลี่ยนอะไหล่ (บังคับบันทึกเลขช็อตเครื่องล่าสุด)
+                    <div className="p-4 space-y-3 animate-fadeIn">
+                      <div className="flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+                        <div className="flex items-center gap-2">
+                          <span className="text-cyan-300 font-bold flex items-center gap-1.5">
+                            <GridIcon className="w-4 h-4 text-cyan-400" />
+                            <span>ผังบล็อก {getCleanStageName(stage.stageName)} ({stage.totalPins} ตำแหน่ง)</span>
                           </span>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-3 text-[11px]">
-                          <span className="flex items-center gap-1 text-emerald-400">
-                            <span className="w-2 h-2 rounded-full bg-emerald-400"></span> ปกติ (Active)
-                          </span>
-                          <span className="flex items-center gap-1 text-amber-400">
-                            <span className="w-2 h-2 rounded-full bg-amber-400"></span> เฝ้าระวัง (Warning)
-                          </span>
-                          <span className="flex items-center gap-1 text-rose-400">
-                            <span className="w-2 h-2 rounded-full bg-rose-500"></span> ชำรุด (Broken)
-                          </span>
-
+                        <div className="flex flex-wrap items-center gap-3">
                           <button
                             type="button"
                             onClick={() => setSelectedStageForSwap(stage)}
-                            className="ml-2 px-2.5 py-1 rounded bg-cyan-950/80 hover:bg-cyan-900 text-[11px] font-mono font-bold text-cyan-300 border border-cyan-800 hover:border-cyan-600 flex items-center gap-1.5 shadow transition-all hover:scale-[1.03] active:scale-[0.97]"
+                            className="liquid-pill px-3 py-1.5 text-xs font-mono font-bold text-cyan-300 bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-400/40 flex items-center gap-1.5 shadow transition-all active:scale-95"
                           >
                             <Wrench className="w-3.5 h-3.5 text-cyan-400" />
                             <span>เปลี่ยน/เจียรยกบล็อก (Swap Entire Stage)</span>
@@ -1213,32 +1176,31 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
                         </div>
                       </div>
 
-                      {/* 2D Unified Block Grid Scroll Area */}
-                      <div className="overflow-x-auto custom-scrollbar p-3 bg-slate-950/90 rounded-xl border border-slate-800/90">
+                      {/* 2D Block Grid Scroll Area */}
+                      <div className="overflow-x-auto custom-scrollbar p-3.5 sm:p-4 bg-black/40 rounded-2xl border border-white/10 backdrop-blur-md">
                         <div className="inline-block min-w-max space-y-2">
-                          {/* 1 Block Stage Banner Header */}
-                          <div className="pl-16 pr-2">
-                            <div className="bg-slate-900/90 border border-slate-700/80 rounded-t px-3 py-1.5 text-center font-mono text-xs text-cyan-300 font-bold flex items-center justify-between">
-                              <span>{stage.stageName} — 1 BLOCK UNIFIED</span>
-                              <span className="text-[11px] text-slate-400 font-normal">
-                                Col 1 ถึง {stage.cols} ({stage.totalPins} ชิ้นต่อ 1 เซ็ตแม่พิมพ์)
-                              </span>
+                          {/* Column / Block Index Markers (Continuous 1 to Max N) */}
+                          <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-400 font-bold select-none">
+                            <div className="w-16 text-right pr-2 text-[10px] font-mono font-black text-cyan-400 select-none whitespace-nowrap tracking-wider">
+                              BLOCK
+                            </div>
+                            <div className="flex items-center gap-1 px-1">
+                              {Array.from({ length: stage.cols }).map((_, cIdx) => {
+                                const blockNum = cIdx + 1;
+                                return (
+                                  <div
+                                    key={blockNum}
+                                    className="w-8 text-center text-[10px] text-slate-300 bg-white/[0.06] py-0.5 rounded-md border border-white/10 font-bold tabular-nums"
+                                    title={`Block ${blockNum}`}
+                                  >
+                                    {blockNum}
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
 
-                          {/* Column Index Markers (1 to N) */}
-                          <div className="flex items-center gap-1 pl-16 text-[10px] font-mono text-slate-400 font-bold select-none">
-                            {Array.from({ length: stage.cols }).map((_, cIdx) => {
-                              const colNum = cIdx + 1;
-                              return (
-                                <div key={colNum} className="w-8 text-center text-[10px] text-slate-400 bg-slate-900/50 py-0.5 rounded border border-slate-800/60">
-                                  {colNum}
-                                </div>
-                              );
-                            })}
-                          </div>
-
-                          {/* Rows of Pins in 1 Unified Block */}
+                          {/* Rows of Pins in Stage */}
                           {Array.from({ length: stage.rows }).map((_, rIdx) => {
                             const rowNum = rIdx + 1;
                             let rowLabel = rowNum === 1 ? '1st' : rowNum === 2 ? '2nd' : '3rd';
@@ -1253,57 +1215,64 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
                             return (
                               <div key={rowNum} className="flex items-center gap-1.5">
                                 {/* Row Identifier Label */}
-                                <div className="w-14 text-right pr-2 text-[11px] font-mono font-bold text-slate-400 select-none whitespace-nowrap">
+                                <div className="w-16 text-right pr-2 text-[11px] font-mono font-bold text-slate-400 select-none whitespace-nowrap">
                                   {rowLabel}
                                 </div>
 
                                 {/* Row Items */}
-                                <div className="flex items-center gap-1 p-1 bg-slate-900/40 rounded-lg border border-slate-800/60 hover:border-slate-700/80 transition-colors">
+                                <div className="flex items-center gap-1 p-1 bg-white/[0.02] rounded-2xl border border-white/[0.06] hover:border-white/15 transition-colors">
                                   {Array.from({ length: stage.cols }).map((_, cIdx) => {
                                     const colNum = cIdx + 1;
                                     const pin = allStagePins.find(p => p.row === rowNum && p.col === colNum);
+                                    const continuousSeqNo = (rowNum - 1) * stage.cols + colNum;
 
                                     if (!pin) {
                                       return (
                                         <div
                                           key={colNum}
-                                          className="w-8 h-8 rounded border border-dashed border-slate-800 bg-slate-950/40"
-                                        />
+                                          className="w-8 h-8 rounded-xl border border-dashed border-white/10 bg-white/[0.02] flex items-center justify-center text-[10px] font-mono text-slate-600"
+                                        >
+                                          {continuousSeqNo}
+                                        </div>
                                       );
                                     }
 
-                                    // Color Coding
-                                    let bgStyle = 'bg-emerald-500 text-emerald-950 border-emerald-400 hover:ring-2 hover:ring-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.3)]';
+                                    // Color Coding with Liquid Obsidian Glow
+                                    let bgStyle = 'bg-emerald-500 text-black font-black border-emerald-400/80 hover:ring-2 hover:ring-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.35)]';
                                     let icon = null;
 
                                     if (pin.status === 'warning') {
-                                      bgStyle = 'bg-amber-400 text-amber-950 border-amber-300 animate-pulse hover:ring-2 hover:ring-amber-200 shadow-[0_0_10px_rgba(251,191,36,0.6)]';
+                                      bgStyle = 'bg-amber-400 text-amber-950 font-black border-amber-300 animate-pulse hover:ring-2 hover:ring-amber-200 shadow-[0_0_12px_rgba(251,191,36,0.6)]';
                                     } else if (pin.status === 'broken') {
-                                      bgStyle = 'bg-rose-500 text-white border-rose-300 animate-pulse hover:ring-2 hover:ring-rose-200 shadow-[0_0_10px_rgba(244,63,94,0.7)]';
-                                      icon = <AlertOctagon className="w-3.5 h-3.5" />;
+                                      bgStyle = 'bg-rose-500 text-white font-black border-rose-300 animate-pulse hover:ring-2 hover:ring-rose-200 shadow-[0_0_14px_rgba(244,63,94,0.75)]';
+                                      icon = <AlertOctagon className="w-3 h-3 text-white inline-block mr-0.5" />;
                                     }
 
                                     const shotPct = Math.round((pin.currentShots / pin.maxShots) * 100);
+                                    const displaySeqNo = pin.seqNo || continuousSeqNo;
 
                                     return (
                                       <button
-                                        key={colNum}
+                                        key={pin.id}
                                         type="button"
                                         onClick={() => handlePinClick(pin)}
-                                        title={`${pin.pinCode} | ${pin.stageName}\nสถานะ: ${pin.status.toUpperCase()}\nช็อตใช้งาน: ${formatShots(pin.currentShots)} / ${formatShots(pin.maxShots)} (${shotPct}%)\nช็อตเครื่องรอบก่อน: ${formatShots(pin.lastReplacementShot)}\nคลิกเพื่อเปลี่ยนอะไหล่ / บันทึกช็อตเครื่องล่าสุด`}
-                                        className={`w-8 h-8 rounded text-[10px] font-mono font-black border flex items-center justify-center transition-all cursor-pointer relative group ${bgStyle}`}
+                                        title={`Block No. ${displaySeqNo} (Col ${pin.col}, ${pin.rowLabel}) | ${getCleanStageName(pin.stageName)}\nสถานะ: ${pin.status.toUpperCase()}\nช็อตใช้งาน: ${formatShots(pin.currentShots)} / ${formatShots(pin.maxShots)} (${shotPct}%)\nช็อตเครื่องรอบก่อน: ${formatShots(pin.lastReplacementShot)}\nคลิกเพื่อเปลี่ยนอะไหล่ / บันทึกช็อตเครื่องล่าสุด`}
+                                        className={`w-8 h-8 rounded-lg text-[10px] font-mono border flex items-center justify-center transition-all cursor-pointer relative group active:scale-95 ${bgStyle}`}
                                       >
-                                        {icon ? icon : colNum}
+                                        <span className="tabular-nums flex items-center justify-center">
+                                          {icon}
+                                          {displaySeqNo}
+                                        </span>
 
                                         {/* Mini Tooltip on Hover */}
-                                        <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 hidden group-hover:flex flex-col items-center z-40 pointer-events-none">
-                                          <div className="bg-slate-900 border border-slate-700 text-slate-100 rounded-lg p-2 text-[11px] shadow-2xl whitespace-nowrap space-y-0.5">
-                                            <div className="font-bold text-cyan-300 flex items-center gap-1">
+                                        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:flex flex-col items-center z-40 pointer-events-none">
+                                          <div className="liquid-glass-card rounded-xl p-2.5 text-[11px] shadow-2xl whitespace-nowrap space-y-1 border border-white/20">
+                                            <div className="font-bold text-cyan-300 flex items-center gap-1.5">
                                               <span>{pin.pinCode}</span>
-                                              <span className="text-[9px] px-1 rounded bg-slate-800 text-slate-300 font-normal">Col {colNum}</span>
+                                              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/10 text-slate-200 font-mono font-normal">Block {colNum}</span>
                                             </div>
-                                            <div className="text-slate-400 text-[10px]">{pin.stageName}</div>
-                                            <div className="text-emerald-400 font-mono">Running Shots: {formatShots(pin.currentShots)} ({shotPct}%)</div>
+                                            <div className="text-slate-300 text-[10px]">{getCleanStageName(pin.stageName)}</div>
+                                            <div className="text-emerald-400 font-mono font-bold">Running Shots: {formatShots(pin.currentShots)} ({shotPct}%)</div>
                                             <div className="text-slate-400 text-[10px]">Last Machine Shot: {formatShots(pin.lastReplacementShot)}</div>
                                             <div className="text-amber-300 text-[10px]">Regrind: {pin.regrindCount}/${pin.maxRegrind} cycles</div>
                                             {pin.status === 'broken' && (
@@ -1332,12 +1301,12 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
       {/* 3. CLEAN OPERATOR ACTION MODAL (ENFORCING RECORD LATEST SHOT) */}
       {/* ======================================================== */}
       {selectedPin && (
-        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-3 sm:p-5 backdrop-blur-sm animate-fadeIn overflow-y-auto">
-          <div className="bg-[#0D1527] border border-slate-700 rounded-2xl max-w-2xl w-full p-5 sm:p-6 space-y-5 shadow-2xl my-auto text-slate-100 max-h-[92vh] overflow-y-auto custom-scrollbar">
+        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-3 sm:p-5 backdrop-blur-md animate-fadeIn overflow-y-auto">
+          <div className="liquid-glass-card border border-white/15 rounded-3xl max-w-2xl w-full p-5 sm:p-6 space-y-5 shadow-2xl my-auto text-slate-100 max-h-[92vh] overflow-y-auto custom-scrollbar">
             {/* Modal Header */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
               <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-mono font-bold text-sm border shadow-lg ${
+                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-mono font-bold text-sm border shadow-lg ${
                   selectedPin.status === 'broken'
                     ? 'bg-rose-950 text-rose-300 border-rose-500'
                     : selectedPin.status === 'warning'
@@ -1349,12 +1318,12 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
                 <div>
                   <h3 className="text-base font-bold text-white font-mono flex items-center gap-2">
                     <span>{selectedPin.partName} ({selectedPin.pinCode})</span>
-                    <span className="text-xs px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-700">
+                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-cyan-950/80 text-cyan-300 border border-cyan-500/40 font-mono">
                       Line {selectedLineId}
                     </span>
                   </h3>
                   <div className="text-xs text-slate-400 font-thai">
-                    {selectedPin.stageName} • 1 Unified Block (Pos {selectedPin.col}, Row {selectedPin.rowLabel})
+                    {getCleanStageName(selectedPin.stageName)} • Col {selectedPin.col}, Row {selectedPin.rowLabel} (No. {selectedPin.seqNo})
                   </div>
                 </div>
               </div>
@@ -1362,15 +1331,15 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
               <button
                 type="button"
                 onClick={() => setSelectedPin(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-800 border border-slate-700"
+                className="liquid-pill p-2 rounded-full text-slate-400 hover:text-white bg-white/[0.04] hover:bg-white/[0.1] border border-white/10 active:scale-95 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* MANDATORY: Record Latest Machine Shot Input Card */}
-            <div className="bg-gradient-to-r from-blue-950/80 to-indigo-950/80 border-2 border-blue-500/80 rounded-xl p-4 space-y-3 font-mono">
-              <div className="flex items-center justify-between">
+            <div className="bg-gradient-to-r from-blue-950/60 to-indigo-950/60 border border-cyan-500/50 rounded-2xl p-4 sm:p-5 space-y-3 font-mono shadow-lg">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <label className="text-xs font-bold text-cyan-300 uppercase flex items-center gap-2">
                   <Gauge className="w-4 h-4 text-cyan-400 animate-pulse" />
                   <span>บันทึกเลขมิเตอร์ช็อตเครื่องล่าสุด ณ ขณะเปลี่ยน (MANDATORY MACHINE SHOT) *</span>
@@ -1382,7 +1351,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
                     const live = lineMonitoring?.machineShotTotal || 29820563;
                     setMachineShotInput(live);
                   }}
-                  className="px-2 py-0.5 rounded bg-blue-900/80 hover:bg-blue-800 text-[10px] text-cyan-200 border border-blue-400 flex items-center gap-1"
+                  className="liquid-pill px-3 py-1 rounded-full bg-blue-900/60 hover:bg-blue-800/80 text-[11px] text-cyan-200 border border-blue-400/50 flex items-center gap-1.5 active:scale-95 cursor-pointer"
                 >
                   <RefreshCw className="w-3 h-3" />
                   ดึงจากมิเตอร์สด ({formatShots(storageService.getLineMonitoring(selectedLineId)?.machineShotTotal || 29820563)})
@@ -1397,7 +1366,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
                     value={machineShotInput || ''}
                     onChange={e => setMachineShotInput(parseInt(e.target.value) || 0)}
                     placeholder="กรอกเลขช็อตเครื่องล่าสุด..."
-                    className="w-full bg-slate-950 border-2 border-cyan-400 rounded-lg px-3 py-2 text-base text-cyan-200 font-mono font-bold focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                    className="liquid-input w-full rounded-xl px-3.5 py-2 text-base text-cyan-200 font-mono font-bold focus:outline-none focus:ring-2 focus:ring-cyan-400"
                     required
                   />
                   <div className="text-[10px] text-slate-400 mt-1 font-thai">
@@ -1405,10 +1374,10 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
                   </div>
                 </div>
 
-                <div className="bg-slate-950/90 border border-slate-700 rounded-lg p-2.5 text-xs space-y-1">
+                <div className="bg-black/40 border border-white/10 rounded-xl p-3 text-xs space-y-1">
                   <div className="text-[10px] text-slate-400">ช็อตเปลี่ยนรอบก่อน:</div>
-                  <div className="font-bold text-slate-200">{formatShots(selectedPin.lastReplacementShot)}</div>
-                  <div className="text-[10px] text-emerald-400 font-bold border-t border-slate-800 pt-1">
+                  <div className="font-bold text-slate-200 font-mono">{formatShots(selectedPin.lastReplacementShot)}</div>
+                  <div className="text-[10px] text-emerald-400 font-bold border-t border-white/10 pt-1 font-mono">
                     ช็อตใช้งานจริง: {formatShots(Math.max(0, machineShotInput - selectedPin.lastReplacementShot))}
                   </div>
                 </div>
@@ -1661,17 +1630,17 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
               </div>
 
               {/* Modal Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/10">
                 <button
                   type="button"
                   onClick={() => setSelectedPin(null)}
-                  className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono font-bold"
+                  className="liquid-pill px-5 py-2.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] text-slate-300 hover:text-white text-xs font-mono font-bold border border-white/10 active:scale-95 cursor-pointer"
                 >
                   ยกเลิก
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-mono font-bold shadow-lg shadow-cyan-600/30 flex items-center gap-1.5"
+                  className="liquid-pill px-6 py-2.5 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs font-mono font-bold shadow-[0_0_20px_rgba(6,182,212,0.4)] flex items-center gap-2 active:scale-95 cursor-pointer border-none"
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   <span>บันทึกการเปลี่ยนอะไหล่พร้อมเลข Shot</span>
@@ -1686,18 +1655,18 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
       {/* 3.5 SWAP ENTIRE STAGE MODAL (BATCH UPDATE / MAINTENANCE) */}
       {/* ======================================================== */}
       {selectedStageForSwap && (
-        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-3 sm:p-5 backdrop-blur-sm animate-fadeIn overflow-y-auto">
-          <div className="bg-[#0D1527] border border-slate-700 rounded-2xl max-w-2xl w-full p-5 sm:p-6 space-y-5 shadow-2xl my-auto text-slate-100 max-h-[92vh] overflow-y-auto custom-scrollbar">
+        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-3 sm:p-5 backdrop-blur-md animate-fadeIn overflow-y-auto">
+          <div className="liquid-glass-card border border-white/15 rounded-3xl max-w-2xl w-full p-5 sm:p-6 space-y-5 shadow-2xl my-auto text-slate-100 max-h-[92vh] overflow-y-auto custom-scrollbar">
             {/* Modal Header */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center font-mono font-bold text-sm border shadow-lg bg-cyan-950 text-cyan-300 border-cyan-500">
+                <div className="w-10 h-10 rounded-2xl flex items-center justify-center font-mono font-bold text-sm border shadow-lg bg-cyan-950/80 text-cyan-300 border-cyan-400/50">
                   ALL
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-white font-mono flex items-center gap-2">
-                    <span>เปลี่ยน/เจียรบำรุงยกชุด — {selectedStageForSwap.stageName}</span>
-                    <span className="text-xs px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-700">
+                    <span>เปลี่ยน/เจียรบำรุงยกชุด — {getCleanStageName(selectedStageForSwap.stageName)}</span>
+                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-cyan-950/80 text-cyan-300 border border-cyan-500/40 font-mono">
                       Line {selectedLineId}
                     </span>
                   </h3>
@@ -1710,15 +1679,15 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
               <button
                 type="button"
                 onClick={() => setSelectedStageForSwap(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-800 border border-slate-700"
+                className="liquid-pill p-2 rounded-full text-slate-400 hover:text-white bg-white/[0.04] hover:bg-white/[0.1] border border-white/10 active:scale-95 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* MANDATORY: Record Latest Machine Shot Input Card */}
-            <div className="bg-gradient-to-r from-blue-950/80 to-indigo-950/80 border-2 border-blue-500/80 rounded-xl p-4 space-y-3 font-mono">
-              <div className="flex items-center justify-between">
+            <div className="bg-gradient-to-r from-blue-950/60 to-indigo-950/60 border border-cyan-500/50 rounded-2xl p-4 sm:p-5 space-y-3 font-mono shadow-lg">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <label className="text-xs font-bold text-cyan-300 uppercase flex items-center gap-2">
                   <Gauge className="w-4 h-4 text-cyan-400 animate-pulse" />
                   <span>บันทึกเลขมิเตอร์ช็อตเครื่องล่าสุด ณ ขณะซ่อมยกชุด (MANDATORY MACHINE SHOT) *</span>
@@ -1730,7 +1699,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
                     const live = lineMonitoring?.machineShotTotal || 29820563;
                     setSwapMachineShotInput(live);
                   }}
-                  className="px-2 py-0.5 rounded bg-blue-900/80 hover:bg-blue-800 text-[10px] text-cyan-200 border border-blue-400 flex items-center gap-1"
+                  className="liquid-pill px-3 py-1 rounded-full bg-blue-900/60 hover:bg-blue-800/80 text-[11px] text-cyan-200 border border-blue-400/50 flex items-center gap-1.5 active:scale-95 cursor-pointer"
                 >
                   <RefreshCw className="w-3 h-3" />
                   ดึงจากมิเตอร์สด ({formatShots(storageService.getLineMonitoring(selectedLineId)?.machineShotTotal || 29820563)})
@@ -1745,7 +1714,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
                     value={swapMachineShotInput || ''}
                     onChange={e => setSwapMachineShotInput(parseInt(e.target.value) || 0)}
                     placeholder="กรอกเลขช็อตเครื่องล่าสุด..."
-                    className="w-full bg-slate-950 border-2 border-cyan-400 rounded-lg px-3 py-2 text-base text-cyan-200 font-mono font-bold focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                    className="liquid-input w-full rounded-xl px-3.5 py-2 text-base text-cyan-200 font-mono font-bold focus:outline-none focus:ring-2 focus:ring-cyan-400"
                     required
                   />
                   <div className="text-[10px] text-slate-400 mt-1 font-thai">
@@ -1929,17 +1898,17 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
               </div>
 
               {/* Modal Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/10">
                 <button
                   type="button"
                   onClick={() => setSelectedStageForSwap(null)}
-                  className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono font-bold"
+                  className="liquid-pill px-5 py-2.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] text-slate-300 hover:text-white text-xs font-mono font-bold border border-white/10 active:scale-95 cursor-pointer"
                 >
                   ยกเลิก
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-mono font-bold shadow-lg shadow-emerald-600/30 flex items-center gap-1.5"
+                  className="liquid-pill px-6 py-2.5 rounded-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white text-xs font-mono font-bold shadow-[0_0_20px_rgba(16,185,129,0.4)] flex items-center gap-2 active:scale-95 cursor-pointer border-none"
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   <span>ยืนยันการทำบำรุงรักษายก Stage ({selectedStageForSwap.totalPins} ชิ้น)</span>
@@ -1972,24 +1941,24 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
               <select
                 value={historyStageFilter}
                 onChange={e => setHistoryStageFilter(e.target.value)}
-                className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-300 focus:outline-none focus:border-cyan-400"
+                className="bg-[#090d16] border border-white/20 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-cyan-400 cursor-pointer shadow-sm"
               >
-                <option value="ALL">ทุก STAGE (All Stages)</option>
+                <option value="ALL" className="bg-[#090d16] text-white font-bold py-1">ทุก STAGE (All Stages)</option>
                 {activeStageConfigs.map(s => (
-                  <option key={s.stageId} value={s.stageId}>{s.shortName}</option>
+                  <option key={s.stageId} value={s.stageId} className="bg-[#090d16] text-slate-100 py-1">{s.shortName}</option>
                 ))}
               </select>
 
               <select
                 value={historyActionFilter}
                 onChange={e => setHistoryActionFilter(e.target.value)}
-                className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-300 focus:outline-none focus:border-cyan-400"
+                className="bg-[#090d16] border border-white/20 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-cyan-400 cursor-pointer shadow-sm"
               >
-                <option value="ALL">ทุกประเภทการทำงาน (All Actions)</option>
-                <option value="REPLACE_NEW">เปลี่ยนอะไหล่ใหม่ (Replace)</option>
-                <option value="REGRIND">ส่งเจียรลับคม (Regrind)</option>
-                <option value="BROKEN">แจ้งชำรุด (Broken)</option>
-                <option value="SETUP_CHANGE">Toolroom Setup Overhaul</option>
+                <option value="ALL" className="bg-[#090d16] text-white font-bold py-1">ทุกประเภทการทำงาน (All Actions)</option>
+                <option value="REPLACE_NEW" className="bg-[#090d16] text-emerald-300 py-1">● เปลี่ยนอะไหล่ใหม่ (Replace)</option>
+                <option value="REGRIND" className="bg-[#090d16] text-cyan-300 py-1">⚡ ส่งเจียรลับคม (Regrind)</option>
+                <option value="BROKEN" className="bg-[#090d16] text-rose-300 py-1">✖ แจ้งชำรุด (Broken)</option>
+                <option value="SETUP_CHANGE" className="bg-[#090d16] text-amber-300 py-1">⚙ Toolroom Setup Overhaul</option>
               </select>
 
               <DateRangeFilter
