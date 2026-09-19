@@ -106,8 +106,12 @@ class RegrindService {
       });
     } catch (e) {
       console.warn('Failed to link Regrind Masters with Part Master:', e);
-      const raw = localStorage.getItem(STORAGE_KEYS.TOOLING_MASTERS);
-      return raw ? JSON.parse(raw) : REGRIND_TOOLING_MASTERS;
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.TOOLING_MASTERS);
+        return raw ? JSON.parse(raw) : REGRIND_TOOLING_MASTERS;
+      } catch {
+        return REGRIND_TOOLING_MASTERS;
+      }
     }
   }
 

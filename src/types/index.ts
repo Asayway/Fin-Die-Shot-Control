@@ -305,6 +305,9 @@ export interface MoldDieMasterItem {
   stage: string;
   partName: string;
   drawingNo?: string;
+  newSpecMm?: number;
+  scrapLimitMm?: number;
+  applicableLines?: string[];
   // 2. Install Quantity by Line (EA)
   installQty: {
     e1?: number;

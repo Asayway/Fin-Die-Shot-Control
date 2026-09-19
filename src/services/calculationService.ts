@@ -299,9 +299,9 @@ export function calculatePartMetrics(
     : (part.backupQty || 0);
 
   const hasLineStockConfig = activeConfig && activeConfig.stockQuantities && activeConfig.stockQuantities[part.partCode] !== undefined;
-  const lineStockQty = hasLineStockConfig ? activeConfig!.stockQuantities![part.partCode] : totalStockQty;
+  const lineStockQty = hasLineStockConfig ? activeConfig!.stockQuantities![part.partCode] : undefined;
 
-  const availableSpare = hasLineStockConfig ? lineStockQty : totalStockQty;
+  const availableSpare = lineStockQty !== undefined ? lineStockQty : (part.backupQty !== undefined ? part.backupQty : totalStockQty);
   const stockStatus = determineStockStatus(stock, part.installQty);
   const orderStatus = stock ? stock.orderStatus : 'NOT REQUIRED';
   const etaDeliveryDate = stock?.poEtaDate;
@@ -438,6 +438,78 @@ export function calculatePartMetrics(
  * 7. DATA ERROR
  * Secondary sort: usagePercent descending
  */
+/**
+ * Helper to calculate progressive die progressive rank based on physical progressive order:
+ * 1. Pierce Punch
+ * 2. Burring Punch
+ * 3. Ironing Punch
+ * 4. Ironing Die
+ * 5. Louver Punch
+ * 6. Louver Die
+ * 7. Reflare Punch
+ * 8. Reflare Die
+ * 9. Row slit blade / Slit Blade
+ * 10. Side cutting Punch
+ * 11. Side cutting Die
+ * 12. Cut off Punch
+ * 13. Cut off Die
+ */
+export function getPartProgressiveRank(partName: string, stageName: string): number {
+  const pName = (partName || '').toUpperCase();
+  const sName = (stageName || '').toUpperCase();
+
+  let stageRank = 999;
+  let subRank = 99;
+
+  if (sName.includes('PIERCE & BURRING') || pName.includes('PIERCE') || pName.includes('BURRING') || sName.includes('PIERCE') || sName.includes('BURRING')) {
+    stageRank = 10;
+    if (pName.includes('PIERCE PUNCH') || pName.includes('PIERCE P')) subRank = 1;
+    else if (pName.includes('BURRING PUNCH') || pName.includes('BURRING P')) subRank = 2;
+    else if (pName.includes('PIERCE DIE') || pName.includes('PIERCE D')) subRank = 3;
+    else if (pName.includes('BURRING DIE') || pName.includes('BURRING D')) subRank = 4;
+  } else if (sName.includes('IRONING') || pName.includes('IRONING')) {
+    stageRank = 20;
+    if (pName.includes('PUNCH') || pName.includes('P')) subRank = 1;
+    else if (pName.includes('DIE') || pName.includes('D')) subRank = 2;
+  } else if (sName.includes('LOUVER') || pName.includes('LOUVER')) {
+    stageRank = 30;
+    if (pName.includes('PUNCH') || pName.includes('BLADE') || pName.includes('P')) subRank = 1;
+    else if (pName.includes('DIE') || pName.includes('D')) subRank = 2;
+  } else if (sName.includes('REFLARE') || sName.includes('REFLAIRE') || sName.includes('REFALRE') || pName.includes('REFLARE') || pName.includes('REFLAIRE') || pName.includes('REFALRE')) {
+    stageRank = 40;
+    if (pName.includes('PUNCH') || pName.includes('P')) subRank = 1;
+    else if (pName.includes('DIE') || pName.includes('D')) subRank = 2;
+  } else if (sName.includes('S5 CENTER NOTCH') || pName.includes('S5 CENTER NOTCH') || sName.includes('CENTER NOTCH')) {
+    stageRank = 50;
+    if (pName.includes('PUNCH') || pName.includes('P')) subRank = 1;
+    else if (pName.includes('DIE') || pName.includes('D')) subRank = 2;
+  } else if (sName.includes('ROW SLIT') || sName.includes('SLIT') || pName.includes('ROW SLIT') || pName.includes('SLIT')) {
+    stageRank = 60;
+    if (pName.includes('BLADE') || pName.includes('PUNCH') || pName.includes('P')) subRank = 1;
+    else if (pName.includes('DIE') || pName.includes('D')) subRank = 2;
+  } else if (sName.includes('WIDE LOWER') || pName.includes('WIDE LOWER')) {
+    stageRank = 70;
+    if (pName.includes('PUNCH') || pName.includes('P')) subRank = 1;
+    else if (pName.includes('DIE') || pName.includes('D')) subRank = 2;
+  } else if (sName.includes('CORNER CUT') || pName.includes('CORNER CUT')) {
+    stageRank = 80;
+    if (pName.includes('PUNCH') || pName.includes('P')) subRank = 1;
+    else if (pName.includes('DIE') || pName.includes('D')) subRank = 2;
+  } else if (sName.includes('SIDE CUT') || sName.includes('SIDE CUTTING') || sName.includes('SIDE_CUT') || sName.includes('SIDECUT') || pName.includes('SIDE CUT')) {
+    stageRank = 90;
+    if (pName.includes('PUNCH') || pName.includes('P')) subRank = 1;
+    else if (pName.includes('DIE') || pName.includes('D')) subRank = 2;
+  } else if (sName.includes('CUT OFF') || sName.includes('CUTOFF') || pName.includes('CUT OFF') || pName.includes('CUTOFF')) {
+    stageRank = 100;
+    if (pName.includes('PUNCH') || pName.includes('P')) subRank = 1;
+    else if (pName.includes('DIE') || pName.includes('D')) subRank = 2;
+  } else if (sName.includes('HITCH FEED') || sName.includes('FEED') || pName.includes('HITCH FEED') || pName.includes('FEED')) {
+    stageRank = 110;
+  }
+
+  return stageRank * 100 + subRank;
+}
+
 export type TvSortMode = 'INDUSTRIAL_PRIORITY' | 'USAGE_DESC' | 'USAGE_ASC' | 'REMAINING_ASC' | 'STAGE_ORDER' | 'CUSTOM_SEQUENCE';
 
 /**
@@ -477,9 +549,12 @@ export function sortTrackingItems(
       return (a.remainingShot ?? 999999999) - (b.remainingShot ?? 999999999);
     }
     if (sortMode === 'STAGE_ORDER') {
-      const stageA = a.stagePunchDie || a.partName || '';
-      const stageB = b.stagePunchDie || b.partName || '';
-      return stageA.localeCompare(stageB);
+      const rankA = getPartProgressiveRank(a.partName, a.stagePunchDie);
+      const rankB = getPartProgressiveRank(b.partName, b.stagePunchDie);
+      if (rankA !== rankB) {
+        return rankA - rankB;
+      }
+      return a.partName.localeCompare(b.partName);
     }
     if (sortMode === 'CUSTOM_SEQUENCE') {
       const parseSlot = (s: string) => {
@@ -602,6 +677,7 @@ export function formatShots(num: number | undefined | null): string {
 /**
  * Format currency in THB
  */
-export function formatThb(num: number): string {
+export function formatThb(num: number | undefined | null): string {
+  if (num === undefined || num === null || isNaN(num)) return '฿0';
   return `฿${num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }

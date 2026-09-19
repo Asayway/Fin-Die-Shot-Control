@@ -13,8 +13,9 @@ export const DEFAULT_STAGE_GROUPS: string[] = [
   'ROW SLIT',
   'CUT OFF',
   'SIDE CUT',
-  'S5 CENTER NOTCH',
+  'S1 CENTER NOTCH',
   'CORNER CUT',
+  'S5 CENTER NOTCH',
   'HITCH FEED'
 ];
 
@@ -150,3 +151,102 @@ export function deriveLogicalStage(partName: string, currentStageName?: string, 
 
   return groupsToUse[0] || 'PIERCE & BURRING';
 }
+
+/**
+ * Maps and validates a live monitoring item against the 2D interactive layout's stage configuration
+ */
+export function isPartMatchingInteractiveStage(
+  item: { partCode: string; partName: string; stagePunchDie: string },
+  layoutPartCode: string,
+  layoutStageName: string
+): boolean {
+  if (!item) return false;
+  
+  // Clean values for robust matching
+  const lp = (layoutPartCode || '').toUpperCase();
+  const ls = (layoutStageName || '').toUpperCase();
+  const ipCode = (item.partCode || '').toUpperCase();
+  const ipName = (item.partName || '').toUpperCase();
+  const ipStage = (item.stagePunchDie || '').toUpperCase();
+
+  // If partCode matches exactly, it's a direct link
+  if (ipCode === lp) return true;
+
+  // 1. BURRING PUNCH STAGE
+  if (lp.includes('BURR') || ls.includes('BURRING')) {
+    return (ipStage.includes('PIERCE') || ipStage.includes('BURRING')) && ipName.includes('BURRING');
+  }
+
+  // 2. PIERCE PUNCH STAGE
+  if (lp.includes('PIERCE') || ls.includes('PIERCE')) {
+    return (ipStage.includes('PIERCE') || ipStage.includes('BURRING')) && ipName.includes('PIERCE');
+  }
+
+  // 3. IRONING PUNCH STAGE
+  if (lp.includes('IRON') || ls.includes('IRONING')) {
+    return ipStage.includes('IRONING') || ipStage.includes('IRON');
+  }
+
+  // 4. REFLARE PUNCH STAGE
+  if (lp.includes('REFL') || ls.includes('REFLARE')) {
+    return ipStage.includes('REFLARE');
+  }
+
+  // 5. SLIT / LOUVER PUNCH STAGE
+  if (lp.includes('SLIT-') || lp.includes('LOUV-') || lp.includes('SLIT_PUNCH') || ls.includes('SLIT PUNCH') || ls.includes('LOUVER PUNCH')) {
+    return (ipStage.includes('SLIT') || ipStage.includes('LOUVER')) && !ipName.includes('DIE');
+  }
+
+  // 6. SLIT / LOUVER DIE STAGE (DIE A & DIE B)
+  if (ls.includes('DIE STAGE') || ls.includes('SLIT / LOUVER DIE') || ls.includes('SLIT DIE') || ls.includes('LOUVER DIE')) {
+    return (ipStage.includes('SLIT') || ipStage.includes('LOUVER')) && ipName.includes('DIE');
+  }
+
+  // 7. ROW SLIT BLADE STAGE
+  if (lp.includes('ROW-') || ls.includes('ROW SLIT')) {
+    return ipStage.includes('ROW SLIT');
+  }
+
+  // 8. CUT OFF STAGE
+  if (lp.includes('CUT-') || ls.includes('CUT OFF') || ls.includes('CUTOFF')) {
+    return ipStage.includes('CUT OFF') || ipStage.includes('CUTOFF');
+  }
+
+  // 9. SIDE CUT STAGE
+  if (lp.includes('SIDE-') || ls.includes('SIDE CUT') || ls.includes('SIDECUT')) {
+    return ipStage.includes('SIDE CUT') || ipStage.includes('SIDECUT');
+  }
+
+  // 10. S1 CENTER NOTCH STAGE
+  if (ls.includes('S1 CENTER NOTCH')) {
+    return ipStage.includes('S1 CENTER NOTCH');
+  }
+
+  // 11. S5 CENTER NOTCH STAGE
+  if (ls.includes('S5 CENTER NOTCH')) {
+    return ipStage.includes('S5 CENTER NOTCH');
+  }
+
+  // 12. CORNER CUT STAGE
+  if (ls.includes('CORNER CUT')) {
+    return ipStage.includes('CORNER CUT');
+  }
+
+  // 13. HITCH FEED STAGE
+  if (ls.includes('HITCH FEED')) {
+    return ipStage.includes('HITCH FEED');
+  }
+
+  // 14. WIDE LOWER STAGE
+  if (ls.includes('WIDE LOWER')) {
+    return ipStage.includes('WIDE LOWER');
+  }
+
+  // Fallback fuzzy match: if the logical stage is part of layout stage name or vice versa
+  if (ls.includes(ipStage) || ipStage.includes(ls)) {
+    return true;
+  }
+
+  return false;
+}
+

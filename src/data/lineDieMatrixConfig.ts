@@ -73,179 +73,329 @@ export const createStandardStages = (
 ): LineStageGridConfig[] => {
   const totalPunchQty = cols * 3;
 
-  return [
-    // 1. BURRING PUNCH STAGE (1 Unified Block)
-    {
-      stageId: 's-burr',
-      stageName: 'BURRING PUNCH STAGE',
-      shortName: 'BURRING PUNCH',
-      stageCategory: 'PUNCH_MATRIX',
-      partCode: `P-BURR-${lineId}`,
-      partName: `BURRING PUNCH (${tubeSize})`,
-      material: 'SKH-51 (Powder HSS)',
-      drawingNo: `DWG-FD-${tubeSize.replace('Ø', '')}-${lineId}-BURR`,
-      rows: 3,
-      cols: cols,
-      totalPins: totalPunchQty,
-      maxShots: 100000000,
-      maxRegrind: 4,
-      blocks: makeUnifiedBlock(cols, `BURRING 1 BLOCK (${cols} Col × 3 Row = ${totalPunchQty} EA)`),
-      gridType: 'GRID_PINS'
-    },
+  // 1. BURRING PUNCH STAGE
+  const burringPunch: LineStageGridConfig = {
+    stageId: 's-burr',
+    stageName: 'PIERCE & BURRING STAGE',
+    shortName: 'PIERCE & BURRING',
+    stageCategory: 'PUNCH_MATRIX',
+    partCode: `P-BURR-${lineId}`,
+    partName: `BURRING PUNCH (${tubeSize})`,
+    material: 'SKH-51 (Powder HSS)',
+    drawingNo: `DWG-FD-${tubeSize.replace('Ø', '')}-${lineId}-BURR`,
+    rows: 3,
+    cols: cols,
+    totalPins: totalPunchQty,
+    maxShots: 100000000,
+    maxRegrind: 4,
+    blocks: makeUnifiedBlock(cols, `BURRING 1 BLOCK (${cols} Col × 3 Row = ${totalPunchQty} EA)`),
+    gridType: 'GRID_PINS'
+  };
 
-    // 2. PIERCE PUNCH STAGE (1 Unified Block)
-    {
-      stageId: 's-pierce',
-      stageName: 'PIERCE PUNCH STAGE',
-      shortName: 'PIERCE PUNCH',
-      stageCategory: 'PUNCH_MATRIX',
-      partCode: `P-PIERCE-${lineId}`,
-      partName: `PIERCE PUNCH (${tubeSize})`,
-      material: 'SKH-51 (Powder HSS)',
-      drawingNo: `DWG-FD-${tubeSize.replace('Ø', '')}-${lineId}-PIERCE`,
-      rows: 3,
-      cols: cols,
-      totalPins: totalPunchQty,
-      maxShots: 100000000,
-      maxRegrind: 4,
-      blocks: makeUnifiedBlock(cols, `PIERCE 1 BLOCK (${cols} Col × 3 Row = ${totalPunchQty} EA)`),
-      gridType: 'GRID_PINS'
-    },
+  // 2. PIERCE PUNCH STAGE
+  const piercePunch: LineStageGridConfig = {
+    stageId: 's-pierce',
+    stageName: 'PIERCE & BURRING STAGE',
+    shortName: 'PIERCE & BURRING',
+    stageCategory: 'PUNCH_MATRIX',
+    partCode: `P-PIERCE-${lineId}`,
+    partName: `PIERCE PUNCH (${tubeSize})`,
+    material: 'SKH-51 (Powder HSS)',
+    drawingNo: `DWG-FD-${tubeSize.replace('Ø', '')}-${lineId}-PIERCE`,
+    rows: 3,
+    cols: cols,
+    totalPins: totalPunchQty,
+    maxShots: 100000000,
+    maxRegrind: 4,
+    blocks: makeUnifiedBlock(cols, `PIERCE 1 BLOCK (${cols} Col × 3 Row = ${totalPunchQty} EA)`),
+    gridType: 'GRID_PINS'
+  };
 
-    // 3. IRONING PUNCH STAGE (1 Unified Block)
-    {
-      stageId: 's-iron',
-      stageName: 'IRONING PUNCH STAGE',
-      shortName: 'IRONING PUNCH',
-      stageCategory: 'PUNCH_MATRIX',
-      partCode: `P-IRON-${lineId}`,
-      partName: `IRONING PUNCH & DIE (${tubeSize})`,
-      material: 'Carbide V30 / DC53',
-      drawingNo: `DWG-FD-${tubeSize.replace('Ø', '')}-${lineId}-IRON`,
-      rows: 3,
-      cols: cols,
-      totalPins: totalPunchQty,
-      maxShots: 80000000,
-      maxRegrind: 4,
-      blocks: makeUnifiedBlock(cols, `IRONING 1 BLOCK (${cols} Col × 3 Row = ${totalPunchQty} EA)`),
-      gridType: 'GRID_PINS'
-    },
+  // 3. IRONING PUNCH STAGE
+  const ironingPunch: LineStageGridConfig = {
+    stageId: 's-iron',
+    stageName: 'IRONING STAGE',
+    shortName: 'IRONING',
+    stageCategory: 'PUNCH_MATRIX',
+    partCode: `P-IRON-${lineId}`,
+    partName: `IRONING PUNCH & DIE (${tubeSize})`,
+    material: 'Carbide V30 / DC53',
+    drawingNo: `DWG-FD-${tubeSize.replace('Ø', '')}-${lineId}-IRON`,
+    rows: 3,
+    cols: cols,
+    totalPins: totalPunchQty,
+    maxShots: 80000000,
+    maxRegrind: 4,
+    blocks: makeUnifiedBlock(cols, `IRONING 1 BLOCK (${cols} Col × 3 Row = ${totalPunchQty} EA)`),
+    gridType: 'GRID_PINS'
+  };
 
-    // 4. REFLARE PUNCH STAGE (1 Unified Block)
-    {
-      stageId: 's-reflare',
-      stageName: 'REFLARE PUNCH STAGE',
-      shortName: 'REFLARE PUNCH',
-      stageCategory: 'PUNCH_MATRIX',
-      partCode: `P-REFL-${lineId}`,
-      partName: `REFLARE PUNCH & DIE (${tubeSize})`,
-      material: 'SKH-51 (TiCN Coated)',
-      drawingNo: `DWG-FD-${tubeSize.replace('Ø', '')}-${lineId}-REFL`,
-      rows: 3,
-      cols: cols,
-      totalPins: totalPunchQty,
-      maxShots: 90000000,
-      maxRegrind: 4,
-      blocks: makeUnifiedBlock(cols, `REFLARE 1 BLOCK (${cols} Col × 3 Row = ${totalPunchQty} EA)`),
-      gridType: 'GRID_PINS'
-    },
+  // 4. REFLARE PUNCH STAGE
+  const reflarePunch: LineStageGridConfig = {
+    stageId: 's-reflare',
+    stageName: 'REFLARE STAGE',
+    shortName: 'REFLARE',
+    stageCategory: 'PUNCH_MATRIX',
+    partCode: `P-REFL-${lineId}`,
+    partName: `REFLARE PUNCH & DIE (${tubeSize})`,
+    material: 'SKH-51 (TiCN Coated)',
+    drawingNo: `DWG-FD-${tubeSize.replace('Ø', '')}-${lineId}-REFL`,
+    rows: 3,
+    cols: cols,
+    totalPins: totalPunchQty,
+    maxShots: 90000000,
+    maxRegrind: 4,
+    blocks: makeUnifiedBlock(cols, `REFLARE 1 BLOCK (${cols} Col × 3 Row = ${totalPunchQty} EA)`),
+    gridType: 'GRID_PINS'
+  };
 
-    // 5. SLIT / LOUVER PUNCH STAGE (1 Unified Block)
-    {
-      stageId: 's-slit-punch',
-      stageName: isLouver ? 'LOUVER PUNCH STAGE' : 'SLIT PUNCH STAGE',
-      shortName: isLouver ? 'LOUVER PUNCH' : 'SLIT PUNCH',
-      stageCategory: 'PUNCH_MATRIX',
-      partCode: isLouver ? `P-LOUV-${lineId}` : `P-SLIT-${lineId}`,
-      partName: isLouver ? `LOUVER PUNCH (${tubeSize})` : `SLIT PUNCH (${tubeSize})`,
-      material: 'Carbide V30',
-      drawingNo: `DWG-FD-${tubeSize.replace('Ø', '')}-${lineId}-SLIT-P`,
-      rows: 3,
-      cols: cols,
-      totalPins: totalPunchQty,
-      maxShots: 85000000,
-      maxRegrind: 4,
-      blocks: makeUnifiedBlock(cols, `${isLouver ? 'LOUVER' : 'SLIT'} PUNCH 1 BLOCK (${cols} Col × 3 Row = ${totalPunchQty} EA)`),
-      gridType: 'GRID_PINS'
-    },
+  // 5. SLIT / LOUVER PUNCH STAGE
+  const slitLouverPunch: LineStageGridConfig = {
+    stageId: 's-slit-punch',
+    stageName: isLouver ? 'LOUVER STAGE' : 'SLIT STAGE',
+    shortName: isLouver ? 'LOUVER' : 'SLIT',
+    stageCategory: 'PUNCH_MATRIX',
+    partCode: isLouver ? `P-LOUV-${lineId}` : `P-SLIT-${lineId}`,
+    partName: isLouver ? `LOUVER PUNCH (${tubeSize})` : `SLIT PUNCH (${tubeSize})`,
+    material: 'Carbide V30',
+    drawingNo: `DWG-FD-${tubeSize.replace('Ø', '')}-${lineId}-SLIT-P`,
+    rows: 3,
+    cols: cols,
+    totalPins: totalPunchQty,
+    maxShots: 85000000,
+    maxRegrind: 4,
+    blocks: makeUnifiedBlock(cols, `${isLouver ? 'LOUVER' : 'SLIT'} PUNCH 1 BLOCK (${cols} Col × 3 Row = ${totalPunchQty} EA)`),
+    gridType: 'GRID_PINS'
+  };
 
-    // 6. SLIT / LOUVER DIE STAGE (1 Block with Slit Die A & B Sheets)
-    {
-      stageId: 's-slit-die',
-      stageName: 'SLIT / LOUVER DIE STAGE (DIE A & DIE B)',
-      shortName: 'SLIT DIE A/B',
-      stageCategory: 'DIE_SEGMENT',
-      partCode: `D-SLIT-${lineId}`,
-      partName: `SLIT DIE A & B (${tubeSize})`,
-      material: 'Carbide V30 / Tungsten',
-      drawingNo: `DWG-FD-${tubeSize.replace('Ø', '')}-${lineId}-SLIT-D`,
-      rows: 2, // Die A (Row 1) and Die B (Row 2)
-      cols: slitDieSheets,
-      sheetCount: slitDieSheets,
-      totalPins: slitDieSheets * 2,
-      maxShots: 90000000,
-      maxRegrind: 4,
-      blocks: makeUnifiedBlock(slitDieSheets, `SLIT DIE 1 BLOCK (DIE A: 1-${slitDieSheets}, DIE B: 1-${slitDieSheets})`),
-      gridType: 'DIE_SEGMENTS'
-    },
+  // 6. SLIT / LOUVER DIE STAGE
+  const slitLouverDie: LineStageGridConfig = {
+    stageId: 's-slit-die',
+    stageName: isLouver ? 'LOUVER STAGE' : 'SLIT STAGE',
+    shortName: isLouver ? 'LOUVER' : 'SLIT',
+    stageCategory: 'DIE_SEGMENT',
+    partCode: `D-SLIT-${lineId}`,
+    partName: isLouver ? `LOUVER DIE A & B (${tubeSize})` : `SLIT DIE A & B (${tubeSize})`,
+    material: 'Carbide V30 / Tungsten',
+    drawingNo: `DWG-FD-${tubeSize.replace('Ø', '')}-${lineId}-SLIT-D`,
+    rows: 2,
+    cols: slitDieSheets,
+    sheetCount: slitDieSheets,
+    totalPins: slitDieSheets * 2,
+    maxShots: 90000000,
+    maxRegrind: 4,
+    blocks: makeUnifiedBlock(slitDieSheets, `${isLouver ? 'LOUVER' : 'SLIT'} DIE 1 BLOCK (DIE A: 1-${slitDieSheets}, DIE B: 1-${slitDieSheets})`),
+    gridType: 'DIE_SEGMENTS'
+  };
 
-    // 7. ROW SLIT BLADE STAGE (1 Unified Block with Blade 1..N)
-    {
-      stageId: 's-row-slit',
-      stageName: 'ROW SLIT BLADE STAGE',
-      shortName: 'ROW SLIT BLADE',
-      stageCategory: 'BLADE',
-      partCode: `B-ROWSLIT-${lineId}`,
-      partName: `ROW SLIT BLADE (${tubeSize})`,
-      material: 'SKD-11 / DC53 Hardened',
-      drawingNo: `DWG-FD-${tubeSize.replace('Ø', '')}-${lineId}-RSLIT`,
-      rows: 1,
-      cols: bladeCount,
-      totalPins: bladeCount,
-      maxShots: 75000000,
-      maxRegrind: 5,
-      blocks: makeUnifiedBlock(bladeCount, `ROW SLIT BLADE 1 BLOCK (Blade No. 1 to ${bladeCount})`),
-      gridType: 'ROW_BLADES'
-    },
+  // 7. ROW SLIT BLADE STAGE
+  const rowSlitBlade: LineStageGridConfig = {
+    stageId: 's-row-slit',
+    stageName: 'ROW SLIT STAGE',
+    shortName: 'ROW SLIT',
+    stageCategory: 'BLADE',
+    partCode: `B-ROWSLIT-${lineId}`,
+    partName: `ROW SLIT BLADE (${tubeSize})`,
+    material: 'SKD-11 / DC53 Hardened',
+    drawingNo: `DWG-FD-${tubeSize.replace('Ø', '')}-${lineId}-RSLIT`,
+    rows: 1,
+    cols: bladeCount,
+    totalPins: bladeCount,
+    maxShots: 75000000,
+    maxRegrind: 5,
+    blocks: makeUnifiedBlock(bladeCount, `ROW SLIT BLADE 1 BLOCK (Blade No. 1 to ${bladeCount})`),
+    gridType: 'ROW_BLADES'
+  };
 
-    // 8. CUT OFF STAGE (1 Unified Block: No. 1, 2, 3, 4 - Upper / Down)
-    {
-      stageId: 's-cutoff',
-      stageName: 'CUT OFF STAGE',
-      shortName: 'CUT OFF',
-      stageCategory: 'CUTOFF',
-      partCode: `C-CUTOFF-${lineId}`,
-      partName: `CUT OFF PUNCH & DIE (${tubeSize})`,
-      material: 'DC53 / High Alloy Tool Steel',
-      drawingNo: `DWG-FD-${tubeSize.replace('Ø', '')}-${lineId}-CUTOFF`,
-      rows: 2, // Upper (Row 1) and Down/Lower (Row 2)
-      cols: 4,
-      totalPins: 4 * 2,
-      maxShots: 60000000,
-      maxRegrind: 5,
-      blocks: makeUnifiedBlock(4, 'CUT OFF 1 BLOCK (No. 1 to 4 • Upper / Down)'),
-      gridType: 'CUT_OFF'
-    },
+  // 8. CUT OFF STAGE
+  const cutoffStage: LineStageGridConfig = {
+    stageId: 's-cutoff',
+    stageName: 'CUT OFF STAGE',
+    shortName: 'CUT OFF',
+    stageCategory: 'CUTOFF',
+    partCode: `C-CUTOFF-${lineId}`,
+    partName: `CUT OFF PUNCH & DIE (${tubeSize})`,
+    material: 'DC53 / High Alloy Tool Steel',
+    drawingNo: `DWG-FD-${tubeSize.replace('Ø', '')}-${lineId}-CUTOFF`,
+    rows: 2,
+    cols: 4,
+    totalPins: 4 * 2,
+    maxShots: 60000000,
+    maxRegrind: 5,
+    blocks: makeUnifiedBlock(4, 'CUT OFF 1 BLOCK (No. 1 to 4 • Upper / Down)'),
+    gridType: 'CUT_OFF'
+  };
 
-    // 9. SIDE CUT STAGE (1 Unified Block: No. 1, 2 - Upper / Down)
-    {
-      stageId: 's-sidecut',
-      stageName: 'SIDE CUT STAGE',
-      shortName: 'SIDE CUT',
-      stageCategory: 'SIDECUT',
-      partCode: `S-SIDECUT-${lineId}`,
-      partName: `SIDE CUT PUNCH & DIE (${tubeSize})`,
-      material: 'DC53 / SKD-11',
-      drawingNo: `DWG-FD-${tubeSize.replace('Ø', '')}-${lineId}-SIDECUT`,
-      rows: 2, // Upper (Row 1) and Down/Lower (Row 2)
-      cols: 2,
-      totalPins: 2 * 2,
-      maxShots: 60000000,
-      maxRegrind: 5,
-      blocks: makeUnifiedBlock(2, 'SIDE CUT 1 BLOCK (No. 1 to 2 • Upper / Down)'),
-      gridType: 'SIDE_CUT'
-    }
-  ];
+  // 9. SIDE CUT STAGE
+  const sidecutStage: LineStageGridConfig = {
+    stageId: 's-sidecut',
+    stageName: 'SIDE CUT STAGE',
+    shortName: 'SIDE CUT',
+    stageCategory: 'SIDECUT',
+    partCode: `S-SIDECUT-${lineId}`,
+    partName: `SIDE CUT PUNCH & DIE (${tubeSize})`,
+    material: 'DC53 / SKD-11',
+    drawingNo: `DWG-FD-${tubeSize.replace('Ø', '')}-${lineId}-SIDECUT`,
+    rows: 2,
+    cols: 2,
+    totalPins: 2 * 2,
+    maxShots: 60000000,
+    maxRegrind: 5,
+    blocks: makeUnifiedBlock(2, 'SIDE CUT 1 BLOCK (No. 1 to 2 • Upper / Down)'),
+    gridType: 'SIDE_CUT'
+  };
+
+  // 10. S1 CENTER NOTCH (E1 Only)
+  const s1CenterNotch: LineStageGridConfig = {
+    stageId: 's-s1-center-notch',
+    stageName: 'S1 CENTER NOTCH STAGE',
+    shortName: 'S1 CENTER NOTCH',
+    stageCategory: 'PUNCH_MATRIX',
+    partCode: 'DWG-S1-002',
+    partName: 'S1 CENTER NOTCH PUNCH',
+    material: 'SKD-11 / Powder HSS',
+    drawingNo: 'DWG-S1-002',
+    rows: 3,
+    cols: cols,
+    totalPins: cols * 3,
+    maxShots: 27000000,
+    maxRegrind: 15,
+    blocks: makeUnifiedBlock(cols, `S1 CENTER NOTCH 1 BLOCK (${cols} Col × 3 Row)`),
+    gridType: 'GRID_PINS'
+  };
+
+  // 11. CORNER CUT (E1, E4 Only)
+  const cornerCut: LineStageGridConfig = {
+    stageId: 's-corner-cut',
+    stageName: 'CORNER CUT STAGE',
+    shortName: 'CORNER CUT',
+    stageCategory: 'PUNCH_MATRIX',
+    partCode: 'DWG-CC-002',
+    partName: 'CORNER CUT PUNCH',
+    material: 'SKD-11 / Powder HSS',
+    drawingNo: 'DWG-CC-002',
+    rows: 3,
+    cols: cols,
+    totalPins: cols * 3,
+    maxShots: 27000000,
+    maxRegrind: 5,
+    blocks: makeUnifiedBlock(cols, `CORNER CUT 1 BLOCK (${cols} Col × 3 Row)`),
+    gridType: 'GRID_PINS'
+  };
+
+  // 12. S5 CENTER NOTCH (E1 Only)
+  const s5CenterNotch: LineStageGridConfig = {
+    stageId: 's-s5-center-notch',
+    stageName: 'S5 CENTER NOTCH STAGE',
+    shortName: 'S5 CENTER NOTCH',
+    stageCategory: 'PUNCH_MATRIX',
+    partCode: 'DWG-S5-002',
+    partName: 'CORNER CUT S1/S0 PUNCH',
+    material: 'SKD-11 / Powder HSS',
+    drawingNo: 'DWG-S5-002',
+    rows: 3,
+    cols: cols,
+    totalPins: cols * 3,
+    maxShots: 27000000,
+    maxRegrind: 5,
+    blocks: makeUnifiedBlock(cols, `S5 CENTER NOTCH 1 BLOCK (${cols} Col × 3 Row)`),
+    gridType: 'GRID_PINS'
+  };
+
+  // 13. HITCH FEED (All Lines)
+  const hitchFeed: LineStageGridConfig = {
+    stageId: 's-hitch-feed',
+    stageName: 'HITCH FEED STAGE',
+    shortName: 'HITCH FEED',
+    stageCategory: 'PUNCH_MATRIX',
+    partCode: tubeSize === 'Ø5' ? 'DWG-HF-001' : 'DWG-HF-002',
+    partName: 'HITCH FEED PIN',
+    material: 'SKD-11 / DC53',
+    drawingNo: tubeSize === 'Ø5' ? 'DWG-HF-001' : 'DWG-HF-002',
+    rows: 3,
+    cols: cols,
+    totalPins: cols * 3,
+    maxShots: 100000000,
+    maxRegrind: 5,
+    blocks: makeUnifiedBlock(cols, `HITCH FEED 1 BLOCK (${cols} Col × 3 Row)`),
+    gridType: 'GRID_PINS'
+  };
+
+  // 14. WIDE LOWER (E3-2, E3-3 Only)
+  const wideLower: LineStageGridConfig = {
+    stageId: 's-wide-lower',
+    stageName: 'WIDE LOWER STAGE',
+    shortName: 'WIDE LOWER',
+    stageCategory: 'PUNCH_MATRIX',
+    partCode: 'DWG-WL-001',
+    partName: 'LOUVER PUNCH (WIDE LOWER) UP',
+    material: 'Carbide V30',
+    drawingNo: 'DWG-WL-001',
+    rows: 3,
+    cols: cols,
+    totalPins: cols * 3,
+    maxShots: 100000000,
+    maxRegrind: 4,
+    blocks: makeUnifiedBlock(cols, `WIDE LOWER 1 BLOCK (${cols} Col × 3 Row)`),
+    gridType: 'GRID_PINS'
+  };
+
+  // Construct stages dynamically based on Line ID / Zone installed parts
+  const activeStages: LineStageGridConfig[] = [];
+
+  // Always include Pierce & Burring (as separate Burring / Pierce punches)
+  activeStages.push(burringPunch);
+  activeStages.push(piercePunch);
+
+  // Ironing
+  if (lineId === 'E1' || lineId === 'E2' || lineId === 'E3-1' || lineId === 'E4' || lineId === 'E5') {
+    activeStages.push(ironingPunch);
+  }
+
+  // Wide Lower (E3-2, E3-3)
+  if (lineId === 'E3-2' || lineId === 'E3-3') {
+    activeStages.push(wideLower);
+  }
+
+  // Reflare
+  if (lineId === 'E1' || lineId === 'E2' || lineId === 'E3-1' || lineId === 'E4' || lineId === 'E5') {
+    activeStages.push(reflarePunch);
+  }
+
+  // Slit / Louver
+  if (lineId === 'E1' || lineId === 'E2' || lineId === 'E3-1' || lineId === 'E3-2' || lineId === 'E4' || lineId === 'E5') {
+    activeStages.push(slitLouverPunch);
+    activeStages.push(slitLouverDie);
+  }
+
+  // S1 Center Notch (E1)
+  if (lineId === 'E1') {
+    activeStages.push(s1CenterNotch);
+  }
+
+  // Corner Cut (E1, E4, E5)
+  if (lineId === 'E1' || lineId === 'E4' || lineId === 'E5') {
+    activeStages.push(cornerCut);
+  }
+
+  // S5 Center Notch (E1)
+  if (lineId === 'E1') {
+    activeStages.push(s5CenterNotch);
+  }
+
+  // Row Slit Blade (All lines)
+  activeStages.push(rowSlitBlade);
+
+  // Cut Off
+  activeStages.push(cutoffStage);
+
+  // Side Cut
+  activeStages.push(sidecutStage);
+
+  // Hitch Feed (All lines)
+  activeStages.push(hitchFeed);
+
+  return activeStages;
 };
 
 /**

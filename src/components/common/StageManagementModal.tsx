@@ -362,7 +362,7 @@ export const StageManagementModal: React.FC<StageManagementModalProps> = ({
             </div>
 
             {/* Main Table Body - Exactly matching requested layout (No Part Code, No DWG No.) */}
-            <div className="flex-1 overflow-y-auto p-3 bg-[#0c121e]">
+            <div className="flex-1 min-h-0 overflow-y-auto p-3 pb-8 bg-[#0c121e]">
               <table className="w-full text-left border-collapse font-mono text-xs">
                 <thead>
                   <tr className="bg-[#1a2536] text-slate-300 border-b border-slate-700">
@@ -459,12 +459,12 @@ export const StageManagementModal: React.FC<StageManagementModalProps> = ({
               </form>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 flex flex-col">
-              <div className="bg-[#172131] rounded-xl border border-slate-800 overflow-hidden">
-                <div className="p-3 border-b border-slate-800 bg-[#1a2536]">
+            <div className="flex-1 min-h-0 p-4 flex flex-col">
+              <div className="bg-[#172131] rounded-xl border border-slate-800 flex-1 flex flex-col min-h-0 overflow-hidden">
+                <div className="p-3 border-b border-slate-800 bg-[#1a2536] flex-none">
                   <h3 className="text-sm font-bold text-white">รายชื่อ Stage ทั้งหมด</h3>
                 </div>
-                <ul className="divide-y divide-slate-800/80 max-h-[55vh] overflow-y-auto">
+                <ul className="divide-y divide-slate-800/80 flex-1 min-h-0 overflow-y-auto custom-scrollbar p-1 pb-8">
                   {managedStageGroups.map((stg, idx) => (
                     <li key={`${stg}-${idx}`} className="p-3 flex items-center justify-between hover:bg-[#1a2536] transition-colors">
                       <div className="flex items-center gap-3">

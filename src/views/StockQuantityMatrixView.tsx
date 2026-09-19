@@ -829,9 +829,15 @@ export const StockQuantityMatrixView: React.FC<StockQuantityMatrixViewProps> = (
                 </th>
                 <th 
                   colSpan={2} 
+                  className="sticky top-0 z-20 bg-[#2d3a4a] text-cyan-300 font-black py-1.5 px-1.5 border-b border-r border-[#666666] text-center uppercase tracking-wider text-[11px] shadow-xs"
+                >
+                  3. SAFETY STOCK & STATUS (IDEA 6)
+                </th>
+                <th 
+                  colSpan={2} 
                   className="sticky top-0 z-20 bg-[#444455] text-[#FFCC00] font-black py-1.5 px-1.5 border-b border-[#666666] text-center uppercase tracking-wider text-[11px] shadow-xs w-32"
                 >
-                  3. REMARKS & ACTIONS
+                  4. REMARKS & ACTIONS
                 </th>
               </tr>
 
@@ -843,7 +849,7 @@ export const StockQuantityMatrixView: React.FC<StockQuantityMatrixViewProps> = (
                 </th>
 
                 {/* Col: Stage */}
-                <th className="sticky top-[27px] z-20 py-1 px-1 w-14 text-center border-b border-r border-[#666666] bg-[#555566]">
+                <th className="sticky top-[27px] z-20 py-1 px-1 min-w-[140px] w-36 text-center border-b border-r border-[#666666] bg-[#555566]">
                   Stage
                 </th>
 
@@ -897,6 +903,18 @@ export const StockQuantityMatrixView: React.FC<StockQuantityMatrixViewProps> = (
                 {/* Col: Total */}
                 <th className="sticky top-[27px] z-20 py-1 px-1 w-14 text-center bg-[#444455] text-[#FFCC00] font-bold border-b border-r border-[#666666]">
                   Total
+                </th>
+
+                {/* Col: Safety Stock Level (Idea 6) */}
+                <th className="sticky top-[27px] z-20 py-1 px-1 w-20 text-center bg-[#3a4a58] text-cyan-300 font-bold border-b border-r border-[#666666]">
+                  <div>Safety Stock</div>
+                  <div className="text-[8px] text-slate-300 font-normal">เกณฑ์สำรอง</div>
+                </th>
+
+                {/* Col: Stock Status (Idea 6) */}
+                <th className="sticky top-[27px] z-20 py-1 px-1 w-24 text-center bg-[#3a4a58] text-cyan-300 font-bold border-b border-r border-[#666666]">
+                  <div>Stock Status</div>
+                  <div className="text-[8px] text-slate-300 font-normal">สถานะสต็อก</div>
                 </th>
 
                 {/* Col: Notes */}
@@ -967,6 +985,15 @@ export const StockQuantityMatrixView: React.FC<StockQuantityMatrixViewProps> = (
                   ))}
                   <td className="py-1 px-2 text-center text-[#FFCC00] font-bold border-r border-[#444444]">
                     {(Object.values(newRowData.quantities) as number[]).reduce((a, b) => (Number(a) || 0) + (Number(b) || 0), 0)}
+                  </td>
+                  <td className="py-1 px-1 text-center bg-[#151d24] border-r border-[#444444]">
+                    <span className="text-[10px] text-cyan-300 font-mono">10 EA</span>
+                  </td>
+                  <td className="py-1 px-1 text-center bg-[#151d24] border-r border-[#444444]">
+                    <span className="text-[10px] text-slate-400">NEW</span>
+                  </td>
+                  <td className="py-1 px-2 border-r border-[#444444] bg-[#1a1a1a]">
+                    <span className="text-[10px] text-slate-500">-</span>
                   </td>
                   <td className="py-1 px-2 text-center border-[#444444] bg-[#182818]">
                     <div className="flex items-center justify-center gap-1">
@@ -1204,6 +1231,60 @@ export const StockQuantityMatrixView: React.FC<StockQuantityMatrixViewProps> = (
                         <span className={`text-xs font-black font-mono ${row.total > 0 ? 'text-[#FFCC00]' : 'text-slate-500'}`}>
                           {row.total > 0 ? row.total : 0}
                         </span>
+                      </td>
+
+                      {/* Col: Safety Stock Target (Idea 6) */}
+                      <td className="py-1 px-1 text-center bg-[#151d24] border-r border-[#444444]">
+                        {isEditing ? (
+                          <input
+                            type="number"
+                            min={0}
+                            value={row.safetyStockQty}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value, 10) || 0;
+                              setEditSafetyValues(prev => ({ ...prev, [row.partCode]: val }));
+                              setHasUnsavedChanges(true);
+                            }}
+                            className="w-14 py-0.5 text-center text-xs font-bold border border-cyan-500 bg-[#111111] text-cyan-300 focus:outline-none"
+                            title="กำหนดระดับ Safety Stock (ชิ้น)"
+                          />
+                        ) : (
+                          <span className="text-xs font-mono text-cyan-300 font-bold">
+                            {row.safetyStockQty} EA
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Col: Stock Health Status Badge (Idea 6) */}
+                      <td className="py-1 px-1 text-center bg-[#151d24] border-r border-[#444444]">
+                        {(() => {
+                          const totalInstalled = (Object.values(row.installQuantities) as number[]).reduce((a, b) => (Number(a) || 0) + (Number(b) || 0), 0);
+                          if (totalInstalled === 0 && row.total === 0) {
+                            return <span className="text-[10px] text-slate-500 font-bold">STANDBY</span>;
+                          }
+                          if (row.total === 0 && totalInstalled > 0) {
+                            return (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-black bg-[#C40045] text-white animate-pulse" title={`สต็อกหมดเกลี้ยง! มีการติดตั้งใช้งาน ${totalInstalled} ชิ้น เสี่ยงไลน์หยุดผลิต`}>
+                                <AlertTriangle className="w-3 h-3" />
+                                OUT
+                              </span>
+                            );
+                          }
+                          if (row.total < row.safetyStockQty) {
+                            return (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-black bg-[#FFCC00] text-black" title={`ต่ำกว่า Safety Stock (${row.total} / ${row.safetyStockQty} EA)`}>
+                                <AlertTriangle className="w-3 h-3" />
+                                LOW
+                              </span>
+                            );
+                          }
+                          return (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#00FF00]/20 text-[#00FF00] border border-[#00FF00]/40" title="สต็อกเพียงพอตามเกณฑ์ความปลอดภัย">
+                              <CheckCircle2 className="w-3 h-3" />
+                              OK
+                            </span>
+                          );
+                        })()}
                       </td>
 
                       {/* Col 12: Notes / Remarks */}

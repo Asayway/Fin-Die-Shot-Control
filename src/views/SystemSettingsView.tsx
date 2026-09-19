@@ -4,53 +4,35 @@ import {
   RotateCcw, 
   CheckCircle2, 
   Cpu, 
-  Wifi, 
-  Play, 
-  Pause, 
-  Terminal, 
   Activity, 
-  Database,
-  Lock,
-  UserCheck,
-  Plus,
-  Trash2,
-  Copy,
-  Layers,
-  Network,
-  Zap,
-  Server
+  Database, 
+  Lock, 
+  UserCheck, 
+  Network, 
+  ExternalLink,
+  Server,
+  Zap
 } from 'lucide-react';
-import { SystemSettings, User, PLCConnectionMode, PLCProtocol, PLCLineRegisterMap } from '../types';
+import { SystemSettings, User, PLCLineRegisterMap } from '../types';
 import { storageService } from '../services/storageService';
-import { SEED_DATA_VERSION, SEED_SOURCE_LABEL } from '../data/seedData';
+import { SEED_DATA_VERSION, SEED_SOURCE_LABEL, DEFAULT_FACTORY_PLC_METERS } from '../data/seedData';
+import { ProductionLineId } from '../types';
 import { usePLCConnection } from '../hooks/usePLCConnection';
 
-export const SystemSettingsView: React.FC = () => {
+interface SystemSettingsViewProps {
+  onNavigate?: (route: string) => void;
+}
+
+export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({ onNavigate }) => {
   const [settings, setSettings] = useState<SystemSettings>(storageService.getSettings());
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Hook for PLC Driver Connection & Real-time Management
+  // Hook for PLC Driver Connection Status Summary
   const {
     config: plcConfig,
     status: plcStatus,
-    pingLatency,
-    logs: diagnosticLogs,
-    updateConfig: updatePlcConfig,
-    toggleAutoPolling,
-    handleTestConnection,
-    handleManualPulse,
-    updateLineRegisterAddress,
-    toggleLineRegisterActive,
-    addLineRegisterMapping,
-    deleteLineRegisterMapping,
-    clearLogs
+    pingLatency
   } = usePLCConnection();
-
-  // New Line Mapping Modal / Inline Form State
-  const [showAddLineForm, setShowAddLineForm] = useState(false);
-  const [newLineId, setNewLineId] = useState('');
-  const [newLineName, setNewLineName] = useState('');
-  const [newLineAddress, setNewLineAddress] = useState('');
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,52 +40,62 @@ export const SystemSettingsView: React.FC = () => {
     if (settings.stageDisplayMode) {
       localStorage.setItem('findie_tv_layout_mode', settings.stageDisplayMode);
     }
-    setSuccessMsg('System configuration and threshold parameters saved successfully!');
+    setSuccessMsg('บันทึกการตั้งค่าเกณฑ์และรูปแบบระบบเรียบร้อยแล้ว!');
     setTimeout(() => setSuccessMsg(null), 4000);
   };
 
   const handleResetSeed = () => {
-    if (window.confirm('Are you sure you want to reset all data back to the original Excel seed data (31.01.2025)? All recent shot edits and logs will be restored to factory default.')) {
+    if (window.confirm('คุณแน่ใจหรือไม่ว่าต้องการรีเซ็ตข้อมูลทั้งหมดกลับเป็นค่าเริ่มต้นจากไฟล์ Excel (31.01.2025)? ข้อมูลการแก้ไขและการป้อนสโตรกล่าสุดจะถูกกู้คืนเป็นค่าเริ่มต้นของโรงงาน')) {
       storageService.resetToSeedData();
       setSettings(storageService.getSettings());
-      setSuccessMsg('Application state successfully reset to original 31.01.2025 Excel dataset!');
+      setSuccessMsg('รีเซ็ตข้อมูลระบบกลับสู่ชุดข้อมูล Excel (31.01.2025) สำเร็จแล้ว!');
       setTimeout(() => setSuccessMsg(null), 4000);
     }
   };
 
-  const handleCreateLineRegister = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newLineId.trim()) return;
-    addLineRegisterMapping(newLineId, newLineName, newLineAddress);
-    setNewLineId('');
-    setNewLineName('');
-    setNewLineAddress('');
-    setShowAddLineForm(false);
+  const [isGoLiveModalOpen, setIsGoLiveModalOpen] = useState(false);
+  const [lineMeterInputs, setLineMeterInputs] = useState<Record<ProductionLineId, number>>({ ...DEFAULT_FACTORY_PLC_METERS });
+
+  const handleApplyGoLiveReset = (metersOption: 'PLC_FACTORY' | 'ZERO' | 'CUSTOM') => {
+    let targetMeters: Record<ProductionLineId, number> = { ...DEFAULT_FACTORY_PLC_METERS };
+
+    if (metersOption === 'ZERO') {
+      targetMeters = {
+        'E1': 0, 'E2': 0, 'E3-1': 0, 'E3-2': 0, 'E3-3': 0, 'E4': 0, 'E5': 0
+      };
+    } else if (metersOption === 'CUSTOM') {
+      targetMeters = { ...lineMeterInputs };
+    }
+
+    storageService.resetToCleanGoLive(targetMeters);
+    setSettings(storageService.getSettings());
+    setIsGoLiveModalOpen(false);
+    setSuccessMsg('⚡ เซ็ตระบบเป็นค่า 0 (Factory Go-Live Set 0) สำเร็จแล้ว! เลขมิเตอร์ PLC LAN แต่ละไลน์ถูกกำหนดตรงตามหน้างาน พาร์ททุกชิ้นเริ่มต้นที่ 0 ช็อต พร้อมสตรีมข้อมูลสด');
+    setTimeout(() => setSuccessMsg(null), 5000);
   };
 
-  const handleCopyLogs = () => {
-    navigator.clipboard.writeText(diagnosticLogs.join('\n'));
-    setSuccessMsg('Diagnostic console logs copied to clipboard!');
-    setTimeout(() => setSuccessMsg(null), 3000);
-  };
+  const activeRegistersCount = Object.values(plcConfig?.lineRegisters || {}).filter(
+    (r: PLCLineRegisterMap) => r.active
+  ).length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 font-sans">
       {/* Top Header */}
       <div className="liquid-glass-card border border-white/10 rounded-3xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl">
         <div>
           <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2.5">
             <SlidersHorizontal className="w-5 h-5 text-cyan-400" />
-            System Settings & Thresholds
+            <span>ตั้งค่าระบบและเกณฑ์แจ้งเตือน (System Settings & Thresholds)</span>
           </h2>
           <p className="text-sm text-slate-400 mt-1 font-thai">
-            ตั้งค่าเกณฑ์แจ้งเตือน (Alert Thresholds) และกู้คืนข้อมูลระบบ
+            กำหนดค่าเกณฑ์แจ้งเตือนอายุแม่พิมพ์ (Life Thresholds) โหมดการแสดงผลหน้าจอ TV และกู้คืนชุดข้อมูลระบบ
           </p>
         </div>
 
         <button
+          type="button"
           onClick={handleResetSeed}
-          className="liquid-pill flex items-center gap-2 px-5 py-2.5 bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 border border-rose-500/40 font-bold rounded-full text-xs transition-all shadow font-mono cursor-pointer active:scale-95"
+          className="liquid-pill flex items-center gap-2 px-5 py-2.5 bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 border border-rose-500/40 font-bold rounded-full text-xs transition-all shadow font-mono cursor-pointer active:scale-95 shrink-0"
         >
           <RotateCcw className="w-4 h-4" />
           <span>RESET TO SEED DATA</span>
@@ -120,61 +112,67 @@ export const SystemSettingsView: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Main Left Column */}
         <div className="lg:col-span-8 space-y-6">
-          {/* Settings Form */}
+          {/* Settings Form: Life Percentage Thresholds */}
           <div className="liquid-glass-card border border-white/10 rounded-3xl p-5 sm:p-6 space-y-5 shadow-xl">
             <h3 className="font-bold text-slate-100 border-b border-white/10 pb-3 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-cyan-400 inline-block shadow-[0_0_8px_rgba(6,182,212,0.8)]"></span>
-              Life Percentage Thresholds (เกณฑ์ขีดจำกัดการแจ้งเตือนช็อต)
+              <span>Life Percentage Thresholds (เกณฑ์ขีดจำกัดการแจ้งเตือนช็อตสะสม)</span>
             </h3>
 
-            <form onSubmit={handleSave} className="space-y-4 text-xs font-mono">
+            <form onSubmit={handleSave} className="space-y-5 text-xs font-mono">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="bg-black/30 p-3.5 rounded-2xl border border-yellow-500/30">
-                  <label className="block text-yellow-300 font-bold mb-1.5">
+                <div className="bg-black/40 p-4 rounded-2xl border border-yellow-500/30 space-y-1.5">
+                  <label className="block text-yellow-300 font-bold text-xs">
                     WARNING Threshold (%)
                   </label>
                   <input
                     type="number"
+                    min={1}
+                    max={100}
                     value={settings.warningThresholdPercent}
                     onChange={e => setSettings({ ...settings, warningThresholdPercent: parseInt(e.target.value, 10) || 70 })}
-                    className="liquid-input w-full rounded-xl px-3 py-2 text-yellow-300 font-bold text-base"
+                    className="liquid-input w-full rounded-xl px-3 py-2 text-yellow-300 font-bold text-lg"
                   />
-                  <div className="text-[10px] text-slate-400 mt-1.5">Default: 70% (Yellow highlight)</div>
+                  <div className="text-[10px] text-slate-400 font-thai">เตือนเริ่มต้น: ค่ามาตรฐาน 70% (เน้นแถบสีเหลือง)</div>
                 </div>
 
-                <div className="bg-black/30 p-3.5 rounded-2xl border border-amber-500/30">
-                  <label className="block text-amber-400 font-bold mb-1.5">
+                <div className="bg-black/40 p-4 rounded-2xl border border-amber-500/30 space-y-1.5">
+                  <label className="block text-amber-400 font-bold text-xs">
                     PREPARE Threshold (%)
                   </label>
                   <input
                     type="number"
+                    min={1}
+                    max={100}
                     value={settings.prepareThresholdPercent}
                     onChange={e => setSettings({ ...settings, prepareThresholdPercent: parseInt(e.target.value, 10) || 85 })}
-                    className="liquid-input w-full rounded-xl px-3 py-2 text-amber-400 font-bold text-base"
+                    className="liquid-input w-full rounded-xl px-3 py-2 text-amber-400 font-bold text-lg"
                   />
-                  <div className="text-[10px] text-slate-400 mt-1.5">Default: 85% (Orange highlight)</div>
+                  <div className="text-[10px] text-slate-400 font-thai">เตรียมอะไหล่: ค่ามาตรฐาน 85% (เน้นแถบสีส้ม)</div>
                 </div>
 
-                <div className="bg-black/30 p-3.5 rounded-2xl border border-rose-500/30">
-                  <label className="block text-rose-400 font-bold mb-1.5">
+                <div className="bg-black/40 p-4 rounded-2xl border border-rose-500/30 space-y-1.5">
+                  <label className="block text-rose-400 font-bold text-xs">
                     CRITICAL Threshold (%)
                   </label>
                   <input
                     type="number"
+                    min={1}
+                    max={100}
                     value={settings.criticalThresholdPercent}
                     onChange={e => setSettings({ ...settings, criticalThresholdPercent: parseInt(e.target.value, 10) || 95 })}
-                    className="liquid-input w-full rounded-xl px-3 py-2 text-rose-400 font-bold text-base"
+                    className="liquid-input w-full rounded-xl px-3 py-2 text-rose-400 font-bold text-lg"
                   />
-                  <div className="text-[10px] text-slate-400 mt-1.5">Default: 95% (Red alert & sound)</div>
+                  <div className="text-[10px] text-slate-400 font-thai">วิกฤต/ต้องเจียร: ค่ามาตรฐาน 95% (แจ้งเตือนแดง+เสียง)</div>
                 </div>
               </div>
 
               {/* Stage Layout Mode Setting */}
-              <div className="bg-black/30 p-4 rounded-2xl border border-white/10 space-y-2">
+              <div className="bg-black/30 p-4 rounded-2xl border border-white/10 space-y-2.5">
                 <label className="block text-cyan-300 font-bold text-sm">
                   Default Stage Monitor Display Mode (โหมดการแสดงผลของ Stage บนหน้าจอ)
                 </label>
-                <p className="text-[11px] text-slate-400 font-sans">
+                <p className="text-xs text-slate-400 font-thai">
                   เลือกระดับความหนาแน่นในการแสดงผลแถวข้อมูลแม่พิมพ์บนหน้าจอ TV Dashboard
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
@@ -193,7 +191,7 @@ export const SystemSettingsView: React.FC = () => {
                     />
                     <div>
                       <div className="font-bold text-xs text-white">Detailed Mode (มาตรฐาน)</div>
-                      <div className="text-[11px] text-slate-400 font-sans mt-0.5">
+                      <div className="text-[11px] text-slate-400 font-thai mt-0.5">
                         ตัวเลขขนาดใหญ่พิเศษ เหมาะสำหรับหน้าจอ TV ขนาดใหญ่ 55"+ และมองจากระยะไกล
                       </div>
                     </div>
@@ -214,8 +212,8 @@ export const SystemSettingsView: React.FC = () => {
                     />
                     <div>
                       <div className="font-bold text-xs text-white">Compact Mode (กะทัดรัด)</div>
-                      <div className="text-[11px] text-slate-400 font-sans mt-0.5">
-                        ปรับลดความสูงแถวและขนาดตัวอักษร พอดีกับหน้าจอแล็ปท็อป/แท็บเล็ต ช่วยให้เห็นครบทุก Stage โดยไม่ต้องเลื่อน
+                      <div className="text-[11px] text-slate-400 font-thai mt-0.5">
+                        ปรับลดความสูงแถวและขนาดตัวอักษร พอดีกับหน้าจอแล็ปท็อป/แท็บเล็ต เห็นครบทุก Stage
                       </div>
                     </div>
                   </label>
@@ -224,454 +222,255 @@ export const SystemSettingsView: React.FC = () => {
 
               <button
                 type="submit"
-                className="liquid-pill w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold rounded-full text-xs transition-all shadow-[0_0_20px_rgba(6,182,212,0.3)] cursor-pointer active:scale-98 border-none"
+                className="liquid-pill w-full py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold rounded-full text-xs transition-all shadow-[0_0_20px_rgba(6,182,212,0.3)] cursor-pointer active:scale-98 border-none"
               >
-                SAVE SYSTEM CONFIGURATION
+                บันทึกค่าการตั้งค่าระบบ (SAVE SYSTEM CONFIGURATION)
               </button>
             </form>
           </div>
 
-          {/* ============================================================== */}
-          {/* PLC DIRECT INTEGRATION DRIVER SECTION                          */}
-          {/* ============================================================== */}
-          <div className="liquid-glass-card border border-white/10 rounded-3xl p-5 sm:p-6 space-y-5 font-mono shadow-xl">
-            {/* Header & Status Indicator Bar */}
+          {/* Clean Compact PLC Summary Widget */}
+          <div className="liquid-glass-card border border-white/10 rounded-3xl p-5 sm:p-6 space-y-4 shadow-xl">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
               <div>
                 <h3 className="font-bold text-slate-100 text-sm flex items-center gap-2">
                   <Cpu className="w-4 h-4 text-emerald-400" />
-                  <span>PLC Direct Integration Driver (การเชื่อมต่อและดึงข้อมูลจาก PLC สด)</span>
+                  <span>สถานะการเชื่อมต่อ PLC & Data Gateway (PLC Connection Status)</span>
                 </h3>
-                <p className="text-[11px] text-slate-400 font-sans mt-0.5">
-                  รองรับการเชื่อมต่อกับ PLC หน้าไลน์ผลิต (Modbus TCP / Siemens S7 / OPC UA / MQTT Gateway) เพื่อดึงยอดช็อตสะสมอัตโนมัติ
+                <p className="text-xs text-slate-400 font-thai mt-0.5">
+                  ระบบเชื่อมต่ออัตโนมัติย้ายไปรวมศูนย์ควบคุมที่หน้าเมนู <strong>PLC & Data Gateway</strong> โดยเฉพาะแล้ว
                 </p>
-                <div className="mt-2 flex items-center gap-2 px-3.5 py-1.5 bg-amber-950/40 border border-amber-500/30 rounded-full text-[10px] text-amber-300 font-sans">
-                  <Zap className="w-3 h-3 text-amber-400 animate-pulse" />
-                  <span><strong>SAFETY NOTICE:</strong> Telemetry mode is currently READ-ONLY. Connection to production PLC (192.168.10.50) is restricted for verification phase.</span>
-                </div>
               </div>
 
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className={`px-3 py-1 rounded-full text-[10px] font-bold border flex items-center gap-1.5 ${
-                  plcStatus === 'GATEWAY_ONLINE' || plcStatus === 'CONNECTED'
-                    ? 'bg-emerald-950 text-emerald-300 border-emerald-500 animate-pulse'
-                    : plcStatus === 'GATEWAY_CONNECTING' || plcStatus === 'CONNECTING' || plcStatus === 'RECONNECTING'
-                    ? 'bg-amber-950 text-amber-300 border-amber-500'
-                    : plcStatus === 'TEST_SIMULATION_ACTIVE'
-                    ? 'bg-purple-950 text-purple-300 border-purple-500 animate-pulse'
-                    : plcStatus === 'WAITING_FOR_GATEWAY'
-                    ? 'bg-blue-950 text-blue-300 border-blue-500 animate-pulse'
-                    : plcStatus === 'GATEWAY_OFFLINE' || plcStatus === 'ERROR'
-                    ? 'bg-rose-950 text-rose-300 border-rose-600'
-                    : 'bg-black/40 text-slate-400 border-white/10'
-                }`}>
-                  <Activity className="w-3 h-3" />
-                  <span>{plcStatus.replace(/_/g, ' ')}</span>
-                  {pingLatency && <span className="text-slate-400">({pingLatency}ms)</span>}
-                </span>
+              <span className={`px-3 py-1 rounded-full text-xs font-mono font-bold border flex items-center gap-1.5 self-start sm:self-auto ${
+                plcStatus === 'GATEWAY_ONLINE' || plcStatus === 'CONNECTED'
+                  ? 'bg-emerald-950 text-emerald-300 border-emerald-500 animate-pulse'
+                  : plcStatus === 'TEST_SIMULATION_ACTIVE' || plcConfig.connectionMode === 'SIMULATION'
+                  ? 'bg-amber-950 text-amber-300 border-amber-500'
+                  : 'bg-rose-950 text-rose-300 border-rose-600'
+              }`}>
+                <Activity className="w-3.5 h-3.5" />
+                <span>{plcStatus.replace(/_/g, ' ')}</span>
+                {pingLatency && <span className="text-slate-400">({pingLatency}ms)</span>}
+              </span>
+            </div>
 
-                <button
-                  type="button"
-                  onClick={toggleAutoPolling}
-                  className={`liquid-pill px-4 py-1.5 rounded-full text-xs font-bold border flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 ${
-                    plcConfig.isAutoPolling
-                      ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.3)] font-black'
-                      : 'bg-black/30 text-emerald-400 border-emerald-800/60 hover:bg-white/[0.06]'
-                  }`}
-                >
-                  {plcConfig.isAutoPolling ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-                  <span>
-                    {plcConfig.connectionMode === 'SIMULATION' 
-                      ? (plcConfig.isAutoPolling ? 'STOP TEST SIMULATION' : 'START TEST SIMULATION')
-                      : (plcConfig.isAutoPolling ? 'PAUSE AUTO-POLLING' : 'START AUTO-POLLING')}
-                  </span>
-                </button>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono text-xs">
+              <div className="bg-black/30 p-3.5 rounded-2xl border border-white/10 space-y-1">
+                <span className="text-[10px] text-slate-400">CONNECTION PROTOCOL</span>
+                <div className="font-bold text-cyan-300">{plcConfig.protocol}</div>
+                <div className="text-[10px] text-slate-500">Target IP: {plcConfig.ip}:{plcConfig.port}</div>
+              </div>
+
+              <div className="bg-black/30 p-3.5 rounded-2xl border border-white/10 space-y-1">
+                <span className="text-[10px] text-slate-400">POLLING INTERVAL</span>
+                <div className="font-bold text-emerald-400">{plcConfig.pollingIntervalMs} ms</div>
+                <div className="text-[10px] text-slate-500">Auto Polling: {plcConfig.isAutoPolling ? 'ACTIVE' : 'PAUSED'}</div>
+              </div>
+
+              <div className="bg-black/30 p-3.5 rounded-2xl border border-white/10 space-y-1">
+                <span className="text-[10px] text-slate-400">MONITORED LINE REGISTERS</span>
+                <div className="font-bold text-amber-300">{activeRegistersCount} Lines Active</div>
+                <div className="text-[10px] text-slate-500">Total Mapped: {Object.keys(plcConfig?.lineRegisters || {}).length} Lines</div>
               </div>
             </div>
 
-            {/* 1. Connection Mode & Driver Configuration Grid */}
-            <div className="space-y-3">
-              <div className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                <Network className="w-3.5 h-3.5 text-cyan-400" />
-                <span>1. DRIVER CONNECTION MODE & PARAMETERS</span>
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 bg-black/20 p-3.5 rounded-2xl border border-white/5">
+              <div className="flex items-center gap-2 text-xs text-slate-300 font-thai">
+                <Zap className="w-4 h-4 text-amber-400 shrink-0 animate-pulse" />
+                <span>ต้องการปรับแต่ง IP, Address Register หรือทดสอบ PING?</span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 bg-black/30 p-4 rounded-2xl border border-white/10">
-                {/* Connection Mode */}
-                <div>
-                  <label className="block text-[10px] text-cyan-400 font-bold mb-1">CONNECTION MODE</label>
-                  <select
-                    value={plcConfig.connectionMode}
-                    onChange={e => updatePlcConfig({ connectionMode: e.target.value as PLCConnectionMode })}
-                    className="liquid-input w-full text-slate-200 text-xs rounded-xl px-2.5 py-1.5 font-mono focus:border-cyan-400 focus:outline-none"
-                  >
-                    <option value="SIMULATION">SIMULATION (Virtual Pulse Generator - Not Real)</option>
-                    <option value="MODBUS_TCP">REAL PLC: Direct Industrial Modbus TCP (Ethernet)</option>
-                    <option value="WEBSOCKET_MQTT">EDGE GATEWAY: MQTT / WebSocket Broker</option>
-                    <option value="REST_POLLING">BACKEND API: REST Polling Service</option>
-                  </select>
-                </div>
-
-                {/* Protocol Selector */}
-                <div>
-                  <label className="block text-[10px] text-slate-400 font-bold mb-1">PROTOCOL</label>
-                  <select
-                    value={plcConfig.protocol}
-                    onChange={e => updatePlcConfig({ protocol: e.target.value as PLCProtocol })}
-                    className="liquid-input w-full text-slate-200 text-xs rounded-xl px-2.5 py-1.5 font-mono focus:border-cyan-400 focus:outline-none"
-                  >
-                    <option value="MODBUS_TCP">Modbus TCP (Industrial Standard)</option>
-                    <option value="SIEMENS_S7">Siemens S7 (ISO-on-TCP)</option>
-                    <option value="OPC_UA">OPC UA Server (opc.tcp)</option>
-                    <option value="OMRON_ETHERNET">Omron EtherNet/IP</option>
-                    <option value="FIN_PLC_NATIVE">Fin Press Controller (Native)</option>
-                    <option value="WEBSOCKET_MQTT">MQTT / Node-RED WebSocket</option>
-                    <option value="REST_API">HTTP REST API Gateway</option>
-                  </select>
-                </div>
-
-                {/* PLC IP Address */}
-                <div>
-                  <label className="block text-[10px] text-slate-400 font-bold mb-1">PLC IP ADDRESS</label>
-                  <input
-                    type="text"
-                    value={plcConfig.ip}
-                    onChange={e => updatePlcConfig({ ip: e.target.value })}
-                    className="liquid-input w-full text-emerald-400 font-bold text-xs rounded-xl px-2.5 py-1.5 font-mono focus:border-cyan-400 focus:outline-none"
-                    placeholder="192.168.1.120"
-                  />
-                </div>
-
-                {/* Port & Slave ID */}
-                <div>
-                  <label className="block text-[10px] text-slate-400 font-bold mb-1">PORT & SLAVE ID</label>
-                  <div className="flex gap-1.5">
-                    <input
-                      type="number"
-                      value={plcConfig.port}
-                      onChange={e => updatePlcConfig({ port: parseInt(e.target.value, 10) || 502 })}
-                      className="liquid-input w-1/2 text-slate-200 text-xs rounded-xl px-2 py-1.5 font-mono focus:border-cyan-400 focus:outline-none"
-                      title="Port (e.g. 502, 1880, 8080)"
-                    />
-                    <input
-                      type="number"
-                      value={plcConfig.slaveId}
-                      onChange={e => updatePlcConfig({ slaveId: parseInt(e.target.value, 10) || 1 })}
-                      className="liquid-input w-1/2 text-slate-200 text-xs rounded-xl px-2 py-1.5 font-mono focus:border-cyan-400 focus:outline-none"
-                      placeholder="Unit ID"
-                      title="Slave Unit ID"
-                    />
-                  </div>
-                </div>
-
-                {/* Polling Interval */}
-                <div>
-                  <label className="block text-[10px] text-slate-400 font-bold mb-1">POLLING INTERVAL</label>
-                  <select
-                    value={plcConfig.pollingIntervalMs}
-                    onChange={e => updatePlcConfig({ pollingIntervalMs: parseInt(e.target.value, 10) || 1000 })}
-                    className="liquid-input w-full text-slate-200 text-xs rounded-xl px-2.5 py-1.5 font-mono focus:border-cyan-400 focus:outline-none"
-                  >
-                    <option value={500}>500 ms (Realtime Fast)</option>
-                    <option value={1000}>1,000 ms (1 sec Standard)</option>
-                    <option value={2000}>2,000 ms (2 sec Normal)</option>
-                    <option value={5000}>5,000 ms (5 sec Eco)</option>
-                  </select>
-                </div>
-
-                {/* UI Performance Throttle Speed (Batching) */}
-                <div>
-                  <label className="block text-[10px] text-amber-400 font-bold mb-1">UI UPDATE THROTTLE SPEED</label>
-                  <select
-                    value={plcConfig.uiThrottleMs}
-                    onChange={e => updatePlcConfig({ uiThrottleMs: parseInt(e.target.value, 10) || 1000 })}
-                    className="liquid-input w-full text-amber-300 font-bold text-xs rounded-xl px-2.5 py-1.5 font-mono focus:border-amber-400 focus:outline-none"
-                  >
-                    <option value={500}>500 ms (Fast UI Refresh)</option>
-                    <option value={1000}>1,000 ms (Standard Throttled - Recommended)</option>
-                    <option value={2000}>2,000 ms (Low CPU Batch)</option>
-                  </select>
-                </div>
-
-                {/* Dynamic Endpoint URL based on Mode */}
-                {plcConfig.connectionMode === 'WEBSOCKET_MQTT' && (
-                  <div className="col-span-1 sm:col-span-2">
-                    <label className="block text-[10px] text-cyan-400 font-bold mb-1">WEBSOCKET EDGE GATEWAY URL</label>
-                    <input
-                      type="text"
-                      value={plcConfig.wsUrl}
-                      onChange={e => updatePlcConfig({ wsUrl: e.target.value })}
-                      className="liquid-input w-full text-cyan-300 text-xs rounded-xl px-2.5 py-1.5 font-mono focus:border-cyan-400 focus:outline-none"
-                      placeholder="ws://192.168.1.120:1880/ws/plc"
-                    />
-                  </div>
-                )}
-
-                {plcConfig.connectionMode === 'REST_POLLING' && (
-                  <div className="col-span-1 sm:col-span-2">
-                    <label className="block text-[10px] text-cyan-400 font-bold mb-1">REST API ENDPOINT URL</label>
-                    <input
-                      type="text"
-                      value={plcConfig.restApiUrl}
-                      onChange={e => updatePlcConfig({ restApiUrl: e.target.value })}
-                      className="liquid-input w-full text-cyan-300 text-xs rounded-xl px-2.5 py-1.5 font-mono focus:border-cyan-400 focus:outline-none"
-                      placeholder="http://192.168.1.120:8080/api/v1/plc/shots"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Throttle protection notice */}
-              <div className="text-[10px] text-slate-400 font-sans flex items-center justify-between">
-                <span>⚡ High-Speed UI Protection: Batch-flushes pulse counts every {plcConfig.uiThrottleMs}ms to prevent React re-render lag.</span>
-                <span className="text-slate-400 font-mono">Persisted in localStorage</span>
-              </div>
-            </div>
-
-            {/* Test Connection Button */}
-            <div className="flex justify-end pt-1">
               <button
                 type="button"
-                onClick={handleTestConnection}
-                className="liquid-pill px-5 py-2.5 bg-white/[0.06] hover:bg-white/[0.12] text-cyan-300 font-bold border border-cyan-500/40 rounded-full text-xs flex items-center gap-2 transition-all shadow-md cursor-pointer active:scale-95"
+                onClick={() => onNavigate && onNavigate('plc-config')}
+                className="liquid-pill px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold rounded-full text-xs font-mono flex items-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer shrink-0 border-none"
               >
-                <Wifi className="w-3.5 h-3.5 text-cyan-400" />
-                <span>TEST PLC CONNECTION & READ REGISTERS</span>
+                <Network className="w-3.5 h-3.5 text-cyan-200" />
+                <span>จัดการ PLC & DATA GATEWAY ทั้งหมด ➔</span>
               </button>
-            </div>
-
-            {/* 2. Line Register Address Mapping Grid */}
-            <div className="space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-white/10 pt-4">
-                <div>
-                  <div className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                    <Layers className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>2. PLC REGISTER ADDRESS MAPPING (ตารางแอดเดรสยอดช็อตรายไลน์)</span>
-                  </div>
-                  <div className="text-[10px] text-slate-400 font-sans mt-0.5">
-                    กำหนดค่า Register Address (%MW, DB, Topic) สำหรับอ่านยอดช็อตแต่ละสาย | กดปุ่ม +10 Pulse เพื่อทดสอบยิงสัญญาณ
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setShowAddLineForm(!showAddLineForm)}
-                  className="liquid-pill px-3.5 py-1.5 bg-white/[0.06] hover:bg-white/[0.12] text-cyan-300 border border-cyan-500/40 rounded-full text-xs font-bold flex items-center gap-1.5 self-start sm:self-auto cursor-pointer active:scale-95"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>ADD LINE MAPPING</span>
-                </button>
-              </div>
-
-              {/* Inline Add Line Form */}
-              {showAddLineForm && (
-                <form onSubmit={handleCreateLineRegister} className="bg-black/40 p-4 rounded-2xl border border-cyan-500/40 grid grid-cols-1 sm:grid-cols-4 gap-2.5 text-xs shadow-lg">
-                  <div>
-                    <label className="block text-[10px] text-slate-400 font-bold mb-1">LINE ID (e.g. E7)</label>
-                    <input
-                      type="text"
-                      required
-                      value={newLineId}
-                      onChange={e => setNewLineId(e.target.value)}
-                      placeholder="E7"
-                      className="liquid-input w-full rounded-xl px-2.5 py-1.5 font-mono text-slate-100"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] text-slate-400 font-bold mb-1">LINE NAME</label>
-                    <input
-                      type="text"
-                      value={newLineName}
-                      onChange={e => setNewLineName(e.target.value)}
-                      placeholder="LINE E7 (Ø7 Louver)"
-                      className="liquid-input w-full rounded-xl px-2.5 py-1.5 font-mono text-slate-100"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] text-slate-400 font-bold mb-1">REGISTER ADDRESS</label>
-                    <input
-                      type="text"
-                      required
-                      value={newLineAddress}
-                      onChange={e => setNewLineAddress(e.target.value)}
-                      placeholder="%MW109 or DB1.DBD20"
-                      className="liquid-input w-full rounded-xl px-2.5 py-1.5 font-mono text-cyan-300"
-                    />
-                  </div>
-                  <div className="flex items-end gap-2">
-                    <button
-                      type="submit"
-                      className="liquid-pill w-full py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold rounded-full text-xs shadow-md active:scale-95 border-none"
-                    >
-                      CONFIRM ADD
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowAddLineForm(false)}
-                      className="liquid-pill px-3 py-2 bg-white/[0.06] hover:bg-white/[0.12] text-slate-300 rounded-full text-xs font-bold border border-white/10 active:scale-95 cursor-pointer"
-                    >
-                      CANCEL
-                    </button>
-                  </div>
-                </form>
-              )}
-
-              {/* Grid of Mapped Line Registers */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                {(Object.values(plcConfig.lineRegisters) as PLCLineRegisterMap[]).map((reg: PLCLineRegisterMap) => (
-                  <div key={reg.lineId} className={`bg-black/30 p-3 rounded-2xl border transition-all space-y-2 ${
-                    reg.active ? 'border-white/10 hover:border-cyan-500/40 shadow-sm' : 'border-white/5 opacity-50'
-                  }`}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <input
-                          type="checkbox"
-                          checked={reg.active}
-                          onChange={() => toggleLineRegisterActive(reg.lineId)}
-                          className="rounded border-slate-700 bg-slate-900 text-cyan-500 focus:ring-0 cursor-pointer"
-                          title="Toggle active line polling"
-                        />
-                        <span className="font-bold text-cyan-400 text-xs">LINE {reg.lineId}</span>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => deleteLineRegisterMapping(reg.lineId)}
-                        className="text-slate-500 hover:text-rose-400 p-1 rounded-full hover:bg-rose-500/10 cursor-pointer transition-colors"
-                        title="Delete line mapping"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-
-                    {/* Editable Register Address Input */}
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="text-[9px] text-slate-500 uppercase">Reg:</span>
-                      <input
-                        type="text"
-                        value={reg.address}
-                        onChange={e => updateLineRegisterAddress(reg.lineId, e.target.value)}
-                        className="w-24 bg-white/[0.04] border border-white/10 focus:border-cyan-500 text-right text-[10px] text-slate-200 font-mono px-2 py-0.5 rounded-lg focus:outline-none"
-                      />
-                    </div>
-
-                    {/* Current Value Display */}
-                    <div className="flex items-center justify-between font-mono pt-0.5">
-                      <span className="text-[10px] text-slate-400">Current:</span>
-                      <span className="font-bold text-emerald-400 text-xs">{(reg.currentVal || 0).toLocaleString()}</span>
-                    </div>
-
-                    {/* Card Footer */}
-                    <div className="flex items-center justify-between pt-1.5 border-t border-white/5">
-                      <span className="text-[9px] text-slate-500 truncate max-w-[80px]">
-                        {reg.lastPulse ? `Last: ${reg.lastPulse}` : 'No pulse'}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleManualPulse(reg.lineId, 10)}
-                        className="liquid-pill px-2.5 py-0.5 rounded-full bg-cyan-950/60 hover:bg-cyan-900/80 border border-cyan-500/40 text-[9px] font-bold text-cyan-300 cursor-pointer transition-all active:scale-95"
-                      >
-                        +10 Pulse
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* 3. Diagnostic Console */}
-            <div className="bg-black/50 p-4 rounded-2xl border border-white/10 font-mono text-[11px] space-y-2.5 shadow-inner">
-              <div className="text-slate-400 border-b border-white/10 pb-2 flex items-center justify-between flex-wrap gap-2">
-                <span className="flex items-center gap-1.5 text-emerald-400 font-bold">
-                  <Terminal className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>PLC DRIVER DIAGNOSTIC CONSOLE</span>
-                </span>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-slate-400">
-                    STATUS: <span className="text-cyan-400 font-bold">{plcConfig.isAutoPolling ? 'AUTO POLLING ACTIVE' : 'IDLE'}</span> ({plcConfig.protocol})
-                  </span>
-
-                  <button
-                    type="button"
-                    onClick={handleCopyLogs}
-                    className="liquid-pill px-2.5 py-0.5 bg-white/[0.06] hover:bg-white/[0.12] text-slate-300 rounded-full text-[9px] font-bold border border-white/10 flex items-center gap-1 cursor-pointer active:scale-95"
-                  >
-                    <Copy className="w-2.5 h-2.5" />
-                    <span>COPY</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={clearLogs}
-                    className="liquid-pill px-2.5 py-0.5 bg-white/[0.06] hover:bg-white/[0.12] text-slate-400 hover:text-slate-200 rounded-full text-[9px] font-bold border border-white/10 cursor-pointer active:scale-95"
-                  >
-                    CLEAR
-                  </button>
-                </div>
-              </div>
-
-              {/* Console Output Body */}
-              <div className="max-h-36 overflow-y-auto space-y-1 custom-scrollbar text-slate-300 font-mono text-[11px]">
-                {diagnosticLogs.map((log, idx) => {
-                  let textClass = 'text-slate-400';
-                  if (log.includes('ERROR') || log.includes('Failed')) textClass = 'text-rose-400 font-bold';
-                  else if (log.includes('SUCCESS') || log.includes('FLUSH') || log.includes('CONNECTED')) textClass = 'text-emerald-400';
-                  else if (log.includes('Initiating') || log.includes('PULSE TEST')) textClass = 'text-cyan-300';
-
-                  return (
-                    <div key={idx} className={`${textClass} leading-tight`}>
-                      {log}
-                    </div>
-                  );
-                })}
-              </div>
             </div>
           </div>
         </div>
 
         {/* Right Info Column */}
-        <div className="lg:col-span-4 liquid-glass-card border border-white/10 rounded-3xl p-5 sm:p-6 space-y-4 font-mono text-xs text-slate-300 h-fit shadow-xl">
-          <h3 className="font-bold text-slate-100 border-b border-white/10 pb-3 flex items-center gap-2">
-            <Database className="w-4 h-4 text-cyan-400" />
-            <span>Seed Data Lineage & Driver Status</span>
-          </h3>
+        <div className="lg:col-span-4 space-y-6">
+          <div className="liquid-glass-card border border-white/10 rounded-3xl p-5 sm:p-6 space-y-4 font-mono text-xs text-slate-300 shadow-xl">
+            <h3 className="font-bold text-slate-100 border-b border-white/10 pb-3 flex items-center gap-2">
+              <Database className="w-4 h-4 text-cyan-400" />
+              <span>Seed Data Lineage & Database Status</span>
+            </h3>
 
-          <div className="bg-black/30 p-4 rounded-2xl border border-white/10 space-y-3">
-            <div>
-              <div className="text-slate-500 text-[10px]">DATA SOURCE</div>
-              <div className="font-bold text-emerald-400 text-xs">{SEED_SOURCE_LABEL}</div>
-            </div>
-
-            <div>
-              <div className="text-slate-500 text-[10px]">VERSION RELEASE</div>
-              <div className="text-slate-200">{SEED_DATA_VERSION}</div>
-            </div>
-
-            <div>
-              <div className="text-slate-500 text-[10px]">ACTIVE PLC CONNECTION</div>
-              <div className="text-cyan-300 font-bold flex items-center gap-1.5 mt-0.5">
-                <Server className="w-3.5 h-3.5 text-cyan-400" />
-                <span>{plcConfig.protocol} @ {plcConfig.ip}:{plcConfig.port}</span>
+            <div className="bg-black/30 p-4 rounded-2xl border border-white/10 space-y-3">
+              <div>
+                <div className="text-slate-500 text-[10px]">DATA SOURCE</div>
+                <div className="font-bold text-emerald-400 text-xs">{SEED_SOURCE_LABEL}</div>
               </div>
-            </div>
 
-            <div>
-              <div className="text-slate-500 text-[10px]">REGISTER MAPPINGS</div>
-              <div className="text-slate-200">
-                {Object.keys(plcConfig.lineRegisters).length} Monitored Lines ({(Object.values(plcConfig.lineRegisters) as PLCLineRegisterMap[]).filter((r: PLCLineRegisterMap) => r.active).length} Active)
+              <div>
+                <div className="text-slate-500 text-[10px]">VERSION RELEASE</div>
+                <div className="text-slate-200">{SEED_DATA_VERSION}</div>
               </div>
-            </div>
 
-            <div>
-              <div className="text-slate-500 text-[10px]">THROTTLE BATCH SPEED</div>
-              <div className="text-amber-300 font-bold">
-                {plcConfig.uiThrottleMs}ms UI Protection Batch
+              <div>
+                <div className="text-slate-500 text-[10px]">ACTIVE DRIVER ENGINE</div>
+                <div className="text-cyan-300 font-bold flex items-center gap-1.5 mt-0.5">
+                  <Server className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>{plcConfig.protocol} Gateway</span>
+                </div>
+              </div>
+
+              <div>
+                <div className="text-slate-500 text-[10px]">UI REFRESH RATE</div>
+                <div className="text-amber-300 font-bold">
+                  {plcConfig.uiThrottleMs}ms Batch Throttle
+                </div>
               </div>
             </div>
           </div>
+
+          {/* Go-Live Readiness / Set 0 Reset Card */}
+          <div className="liquid-glass-card border border-emerald-500/30 bg-emerald-950/20 rounded-3xl p-5 sm:p-6 space-y-4 shadow-xl">
+            <h3 className="font-bold text-emerald-300 border-b border-emerald-500/20 pb-3 flex items-center gap-2">
+              <Zap className="w-4 h-4 text-emerald-400 animate-pulse" />
+              <span>Factory Go-Live Readiness (เตรียมใช้งานจริง)</span>
+            </h3>
+
+            <p className="text-xs text-slate-300 font-thai leading-relaxed">
+              ฟังก์ชั่นสำหรับ IT & ฝ่ายแม่พิมพ์ เพื่อเซ็ตค่าช็อตสะสม ช็อตการเจียร และประวัติทั้งหมดเป็น <strong>0</strong> เพื่อเริ่มนับการใช้งานจริงของโรงงาน โดยยังคงเก็บฐานข้อมูลแม่พิมพ์และมาสเตอร์พาร์ทครบถ้วน
+            </p>
+
+            <button
+              type="button"
+              onClick={() => setIsGoLiveModalOpen(true)}
+              className="liquid-pill w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-2 transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] cursor-pointer active:scale-95 border-none font-mono"
+            >
+              <RotateCcw className="w-4 h-4 text-emerald-200" />
+              <span>CONFIGURE GO-LIVE (SET 0 & PLC LAN METERS)</span>
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Factory Go-Live Set 0 & PLC LAN Meter Modal */}
+      {isGoLiveModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 font-sans animate-fadeIn">
+          <div className="liquid-glass-card border border-emerald-500/40 bg-slate-950/95 max-w-2xl w-full rounded-3xl p-6 space-y-6 shadow-2xl overflow-y-auto max-h-[90vh]">
+            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  <Zap className="w-5 h-5 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg text-white font-thai">ตั้งค่าระบบสำหรับวันใช้งานจริง (Factory Go-Live Set 0)</h3>
+                  <p className="text-xs text-slate-400 font-thai">กำหนดเลขมิเตอร์ PLC LAN เริ่มต้น + เซ็ตประวัติและช็อตพาร์ทสะสมทั้งหมดเป็น 0</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsGoLiveModalOpen(false)}
+                className="text-slate-400 hover:text-white p-2 rounded-xl bg-white/5 hover:bg-white/10 cursor-pointer text-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Explanatory Banner */}
+            <div className="p-4 bg-emerald-950/40 border border-emerald-500/30 rounded-2xl text-xs text-emerald-200 space-y-2 font-thai leading-relaxed">
+              <div className="font-bold flex items-center gap-2 text-emerald-300">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <span>หลักการทำงานของช็อตพาร์ท เมื่อเชื่อมต่อ PLC LAN โรงงาน:</span>
+              </div>
+              <p>
+                1. เลขมิเตอร์รวมของเครื่อง (Machine Total Counter) จะตรงกับมิเตอร์จริงบนหน้าจอ PLC (เช่น Line E1 = 153,474,176)
+              </p>
+              <p>
+                2. <strong>ช็อตสะสมของพาร์ททุกชิ้นจะเริ่มต้นนับจาก 0 (0% Progress)</strong> โดยระบบบันทึกจุดอ้างอิง Last Change Shot เท่ากับเลขมิเตอร์ปัจจุบันของ PLC
+              </p>
+              <p>
+                3. เมื่อ PLC LAN ส่งสัญญาณสตรีมช็อตเข้ามา ช็อตพาร์ทจะนับเพิ่มขึ้นเรื่อยๆ อย่างแม่นยำ 100%
+              </p>
+            </div>
+
+            {/* Quick Presets */}
+            <div className="space-y-3 font-mono">
+              <div className="text-xs font-bold text-slate-300 font-thai">1. เลือกรูปแบบเลขมิเตอร์เครื่องเริ่มต้น (Select Machine Meter Option):</div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleApplyGoLiveReset('PLC_FACTORY')}
+                  className="p-4 rounded-2xl border border-emerald-500/50 bg-emerald-950/30 hover:bg-emerald-900/50 text-left cursor-pointer transition-all space-y-1.5 group"
+                >
+                  <div className="font-bold text-emerald-300 text-xs flex items-center justify-between">
+                    <span>⚡ PLC LAN Factory Standard</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300">แนะนำ</span>
+                  </div>
+                  <div className="text-[11px] text-slate-300 font-thai">
+                    ใช้เลขมิเตอร์ PLC โรงงานจริงตามคู่มือ (E1=153.4M, E2=142.8M...) พาร์ทเริ่มต้น 0 ช็อต
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleApplyGoLiveReset('ZERO')}
+                  className="p-4 rounded-2xl border border-white/10 bg-black/40 hover:bg-white/5 text-left cursor-pointer transition-all space-y-1.5"
+                >
+                  <div className="font-bold text-slate-200 text-xs">
+                    ⚪ Clear All Line Meters to 0
+                  </div>
+                  <div className="text-[11px] text-slate-400 font-thai">
+                    ตั้งเลขมิเตอร์เครื่องทุกไลน์เป็น 0 และช็อตพาร์ทเริ่มต้น 0 เหมาะสำหรับเครื่องใหม่
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* Custom Per-Line Inputs */}
+            <div className="space-y-3 pt-2 border-t border-white/10 font-mono">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-300 font-thai">2. หรือป้อนเลขมิเตอร์หน้าเครื่องจริงแยกรายไลน์ (Custom Line PLC Meters):</span>
+                <button
+                  type="button"
+                  onClick={() => setLineMeterInputs({ ...DEFAULT_FACTORY_PLC_METERS })}
+                  className="text-[11px] text-cyan-400 hover:underline cursor-pointer"
+                >
+                  [ดึงจาก Standard PLC]
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {(['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'] as ProductionLineId[]).map(lineId => (
+                  <div key={lineId} className="bg-black/50 p-3 rounded-2xl border border-white/10 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-cyan-300">{lineId} PLC Meter</span>
+                      <span className="text-[10px] text-slate-400 font-thai">เลขมิเตอร์จริง</span>
+                    </div>
+                    <input
+                      type="number"
+                      value={lineMeterInputs[lineId] || 0}
+                      onChange={e => setLineMeterInputs({
+                        ...lineMeterInputs,
+                        [lineId]: parseInt(e.target.value, 10) || 0
+                      })}
+                      className="liquid-input w-full px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-300"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleApplyGoLiveReset('CUSTOM')}
+                className="liquid-pill w-full py-3 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-2 transition-all mt-4 cursor-pointer font-mono"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>ยืนยันตามเลขมิเตอร์ที่ป้อนแยกรายไลน์ (EXECUTE CUSTOM SET 0)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -673,7 +673,7 @@ export const InstallQuantityMatrixView: React.FC<InstallQuantityMatrixViewProps>
                 </th>
 
                 {/* Col: Stage */}
-                <th className="sticky top-[27px] z-20 py-1 px-1 w-14 text-center border-b border-r border-[#666666] bg-[#555566]">
+                <th className="sticky top-[27px] z-20 py-1 px-1 min-w-[140px] w-36 text-center border-b border-r border-[#666666] bg-[#555566]">
                   Stage
                 </th>
 

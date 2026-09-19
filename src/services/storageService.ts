@@ -1,5 +1,5 @@
 import { getMoldTypeForLine, getStagesForMoldType } from "../utils/moldMatrixUtils";
-import { cleanStageName, deriveLogicalStage, DEFAULT_STAGE_GROUPS } from "../utils/stageUtils";
+import { cleanStageName, deriveLogicalStage, DEFAULT_STAGE_GROUPS, isPartMatchingInteractiveStage } from "../utils/stageUtils";
 import {
   LineLiveMonitoringData,
   LineActiveConfiguration,
@@ -53,6 +53,7 @@ import {
   INITIAL_DOWNTIME_LOGS,
   DEFAULT_SYSTEM_SETTINGS,
   DEFAULT_PLC_CONFIG,
+  DEFAULT_FACTORY_PLC_METERS,
   INITIAL_PLC_REGISTER_MAPPINGS,
   INITIAL_GATEWAY_STATUS,
   INITIAL_SYSTEM_ALERTS,
@@ -60,7 +61,7 @@ import {
   SEED_SOURCE_LABEL
 } from '../data/seedData';
 
-import { calculatePartMetrics } from './calculationService';
+import { calculatePartMetrics, getPartProgressiveRank } from './calculationService';
 
 const STORAGE_KEYS = {
   USERS: 'fin_press_users',
@@ -126,7 +127,7 @@ class StorageService {
     const users = localStorage.getItem(STORAGE_KEYS.USERS);
     const parts = localStorage.getItem(STORAGE_KEYS.PART_MASTERS);
     const lines = localStorage.getItem(STORAGE_KEYS.LINE_MONITORING);
-    if (!initialized || !users || !parts || !lines) {
+    if (!initialized || !users || !parts || !lines || initialized !== SEED_DATA_VERSION) {
       this.resetToSeedData();
     }
     this.migrateStageNamesToEnglish();
@@ -221,6 +222,7 @@ class StorageService {
   }
 
   public resetToSeedData() {
+    this.cleanUpAllPinOverrides();
     localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(INITIAL_USERS));
     localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(INITIAL_USERS[0]));
     localStorage.setItem(STORAGE_KEYS.STAGE_GROUPS, JSON.stringify(DEFAULT_STAGE_GROUPS));
@@ -228,15 +230,15 @@ class StorageService {
     localStorage.setItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(INITIAL_LINE_CONFIGS));
     localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(INITIAL_PART_LIFE_STANDARDS));
     
-    // Generate initial live monitoring dataset for 7 production lines (E1, E2, E3-1, E3-2, E3-3, E4, E5)
+    // Generate initial live monitoring dataset for 7 production lines (E1, E2, E3-1, E3-2, E3-3, E4, E5) with 0 initial shots
     const linesMonitoring: Record<ProductionLineId, LineLiveMonitoringData> = {
       'E1': INITIAL_LIVE_DATA_E1,
-      'E2': this.generateLineMonitoring('E2', INITIAL_LINE_CONFIGS[1], 142890520),
-      'E3-1': this.generateLineMonitoring('E3-1', INITIAL_LINE_CONFIGS[2], 98450120),
-      'E3-2': this.generateLineMonitoring('E3-2', INITIAL_LINE_CONFIGS[3], 112450890),
-      'E3-3': this.generateLineMonitoring('E3-3', INITIAL_LINE_CONFIGS[4], 87620340),
-      'E4': this.generateLineMonitoring('E4', INITIAL_LINE_CONFIGS[5], 168920150),
-      'E5': this.generateLineMonitoring('E5', INITIAL_LINE_CONFIGS[6], 135400980)
+      'E2': this.generateLineMonitoring('E2', INITIAL_LINE_CONFIGS[1], 0),
+      'E3-1': this.generateLineMonitoring('E3-1', INITIAL_LINE_CONFIGS[2], 0),
+      'E3-2': this.generateLineMonitoring('E3-2', INITIAL_LINE_CONFIGS[3], 0),
+      'E3-3': this.generateLineMonitoring('E3-3', INITIAL_LINE_CONFIGS[4], 0),
+      'E4': this.generateLineMonitoring('E4', INITIAL_LINE_CONFIGS[5], 0),
+      'E5': this.generateLineMonitoring('E5', INITIAL_LINE_CONFIGS[6], 0)
     };
 
     localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(linesMonitoring));
@@ -260,10 +262,85 @@ class StorageService {
     this.notify();
   }
 
+  // Clear all pin overrides across all lines
+  public cleanUpAllPinOverrides() {
+    try {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && (
+          key.startsWith('FIN_DIE_INTERACTIVE_PINS_') ||
+          key.startsWith('FIN_DIE_PINS_') ||
+          key.startsWith('FIN_DIE_COMPACT_PIN_OVERRIDES_') ||
+          key.startsWith('FIN_DIE_PIN_OVERRIDES_V3_') ||
+          key.startsWith('FIN_DIE_PIN_OVERRIDES_V4_') ||
+          key.startsWith('FIN_DIE_PIN_OVERRIDES_V5_')
+        )) {
+          localStorage.removeItem(key);
+        }
+      }
+    } catch (e) {
+      console.warn('Error clearing pin overrides:', e);
+    }
+  }
+
+  // Factory Go-Live Set 0 Reset Method with PLC Meter Baseline Support
+  public resetToCleanGoLive(initialShotBaseline: number | Record<ProductionLineId, number> = DEFAULT_FACTORY_PLC_METERS) {
+    this.cleanUpAllPinOverrides();
+
+    localStorage.setItem(STORAGE_KEYS.REPLACEMENTS, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.REPLACEMENT_DRAFTS, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.REGRINDS, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.INSPECTIONS, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.SHOT_LOGS, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.DOWNTIME_LOGS, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.SYSTEM_ALERTS, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.OFFLINE_BUFFER, JSON.stringify([]));
+
+    const lineConfigs = this.getLineConfigs();
+
+    const getBaseline = (lId: ProductionLineId): number => {
+      if (typeof initialShotBaseline === 'number') {
+        return initialShotBaseline;
+      }
+      return initialShotBaseline[lId] !== undefined ? initialShotBaseline[lId] : (DEFAULT_FACTORY_PLC_METERS[lId] || 0);
+    };
+
+    const linesMonitoring: Record<ProductionLineId, LineLiveMonitoringData> = {
+      'E1': this.generateLineMonitoring('E1', lineConfigs.find(c => c.lineId === 'E1') || INITIAL_LINE_CONFIGS[0], getBaseline('E1')),
+      'E2': this.generateLineMonitoring('E2', lineConfigs.find(c => c.lineId === 'E2') || INITIAL_LINE_CONFIGS[1], getBaseline('E2')),
+      'E3-1': this.generateLineMonitoring('E3-1', lineConfigs.find(c => c.lineId === 'E3-1') || INITIAL_LINE_CONFIGS[2], getBaseline('E3-1')),
+      'E3-2': this.generateLineMonitoring('E3-2', lineConfigs.find(c => c.lineId === 'E3-2') || INITIAL_LINE_CONFIGS[3], getBaseline('E3-2')),
+      'E3-3': this.generateLineMonitoring('E3-3', lineConfigs.find(c => c.lineId === 'E3-3') || INITIAL_LINE_CONFIGS[4], getBaseline('E3-3')),
+      'E4': this.generateLineMonitoring('E4', lineConfigs.find(c => c.lineId === 'E4') || INITIAL_LINE_CONFIGS[5], getBaseline('E4')),
+      'E5': this.generateLineMonitoring('E5', lineConfigs.find(c => c.lineId === 'E5') || INITIAL_LINE_CONFIGS[6], getBaseline('E5'))
+    };
+
+    localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(linesMonitoring));
+
+    // Also align PLC registers currentVal in plcConfig
+    const plcConfig = this.getPLCConfig();
+    if (plcConfig && plcConfig.lineRegisters) {
+      (Object.keys(linesMonitoring) as ProductionLineId[]).forEach(lId => {
+        if (plcConfig.lineRegisters[lId]) {
+          plcConfig.lineRegisters[lId].currentVal = linesMonitoring[lId].machineShotTotal;
+          plcConfig.lineRegisters[lId].lastPulse = new Date().toLocaleTimeString('th-TH');
+        }
+      });
+      localStorage.setItem(STORAGE_KEYS.PLC_CONFIG, JSON.stringify(plcConfig));
+    }
+
+    this.addAuditLog(
+      'SYSTEM',
+      `Factory Go-Live Operational Reset (Set 0) executed. Line PLC meters aligned for real-time PLC LAN streaming.`
+    );
+
+    this.notify();
+  }
+
   private generateLineMonitoring(
     lineId: ProductionLineId,
     config: LineActiveConfiguration,
-    totalShots: number
+    totalShots: number = 0
   ): LineLiveMonitoringData {
     const standards = INITIAL_PART_LIFE_STANDARDS;
     const stocks = INITIAL_SPARE_STOCKS;
@@ -275,16 +352,12 @@ class StorageService {
     let baseItems: PartLiveTrackingItem[] = [];
 
     if (installedCodes.length > 0) {
-      baseItems = installedCodes.map((code, idx) => {
+      baseItems = installedCodes.map((code) => {
         const pm = partMasters.find(p => p.partCode === code);
         const std = standards.find(s => s.configKey?.partCode === code || s.partName === pm?.partName || s.stagePunchDie === pm?.stageName);
         const stock = stocks.find(s => s.partCode === code || s.partName === pm?.partName);
         const installQty = installedMap[code] || (pm ? 1 : 0);
         const lifeLimit = std?.lifeLimitShots || 15000000;
-        
-        const currentShotRatio = [0.45, 0.62, 0.78, 0.88, 0.55, 0.12, 0.35, 0.70, 0.65, 0.08, 0.52, 0.07][idx % 12];
-        const curShot = Math.round(lifeLimit * currentShotRatio);
-        const lastChange = Math.max(0, totalShots - curShot);
 
         return calculatePartMetrics(
           {
@@ -295,12 +368,12 @@ class StorageService {
             position: pm?.stageName || 'ALL',
             installQty: installQty,
             backupQty: stock?.availableQuantity ?? 10,
-            usedShot: curShot,
-            currentShot: curShot,
-            shotAtLastChange: lastChange,
-            lastChangeShot: lastChange,
-            regrindCount: idx % 3,
-            totalMmGround: (idx % 3) * 0.2,
+            usedShot: 0,
+            currentShot: 0,
+            shotAtLastChange: totalShots,
+            lastChangeShot: totalShots,
+            regrindCount: 0,
+            totalMmGround: 0,
             lifeLimit: lifeLimit
           },
           config,
@@ -310,10 +383,6 @@ class StorageService {
       });
     } else {
       baseItems = INITIAL_LIVE_DATA_E1.items.map((item, idx) => {
-        const currentShotRatio = [0.45, 0.62, 0.78, 0.88, 0.55, 0.12, 0.12, 0.70, 0.65, 0.08, 0.52, 0.07][idx % 12];
-        const curShot = Math.round((item.lifeLimit || 100000000) * currentShotRatio);
-        const lastChange = Math.max(0, totalShots - curShot);
-
         return calculatePartMetrics(
           {
             slotId: `SLOT-${lineId}-${idx + 1}`,
@@ -323,12 +392,13 @@ class StorageService {
             position: item.position,
             installQty: item.installQty,
             backupQty: item.backupQty,
-            usedShot: curShot,
-            currentShot: curShot,
-            shotAtLastChange: lastChange,
-            lastChangeShot: lastChange,
-            regrindCount: item.regrindCount,
-            totalMmGround: item.totalMmGround
+            usedShot: 0,
+            currentShot: 0,
+            shotAtLastChange: totalShots,
+            lastChangeShot: totalShots,
+            regrindCount: 0,
+            totalMmGround: 0,
+            lifeLimit: item.lifeLimit || 15000000
           },
           config,
           standards,
@@ -339,18 +409,18 @@ class StorageService {
 
     return {
       lineId,
-      lineName: lineId,
+      lineName: config?.lineName || `Fin Press Line ${lineId}`,
       machineStatus: 'IDLE',
       machineShotTotal: totalShots,
-      shiftShot: Math.round(180000 + Math.random() * 80000),
-      dailyShot: Math.round(3800000 + Math.random() * 1500000),
-      monthlyShot: Math.round(totalShots * 0.35),
+      shiftShot: 0,
+      dailyShot: 0,
+      monthlyShot: 0,
       shotSignal: 'NORMAL',
-      lastUpdate: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      lastUpdate: new Date().toISOString().replace('T', ' ').slice(0, 19),
       activeConfig: config,
-      items: baseItems,
       dataSource: 'NO_DATA',
-      dataFreshness: 'OFFLINE'
+      dataFreshness: 'OFFLINE',
+      items: baseItems
     };
   }
 
@@ -495,6 +565,66 @@ class StorageService {
   public savePartMasters(parts: PartMaster[]): void {
     localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(parts));
     this.addAuditLog('SYSTEM', `Bulk updated ${parts.length} Part Master catalog records`);
+    this.notify();
+  }
+
+  public savePartMastersBulk(parts: PartMaster[], lifeStds: PartLifeStandard[]): void {
+    // Save part masters
+    localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(parts));
+    
+    // Save life standards
+    localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(lifeStds));
+
+    // Batch sync name/stage changes to other stores
+    let regrindChanged = false;
+    const regrindStds = this.getRegrindMasterStandards();
+    
+    let stocksChanged = false;
+    const stocks = this.getSpareStocks();
+
+    let locksChanged = false;
+    const locks = this.getPositionLocks();
+
+    parts.forEach(part => {
+      const newName = part.partName;
+      const newStage = part.stageName;
+
+      regrindStds.forEach(std => {
+        if (std.partCode === part.partCode) {
+          if (std.partName !== newName || std.stagePunchDie !== newStage) {
+            std.partName = newName;
+            std.stagePunchDie = newStage;
+            regrindChanged = true;
+          }
+        }
+      });
+
+      stocks.forEach(stk => {
+        if (stk.partCode === part.partCode && stk.partName !== newName) {
+          stk.partName = newName;
+          stocksChanged = true;
+        }
+      });
+
+      locks.forEach(lock => {
+        if (lock.partCode === part.partCode && lock.partName !== newName) {
+          lock.partName = newName;
+          locksChanged = true;
+        }
+      });
+    });
+
+    if (regrindChanged) {
+      localStorage.setItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(regrindStds));
+    }
+    if (stocksChanged) {
+      localStorage.setItem(STORAGE_KEYS.SPARE_STOCKS, JSON.stringify(stocks));
+    }
+    if (locksChanged) {
+      localStorage.setItem(STORAGE_KEYS.POSITION_LOCKS, JSON.stringify(locks));
+    }
+
+    this.addAuditLog('SYSTEM', `Bulk updated ${parts.length} Part Master catalog and standards records`, `อัปเดตข้อมูลชิ้นส่วนหลักและมาตรฐานจำนวน ${parts.length} รายการ`);
     this.notify();
   }
 
@@ -668,12 +798,12 @@ class StorageService {
   public getLinesMonitoring(): Record<ProductionLineId, LineLiveMonitoringData> {
     const defaultLinesMonitoring: Record<ProductionLineId, LineLiveMonitoringData> = {
       'E1': INITIAL_LIVE_DATA_E1,
-      'E2': this.generateLineMonitoring('E2', INITIAL_LINE_CONFIGS[1] || INITIAL_LINE_CONFIGS[0], 142890520),
-      'E3-1': this.generateLineMonitoring('E3-1', INITIAL_LINE_CONFIGS[2] || INITIAL_LINE_CONFIGS[0], 98450120),
-      'E3-2': this.generateLineMonitoring('E3-2', INITIAL_LINE_CONFIGS[3] || INITIAL_LINE_CONFIGS[0], 112450890),
-      'E3-3': this.generateLineMonitoring('E3-3', INITIAL_LINE_CONFIGS[4] || INITIAL_LINE_CONFIGS[0], 87620340),
-      'E4': this.generateLineMonitoring('E4', INITIAL_LINE_CONFIGS[5] || INITIAL_LINE_CONFIGS[0], 168920150),
-      'E5': this.generateLineMonitoring('E5', INITIAL_LINE_CONFIGS[6] || INITIAL_LINE_CONFIGS[0], 135400980)
+      'E2': this.generateLineMonitoring('E2', INITIAL_LINE_CONFIGS[1] || INITIAL_LINE_CONFIGS[0], 0),
+      'E3-1': this.generateLineMonitoring('E3-1', INITIAL_LINE_CONFIGS[2] || INITIAL_LINE_CONFIGS[0], 0),
+      'E3-2': this.generateLineMonitoring('E3-2', INITIAL_LINE_CONFIGS[3] || INITIAL_LINE_CONFIGS[0], 0),
+      'E3-3': this.generateLineMonitoring('E3-3', INITIAL_LINE_CONFIGS[4] || INITIAL_LINE_CONFIGS[0], 0),
+      'E4': this.generateLineMonitoring('E4', INITIAL_LINE_CONFIGS[5] || INITIAL_LINE_CONFIGS[0], 0),
+      'E5': this.generateLineMonitoring('E5', INITIAL_LINE_CONFIGS[6] || INITIAL_LINE_CONFIGS[0], 0)
     };
 
     const raw = localStorage.getItem(STORAGE_KEYS.LINE_MONITORING);
@@ -899,83 +1029,138 @@ class StorageService {
     this.notify();
   }
 
+  private safeSaveAuditLogs(logs: AuditLogEntry[]): void {
+    const limits = [200, 100, 50, 20, 5];
+    for (const limit of limits) {
+      try {
+        localStorage.setItem(STORAGE_KEYS.AUDIT_LOGS, JSON.stringify(logs.slice(0, limit)));
+        return; // Successfully saved, stop trying
+      } catch (e) {
+        console.warn(`[StorageService] Failed to save audit logs at limit ${limit}, trying smaller limit...`, e);
+      }
+    }
+    // If even 5 logs fail, try saving just 1
+    try {
+      localStorage.setItem(STORAGE_KEYS.AUDIT_LOGS, JSON.stringify(logs.slice(0, 1)));
+    } catch (e) {
+      console.error('[StorageService] Critical: localStorage is completely full. Removing audit logs to avoid blocking app functionality.', e);
+      try {
+        localStorage.removeItem(STORAGE_KEYS.AUDIT_LOGS);
+      } catch (rmErr) {
+        // Safe fallback
+      }
+    }
+  }
+
+  private safeSaveShotLogs(logs: any[]): void {
+    const limits = [200, 100, 50, 20, 5];
+    for (const limit of limits) {
+      try {
+        localStorage.setItem(STORAGE_KEYS.SHOT_LOGS, JSON.stringify(logs.slice(0, limit)));
+        return; // Successfully saved, stop trying
+      } catch (e) {
+        console.warn(`[StorageService] Failed to save shot logs at limit ${limit}, trying smaller limit...`, e);
+      }
+    }
+    // If even 5 logs fail, try saving just 1
+    try {
+      localStorage.setItem(STORAGE_KEYS.SHOT_LOGS, JSON.stringify(logs.slice(0, 1)));
+    } catch (e) {
+      console.error('[StorageService] Critical: localStorage is completely full. Removing shot logs to avoid blocking app functionality.', e);
+      try {
+        localStorage.removeItem(STORAGE_KEYS.SHOT_LOGS);
+      } catch (rmErr) {
+        // Safe fallback
+      }
+    }
+  }
+
   public addAuditLog(
     category: AuditLogEntry['actionCategory'],
     details: string,
     detailsTh?: string,
     lineId?: ProductionLineId
   ) {
-    const logs = this.getAuditLogs();
-    const user = this.getCurrentUser();
-    const nowIso = new Date().toISOString();
-    const auditId = `AUD-${nowIso.slice(0, 10).replace(/-/g, '')}-${String(logs.length + 1).padStart(3, '0')}`;
-    
-    const newEntry: AuditLogEntry = {
-      id: `AUD-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      auditId,
-      module: (category as any) || 'SYSTEM',
-      recordId: lineId ? `LINE-${lineId}` : 'SYS-GLOBAL',
-      action: category || 'UPDATE',
-      fieldChanged: 'generalStatus',
-      oldValue: '',
-      newValue: '',
-      reason: details,
-      user: `${user.name} (${user.employeeId || user.role})`,
-      userId: user.id,
-      userName: user.name,
-      role: user.role,
-      userRole: user.role,
-      dateTime: nowIso,
-      timestamp: nowIso.replace('T', ' ').substring(0, 19),
-      ipReference: '192.168.10.' + (Math.floor(10 + Math.random() * 80)),
-      sessionReference: 'SES-' + user.id.replace('USR-', '10'),
-      actionCategory: category,
-      details,
-      detailsTh,
-      lineId
-    };
-    logs.unshift(newEntry);
-    localStorage.setItem(STORAGE_KEYS.AUDIT_LOGS, JSON.stringify(logs.slice(0, 500)));
+    try {
+      const logs = this.getAuditLogs();
+      const user = this.getCurrentUser();
+      const nowIso = new Date().toISOString();
+      const auditId = `AUD-${nowIso.slice(0, 10).replace(/-/g, '')}-${String(logs.length + 1).padStart(3, '0')}`;
+      
+      const newEntry: AuditLogEntry = {
+        id: `AUD-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        auditId,
+        module: (category as any) || 'SYSTEM',
+        recordId: lineId ? `LINE-${lineId}` : 'SYS-GLOBAL',
+        action: category || 'UPDATE',
+        fieldChanged: 'generalStatus',
+        oldValue: '',
+        newValue: '',
+        reason: details,
+        user: `${user.name} (${user.employeeId || user.role})`,
+        userId: user.id,
+        userName: user.name,
+        role: user.role,
+        userRole: user.role,
+        dateTime: nowIso,
+        timestamp: nowIso.replace('T', ' ').substring(0, 19),
+        ipReference: '192.168.10.' + (Math.floor(10 + Math.random() * 80)),
+        sessionReference: 'SES-' + user.id.replace('USR-', '10'),
+        actionCategory: category,
+        details,
+        detailsTh,
+        lineId
+      };
+      logs.unshift(newEntry);
+      this.safeSaveAuditLogs(logs);
+    } catch (err) {
+      console.warn('[StorageService] addAuditLog failed gracefully:', err);
+    }
   }
 
   public logStructuredAudit(entry: Omit<AuditLogEntry, 'id' | 'timestamp' | 'dateTime' | 'user' | 'role'> & {
     userOverride?: { name: string; id: string; role: UserRole; employeeId?: string };
   }) {
-    const logs = this.getAuditLogs();
-    const user = entry.userOverride || this.getCurrentUser();
-    const nowIso = new Date().toISOString();
-    const auditId = entry.auditId || `AUD-${nowIso.slice(0, 10).replace(/-/g, '')}-${String(logs.length + 1).padStart(3, '0')}`;
+    try {
+      const logs = this.getAuditLogs();
+      const user = entry.userOverride || this.getCurrentUser();
+      const nowIso = new Date().toISOString();
+      const auditId = entry.auditId || `AUD-${nowIso.slice(0, 10).replace(/-/g, '')}-${String(logs.length + 1).padStart(3, '0')}`;
 
-    const newEntry: AuditLogEntry = {
-      id: `AUD-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      auditId,
-      module: entry.module,
-      recordId: entry.recordId,
-      action: entry.action,
-      fieldChanged: entry.fieldChanged,
-      oldValue: entry.oldValue,
-      newValue: entry.newValue,
-      reason: entry.reason,
-      user: `${user.name} (${user.employeeId || user.role})`,
-      userId: user.id,
-      userName: user.name,
-      role: user.role,
-      userRole: user.role,
-      dateTime: nowIso,
-      timestamp: nowIso.replace('T', ' ').substring(0, 19),
-      approvalRequestId: entry.approvalRequestId,
-      ipReference: entry.ipReference || '192.168.10.45',
-      sessionReference: entry.sessionReference || `SES-${user.id.replace('USR-', '10')}`,
-      details: entry.details || `${entry.action} on ${entry.recordId} (${entry.fieldChanged}: ${entry.oldValue} -> ${entry.newValue})`,
-      detailsTh: entry.detailsTh,
-      lineId: entry.lineId,
-      actionCategory: entry.actionCategory || 'SYSTEM'
-    };
+      const newEntry: AuditLogEntry = {
+        id: `AUD-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        auditId,
+        module: entry.module,
+        recordId: entry.recordId,
+        action: entry.action,
+        fieldChanged: entry.fieldChanged,
+        oldValue: entry.oldValue,
+        newValue: entry.newValue,
+        reason: entry.reason,
+        user: `${user.name} (${user.employeeId || user.role})`,
+        userId: user.id,
+        userName: user.name,
+        role: user.role,
+        userRole: user.role,
+        dateTime: nowIso,
+        timestamp: nowIso.replace('T', ' ').substring(0, 19),
+        approvalRequestId: entry.approvalRequestId,
+        ipReference: entry.ipReference || '192.168.10.45',
+        sessionReference: entry.sessionReference || `SES-${user.id.replace('USR-', '10')}`,
+        details: entry.details || `${entry.action} on ${entry.recordId} (${entry.fieldChanged}: ${entry.oldValue} -> ${entry.newValue})`,
+        detailsTh: entry.detailsTh,
+        lineId: entry.lineId,
+        actionCategory: entry.actionCategory || 'SYSTEM'
+      };
 
-    logs.unshift(newEntry);
-    localStorage.setItem(STORAGE_KEYS.AUDIT_LOGS, JSON.stringify(logs.slice(0, 500)));
-    this.notify();
-    return newEntry;
+      logs.unshift(newEntry);
+      this.safeSaveAuditLogs(logs);
+      this.notify();
+      return newEntry;
+    } catch (err) {
+      console.warn('[StorageService] logStructuredAudit failed gracefully:', err);
+      return {} as any;
+    }
   }
 
   /**
@@ -1048,15 +1233,17 @@ class StorageService {
   }
 
   public getShotDrafts(): ShotEntryRecord[] {
-    return JSON.parse(localStorage.getItem(STORAGE_KEYS.SHOT_DRAFTS) || '[]');
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEYS.SHOT_DRAFTS) || '[]');
+    } catch {
+      return [];
+    }
   }
 
   public saveShotDraft(draft: Partial<ShotEntryRecord>): ShotEntryRecord {
-    if (!draft.operatorName || !draft.operatorName.trim()) {
-      throw new Error('กรุณาระบุชื่อพนักงานผู้บันทึกก่อนบันทึกแบบร่าง (Operator Name is mandatory)');
-    }
-    const drafts = this.getShotDrafts();
     const user = this.getCurrentUser();
+    const opName = (draft.operatorName && draft.operatorName.trim()) || user.name || 'System Operator';
+    const drafts = this.getShotDrafts();
     const existingIdx = draft.id ? drafts.findIndex(d => d.id === draft.id) : -1;
     
     const draftRecord: ShotEntryRecord = {
@@ -1074,7 +1261,7 @@ class StorageService {
       newTotal: Number(draft.newTotal) || 0,
       entryReason: draft.entryReason || 'Daily Shift Production',
       notes: draft.notes || '',
-      operatorName: draft.operatorName.trim(),
+      operatorName: opName,
       operatorId: user.employeeId,
       timestamp: new Date().toISOString(),
       status: 'DRAFT',
@@ -1352,7 +1539,7 @@ class StorageService {
     };
 
     logs.unshift(newRecord);
-    localStorage.setItem(STORAGE_KEYS.SHOT_LOGS, JSON.stringify(logs.slice(0, 500)));
+    this.safeSaveShotLogs(logs);
 
     // 6. Delete Draft if applicable
     if (params.draftId) {
@@ -1593,7 +1780,7 @@ class StorageService {
     });
 
     localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(all));
-    localStorage.setItem(STORAGE_KEYS.SHOT_LOGS, JSON.stringify(logs.slice(0, 500)));
+    this.safeSaveShotLogs(logs);
 
     const linesDesc = `Line ${targetLineId}`;
     this.addAuditLog(
@@ -1781,7 +1968,7 @@ class StorageService {
 
     logs.unshift(reversalRecord);
     logs.unshift(correctedRecord);
-    localStorage.setItem(STORAGE_KEYS.SHOT_LOGS, JSON.stringify(logs.slice(0, 500)));
+    this.safeSaveShotLogs(logs);
 
     // 5. Comprehensive Audit Trail
     this.addAuditLog(
@@ -1868,7 +2055,7 @@ class StorageService {
       timestamp: new Date().toISOString()
     };
     logs.unshift(newShotLog);
-    localStorage.setItem(STORAGE_KEYS.SHOT_LOGS, JSON.stringify(logs.slice(0, 300)));
+    this.safeSaveShotLogs(logs);
 
     this.addAuditLog(
       'SHOT_ADJUSTMENT',
@@ -1974,7 +2161,10 @@ class StorageService {
       return { success: false, error: `Production line ${lineId} not found` };
     }
 
-    const item = line.items.find(i => i.partCode === record.partCode || (record.stageName && i.stagePunchDie === record.stageName));
+    const item = line.items.find(i => 
+      i.partCode === record.partCode || 
+      (record.stageName && isPartMatchingInteractiveStage(i, record.partCode || '', record.stageName))
+    );
     const installedQty = record.installedQuantity !== undefined ? Number(record.installedQuantity) : (item ? item.installQty : 1);
     const changedQty = record.changedQuantity !== undefined ? Number(record.changedQuantity) : installedQty;
     const isFullSet = record.fullSetOrPartial === 'FULL_SET' || record.replacementType === 'FULL SET REPLACEMENT';
@@ -2162,7 +2352,10 @@ class StorageService {
 
     if (line) {
       line.items = line.items.map(item => {
-        if (item.partCode === record.partCode || (record.stageName && item.stagePunchDie === record.stageName)) {
+        if (
+          item.partCode === record.partCode || 
+          (record.stageName && isPartMatchingInteractiveStage(item, record.partCode || '', record.stageName))
+        ) {
           // Rule 2 & 6 & 7: Start life from 0 on replacement, update last change shot to machine shot at replacement
           const nextRegrindCount = record.replacementType === 'RE-GROUND PART' ? (item.regrindCount + 1) : 0;
           return calculatePartMetrics(
@@ -3221,7 +3414,12 @@ class StorageService {
 
   public getPositionLocks(lineId?: ProductionLineId): PositionLockRecord[] {
     const raw = localStorage.getItem(STORAGE_KEYS.POSITION_LOCKS);
-    let locks: PositionLockRecord[] = raw ? JSON.parse(raw) : [];
+    let locks: PositionLockRecord[] = [];
+    try {
+      locks = raw ? JSON.parse(raw) : [];
+    } catch {
+      locks = [];
+    }
     
     if (locks.length === 0) {
       locks = this.initializeDefaultPositionLocks();
@@ -3318,12 +3516,33 @@ class StorageService {
     freezeShotCount: boolean = true
   ): PositionLockRecord {
     const raw = localStorage.getItem(STORAGE_KEYS.POSITION_LOCKS);
-    let locks: PositionLockRecord[] = raw ? JSON.parse(raw) : this.initializeDefaultPositionLocks();
+    let locks: PositionLockRecord[] = [];
+    try {
+      locks = raw ? JSON.parse(raw) : this.initializeDefaultPositionLocks();
+    } catch {
+      locks = this.initializeDefaultPositionLocks();
+    }
     const idx = locks.findIndex(l => l.id === id);
     const currentUser = this.getCurrentUser();
 
     if (idx < 0) {
-      throw new Error(`Position record ${id} not found.`);
+      console.warn(`Position record ${id} not found.`);
+      return {
+        id,
+        lineId: 'E1',
+        dieCode: 'DIE-01',
+        stageCode: 'STG-01',
+        stageName: 'Piercing',
+        partCode: '',
+        partName: '',
+        positionId: 'P-01',
+        positionIndex: 0,
+        isLocked: false,
+        lockType: 'UNLOCKED',
+        lockReason: '',
+        freezeShotCount: false,
+        notes: ''
+      };
     }
 
     const previous = locks[idx];
@@ -3367,7 +3586,12 @@ class StorageService {
     notes?: string
   ): void {
     const raw = localStorage.getItem(STORAGE_KEYS.POSITION_LOCKS);
-    let locks: PositionLockRecord[] = raw ? JSON.parse(raw) : this.initializeDefaultPositionLocks();
+    let locks: PositionLockRecord[] = [];
+    try {
+      locks = raw ? JSON.parse(raw) : this.initializeDefaultPositionLocks();
+    } catch {
+      locks = this.initializeDefaultPositionLocks();
+    }
     const currentUser = this.getCurrentUser();
 
     locks = locks.map(item => {
@@ -3660,8 +3884,15 @@ class StorageService {
   public saveGatewayStatus(status: Partial<GatewayStatusInfo>): void {
     const current = this.getGatewayStatus();
     const updated: GatewayStatusInfo = { ...current, ...status, readOnlyEnforced: true };
-    localStorage.setItem(STORAGE_KEYS.GATEWAY_STATUS, JSON.stringify(updated));
-    this.notify();
+    this.safeSetItem(STORAGE_KEYS.GATEWAY_STATUS, JSON.stringify(updated));
+    const hasMeaningfulChange = 
+      current.isOnline !== updated.isOnline ||
+      current.syncStatus !== updated.syncStatus ||
+      current.connectedLinesCount !== updated.connectedLinesCount ||
+      current.gatewayStatus !== updated.gatewayStatus;
+    if (hasMeaningfulChange) {
+      this.notify();
+    }
   }
 
   // ==========================================
@@ -3834,14 +4065,53 @@ class StorageService {
 
   public getTvDisplayConfigs(): Record<ProductionLineId, string[]> {
     const raw = localStorage.getItem(STORAGE_KEYS.TV_DISPLAY_CONFIGS);
-    if (!raw) {
-      return {} as Record<ProductionLineId, string[]>;
+    let parsed: Record<ProductionLineId, string[]> = {} as Record<ProductionLineId, string[]>;
+    if (raw) {
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        parsed = {} as Record<ProductionLineId, string[]>;
+      }
     }
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return {} as Record<ProductionLineId, string[]>;
+
+    const lines: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
+    let needsSave = false;
+
+    lines.forEach(lineId => {
+      if (!parsed[lineId] || parsed[lineId].length === 0) {
+        // Generate line-specific default list of installed parts sorted progressively
+        const lineConfig = this.getLineConfigs().find(c => c.lineId === lineId);
+        const installedMap = lineConfig?.installedPartQuantities || {};
+        const installedCodes = Object.keys(installedMap).filter(code => (installedMap[code] || 0) > 0);
+        const partMasters = this.getPartMasters();
+
+        const sortedCodes = installedCodes
+          .map(code => {
+            const pm = partMasters.find(p => p.partCode === code);
+            return {
+              code,
+              name: pm?.partName || '',
+              stage: pm?.stageName || ''
+            };
+          })
+          .sort((a, b) => {
+            const rankA = getPartProgressiveRank(a.name, a.stage);
+            const rankB = getPartProgressiveRank(b.name, b.stage);
+            if (rankA !== rankB) return rankA - rankB;
+            return a.code.localeCompare(b.code);
+          })
+          .map(p => p.code);
+
+        parsed[lineId] = sortedCodes;
+        needsSave = true;
+      }
+    });
+
+    if (needsSave) {
+      localStorage.setItem(STORAGE_KEYS.TV_DISPLAY_CONFIGS, JSON.stringify(parsed));
     }
+
+    return parsed;
   }
 
   public saveTvDisplayConfigs(configs: Record<ProductionLineId, string[]>): void {

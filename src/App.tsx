@@ -1,19 +1,20 @@
-import React, { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect } from 'react';
 import { User, ProductionLineId, SystemSettings } from './types';
 import { storageService } from './services/storageService';
 import { gatewayService } from './services/gatewayService';
 import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
-import { ViewSkeleton } from './components/common/ViewSkeleton';
 
-// Code Splitting & Lazy Loading for Views
-const TvDashboardView = React.lazy(() => import('./components/tv/TvDashboardView').then(m => ({ default: m.TvDashboardView })));
-const ShotEntryView = React.lazy(() => import('./views/ShotEntryView').then(m => ({ default: m.ShotEntryView })));
-const ReplacementEntryView = React.lazy(() => import('./views/ReplacementEntryView').then(m => ({ default: m.ReplacementEntryView })));
-const UnifiedToolingMasterView = React.lazy(() => import('./views/UnifiedToolingMasterView').then(m => ({ default: m.UnifiedToolingMasterView })));
-const SystemSettingsView = React.lazy(() => import('./views/SystemSettingsView').then(m => ({ default: m.SystemSettingsView })));
-const LoginView = React.lazy(() => import('./views/LoginView').then(m => ({ default: m.LoginView })));
+// Direct View Imports for instant synchronous rendering
+import { TvDashboardView } from './components/tv/TvDashboardView';
+import { ShotEntryView } from './views/ShotEntryView';
+import { ReplacementEntryView } from './views/ReplacementEntryView';
+import { UnifiedToolingMasterView } from './views/UnifiedToolingMasterView';
+import { ReportsView } from './views/ReportsView';
+import { PLCDataConnectionView } from './views/PLCDataConnectionView';
+import { SystemSettingsView } from './views/SystemSettingsView';
+import { LoginView } from './views/LoginView';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User>(storageService.getCurrentUser());
@@ -99,8 +100,13 @@ export default function App() {
       case 'install-quantity-setup':
       case 'spare-stock':
         return <UnifiedToolingMasterView initialTab="install" />;
+      case 'reports':
+        return <ReportsView />;
+      case 'plc-config':
+      case 'gateway-config':
+        return <PLCDataConnectionView />;
       case 'system-settings':
-        return <SystemSettingsView />;
+        return <SystemSettingsView onNavigate={handleNavigate} />;
       case 'login':
         return (
           <LoginView
@@ -124,13 +130,13 @@ export default function App() {
   if (isTvFullscreen && activeRoute === 'tv-monitoring') {
     return (
       <div className="fixed inset-0 z-50 overflow-hidden flex flex-col h-screen w-screen max-h-screen max-w-screen p-0 m-0 theme-dark bg-[#000000] text-slate-100 font-sans">
-        <Suspense fallback={<ViewSkeleton />}>
+        <ErrorBoundary>
           <TvDashboardView
             initialLineId={targetLineId}
             isFullscreenMode={true}
             onToggleFullscreen={handleToggleFullscreen}
           />
-        </Suspense>
+        </ErrorBoundary>
       </div>
     );
   }
@@ -168,9 +174,7 @@ export default function App() {
         <main className={`flex-1 min-h-0 ${activeRoute === 'tv-monitoring' ? 'overflow-hidden p-0 flex flex-col' : 'overflow-y-auto p-2 sm:p-3 lg:p-3.5 custom-scrollbar'} transition-all duration-300 w-full text-slate-100`}>
           <div className={`w-full ${activeRoute === 'tv-monitoring' ? 'h-full flex-1 flex flex-col overflow-hidden' : 'pb-6'}`}>
             <ErrorBoundary>
-              <Suspense fallback={<ViewSkeleton />}>
-                {renderActiveView()}
-              </Suspense>
+              {renderActiveView()}
             </ErrorBoundary>
           </div>
         </main>

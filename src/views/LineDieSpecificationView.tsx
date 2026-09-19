@@ -273,45 +273,63 @@ export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> =
             const isSelected = selectedLineFilter === line.id;
             const status = lineStatuses[line.id] || 'RUNNING';
             const isOff = status === 'STOPPED';
+            const isIdle = status === 'IDLE';
+            const isMaint = status === 'MAINTENANCE';
+            const isRunning = status === 'RUNNING';
+
+            // Status dot color with glowing pulse
+            const dotColorClass = isRunning
+              ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)] animate-pulse'
+              : isIdle
+              ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.9)] animate-pulse'
+              : isMaint
+              ? 'bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.9)] animate-pulse'
+              : 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.9)] animate-pulse';
+
+            // Badge text & color
+            const statusBadgeText = isRunning ? 'RUN' : isIdle ? 'IDLE' : isMaint ? 'MAINT' : 'OFF';
+
+            const badgeStyle = isRunning
+              ? 'bg-emerald-950/90 text-emerald-300 border-emerald-600/70'
+              : isIdle
+              ? 'bg-amber-950/90 text-amber-300 border-amber-500/80 font-black'
+              : isMaint
+              ? 'bg-sky-950/90 text-sky-300 border-sky-600/70'
+              : 'bg-rose-950/90 text-rose-300 border-rose-600/80 font-black';
+
+            // Pill container background
+            const pillContainerClass = isSelected
+              ? 'bg-cyan-400 text-slate-950 border-cyan-300 font-extrabold shadow-lg shadow-cyan-950/50 scale-105'
+              : isRunning
+              ? 'bg-slate-900/90 text-slate-200 border-slate-700 hover:border-emerald-500/60 hover:text-white'
+              : isIdle
+              ? 'bg-amber-950/30 text-amber-200 border-amber-800/60 hover:border-amber-500'
+              : isMaint
+              ? 'bg-sky-950/30 text-sky-200 border-sky-800/60 hover:border-sky-500'
+              : 'bg-rose-950/30 text-rose-300 border-rose-900/60 hover:border-rose-700';
 
             return (
               <button
                 key={line.id}
                 id={`pill-line-${line.id}`}
                 onClick={() => setSelectedLineFilter(line.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all border ${
-                  isSelected
-                    ? 'bg-cyan-400 text-slate-950 border-cyan-300 font-extrabold shadow-lg shadow-cyan-950/50 scale-105'
-                    : isOff
-                    ? 'bg-[#150a10] text-rose-300 border-rose-900/60 hover:border-rose-700'
-                    : 'bg-slate-900 text-slate-300 border-slate-700 hover:border-slate-500 hover:text-white'
-                }`}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all border ${pillContainerClass}`}
               >
-                {/* Status Dot */}
-                <span className={`w-2 h-2 rounded-full ${
-                  isSelected 
-                    ? 'bg-slate-950' 
-                    : isOff 
-                    ? 'bg-rose-500 animate-pulse' 
-                    : 'bg-emerald-400'
-                }`} />
+                {/* Status Dot with permanent color */}
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColorClass}`} />
+                
                 <span>{line.label}</span>
+                
                 <span className={`text-[10px] font-mono px-1 py-0.2 rounded ${
-                  isSelected 
-                    ? 'bg-slate-950/20 text-slate-900 font-extrabold' 
-                    : isOff 
-                    ? 'bg-rose-950 text-rose-300' 
-                    : 'bg-slate-800 text-slate-400'
+                  isSelected ? 'bg-slate-950/20 text-slate-900 font-black' : 'bg-slate-800 text-slate-400'
                 }`}>
                   {line.tag}
                 </span>
-                {isOff && (
-                  <span className={`text-[9px] font-extrabold px-1 rounded ${
-                    isSelected ? 'bg-rose-950 text-rose-300' : 'bg-rose-600 text-white'
-                  }`}>
-                    OFF
-                  </span>
-                )}
+
+                {/* Status Tag Badge */}
+                <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded font-mono border ${badgeStyle}`}>
+                  {statusBadgeText}
+                </span>
               </button>
             );
           })}

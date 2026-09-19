@@ -106,8 +106,20 @@ export const LineFilterSelector: React.FC<LineFilterSelectorProps> = ({
               </span>
             )}
 
+            {lineStatus === 'IDLE' && (
+              <span className="text-[8.5px] font-extrabold px-1 py-0 rounded bg-amber-950/90 text-amber-300 border border-amber-600/70 hidden xl:inline">
+                IDLE
+              </span>
+            )}
+
+            {lineStatus === 'MAINTENANCE' && (
+              <span className="text-[8.5px] font-extrabold px-1 py-0 rounded bg-sky-950/90 text-sky-300 border border-sky-600/70 hidden xl:inline">
+                MAINT
+              </span>
+            )}
+
             {lineStatus === 'STOPPED' && (
-              <span className="text-[8.5px] font-bold px-1 py-0 rounded bg-rose-950 text-rose-300 border border-rose-700/60 hidden xl:inline">
+              <span className="text-[8.5px] font-extrabold px-1 py-0 rounded bg-rose-950/90 text-rose-300 border border-rose-600/70 hidden xl:inline">
                 OFF
               </span>
             )}

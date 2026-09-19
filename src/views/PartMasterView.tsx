@@ -31,13 +31,18 @@ import {
   ArrowDown,
   ChevronsUp,
   ChevronsDown,
-  Repeat
+  Repeat,
+  Box,
+  QrCode,
+  Barcode
 } from 'lucide-react';
 import { PartMaster, PartLifeStandard, LineActiveConfiguration, ProductionLineId } from '../types';
 import { storageService } from '../services/storageService';
 
 import { DeleteConfirmationModal } from '../components/common/DeleteConfirmationModal';
 import { StageManagementModal } from '../components/common/StageManagementModal';
+import { Part3DBlueprintModal } from '../components/common/Part3DBlueprintModal';
+import { PartQrLabelModal } from '../components/common/PartQrLabelModal';
 import { exportPartMasterExcel } from '../utils/excelExport';
 import { DEFAULT_STAGE_GROUPS, deriveLogicalStage, sortStagesInOrder } from '../utils/stageUtils';
 
@@ -49,6 +54,9 @@ export interface UnifiedPartMasterRow {
   drawingNo: string;
   material?: string;
   maintenanceType?: 'REGRIND' | 'DISPOSE';
+  newSpecMm?: number;
+  scrapLimitMm?: number;
+  applicableLines?: string[];
   installQty: {
     e1?: number;
     e2?: number;
@@ -78,10 +86,10 @@ export interface UnifiedPartMasterRow {
   };
 }
 
-export const normalizeToMillion = (val: any): number => {
-  if (val === undefined || val === null || val === '' || val === '-') return 5.0;
+export const normalizeToMillion = (val: any): number | undefined => {
+  if (val === undefined || val === null || val === '' || val === '-') return undefined;
   const num = typeof val === 'number' ? val : parseFloat(String(val).replace(/,/g, ''));
-  if (isNaN(num) || num <= 0) return 5.0;
+  if (isNaN(num) || num <= 0) return undefined;
   if (num >= 10000) {
     return Number((num / 1_000_000).toFixed(4));
   }
@@ -94,6 +102,96 @@ export const millionToShots = (val: any): number => {
   return Math.round(num * 1_000_000);
 };
 
+export const getPartDefaultSpecs = (partName: string) => {
+  const upper = partName.toUpperCase();
+  if (upper.includes('PIERCE PUNCH')) {
+    return {
+      newSpecMm: 46.20,
+      scrapLimitMm: 44.80,
+      perGrindMm: '0.10 mm',
+      totalGrindMm: '1.40',
+      maxCycles: 14,
+      note: 'Change every 10-15 Day (เปลี่ยนทุกๆ 10-15 วัน)'
+    };
+  }
+  if (upper.includes('BURRING PUNCH')) {
+    return {
+      newSpecMm: 62.50,
+      scrapLimitMm: 62.50,
+      perGrindMm: 'Dispose',
+      totalGrindMm: '-',
+      maxCycles: 'Dispose',
+      note: 'Dispose of after 1 use (เปลี่ยนใหม่หลังใช้งาน)'
+    };
+  }
+  if (upper.includes('PIERCE DIE') || upper.includes('BURRING DIE')) {
+    return {
+      newSpecMm: 28.00,
+      scrapLimitMm: 27.00,
+      perGrindMm: '0.10 mm',
+      totalGrindMm: '1.00',
+      maxCycles: 10,
+      note: 'Standard regrind 0.10mm'
+    };
+  }
+  if (upper.includes('IRONING') || upper.includes('BUCKING')) {
+    return {
+      newSpecMm: 35.00,
+      scrapLimitMm: 33.50,
+      perGrindMm: '0.15 mm',
+      totalGrindMm: '1.50',
+      maxCycles: 10,
+      note: 'Standard regrind 0.15mm'
+    };
+  }
+  if (upper.includes('LOUVER')) {
+    return {
+      newSpecMm: 50.00,
+      scrapLimitMm: 48.00,
+      perGrindMm: '0.20 mm',
+      totalGrindMm: '2.00',
+      maxCycles: 10,
+      note: 'Standard regrind 0.20mm'
+    };
+  }
+  if (upper.includes('SLIT') || upper.includes('CUT OFF') || upper.includes('CUTTER') || upper.includes('FLARE') || upper.includes('BLADE')) {
+    return {
+      newSpecMm: 75.00,
+      scrapLimitMm: 72.00,
+      perGrindMm: '0.25 mm',
+      totalGrindMm: '3.00',
+      maxCycles: 12,
+      note: 'Blade sharpening standard'
+    };
+  }
+  return {
+    newSpecMm: 28.00,
+    scrapLimitMm: 27.00,
+    perGrindMm: '0.10 mm',
+    totalGrindMm: '1.00',
+    maxCycles: 10,
+    note: 'Standard regular sharpen'
+  };
+};
+
+export const calculateRegrindMatrix = (newSpec: number, scrapLimit: number, perGrindInput: any) => {
+  const isDispose = (perGrindInput || '').toString().toLowerCase().includes('dispose');
+  if (isDispose) {
+    return {
+      totalGrindMm: '-',
+      regrindCycles: 'Dispose'
+    };
+  }
+  const perGrindVal = parseFloat(perGrindInput.replace(/[^0-9.]/g, '')) || 0;
+  const total = Math.max(0, newSpec - scrapLimit);
+  const totalStr = total.toFixed(2);
+  const cycles = perGrindVal > 0 ? Math.floor(total / perGrindVal) : 0;
+  return {
+    totalGrindMm: totalStr,
+    regrindCycles: cycles
+  };
+};
+
 export const PartMasterView: React.FC = () => {
   const [partMasters, setPartMasters] = useState<PartMaster[]>([]);
   const [lifeStandards, setLifeStandards] = useState<PartLifeStandard[]>([]);
@@ -103,6 +201,8 @@ export const PartMasterView: React.FC = () => {
   const [selectedStage, setSelectedStage] = useState<string>('ALL');
   const [selectedLineFilter, setSelectedLineFilter] = useState<string>('ALL');
   const [selectedPartForDetail, setSelectedPartForDetail] = useState<UnifiedPartMasterRow | null>(null);
+  const [selectedPartFor3D, setSelectedPartFor3D] = useState<UnifiedPartMasterRow | null>(null);
+  const [selectedPartForQrModal, setSelectedPartForQrModal] = useState<UnifiedPartMasterRow | null>(null);
   const [showRegrindOnly, setShowRegrindOnly] = useState(false);
 
   // Inline Add New Part Row State (Top of table, no popup)
@@ -117,10 +217,12 @@ export const PartMasterView: React.FC = () => {
     e3_2_gold: 5.0,
     e3_3_gold: 5.0,
     e4_bare: 4.0,
-    scrapLimit: '62.50',
-    perGrindMm: '0.05 mm',
-    totalGrindMm: '0.50',
-    regrindCycles: 10,
+    e5_bare: 4.0,
+    newSpecMm: 46.20,
+    scrapLimitMm: 44.80,
+    perGrindMm: '0.10 mm',
+    totalGrindMm: '1.40',
+    regrindCycles: 14 as number | string,
     note: 'Standard regular sharpen'
   });
 
@@ -171,31 +273,60 @@ export const PartMasterView: React.FC = () => {
     return partMasters.map((pm, idx) => {
       const ls = lifeStandards.find(s => (s as any).partCode === pm.partCode || s.configKey?.partCode === pm.partCode || s.id === pm.partCode);
       
-      const qE1 = e1Config?.installedPartQuantities?.[pm.partCode] || 0;
-      const qE2 = e2Config?.installedPartQuantities?.[pm.partCode] || 0;
-      const qE3_1 = e3_1Config?.installedPartQuantities?.[pm.partCode] || 0;
-      const qE3_2 = e3_2Config?.installedPartQuantities?.[pm.partCode] || 0;
-      const qE3_3 = e3_3Config?.installedPartQuantities?.[pm.partCode] || 0;
-      const qE4 = e4Config?.installedPartQuantities?.[pm.partCode] || 0;
-      const qE5 = e5Config?.installedPartQuantities?.[pm.partCode] || 0;
-      const totalQty = qE1 + qE2 + qE3_1 + qE3_2 + qE3_3 + qE4 + qE5;
+      const pmInstall = (pm as any).installQty || {};
+      const qE1 = pmInstall.e1 ?? e1Config?.installedPartQuantities?.[pm.partCode] ?? 0;
+      const qE2 = pmInstall.e2 ?? e2Config?.installedPartQuantities?.[pm.partCode] ?? 0;
+      const qE3_1 = pmInstall.e3_1 ?? e3_1Config?.installedPartQuantities?.[pm.partCode] ?? 0;
+      const qE3_2 = pmInstall.e3_2 ?? e3_2Config?.installedPartQuantities?.[pm.partCode] ?? 0;
+      const qE3_3 = pmInstall.e3_3 ?? e3_3Config?.installedPartQuantities?.[pm.partCode] ?? 0;
+      const qE4 = pmInstall.e4 ?? e4Config?.installedPartQuantities?.[pm.partCode] ?? 0;
+      const qE5 = pmInstall.e5 ?? e5Config?.installedPartQuantities?.[pm.partCode] ?? 0;
+      const totalQty = pmInstall.totalQty ?? (qE1 + qE2 + qE3_1 + qE3_2 + qE3_3 + qE4 + qE5);
 
-      const isDisposable = (ls as any)?.disposeAfterUse || pm.maintenanceType === 'DISPOSE' || false;
-      const perGrind = (ls as any)?.oneTimeRegrindMm || (isDisposable ? 'Dispose' : '0.05 mm');
-      const totalGrind = (ls as any)?.totalRegrindMm || (isDisposable ? '-' : '0.50');
-      const maxCycles = (ls as any)?.maxRegrindCount ?? (isDisposable ? 'Dispose' : 10);
-      const note = (ls as any)?.specialNotes || (ls as any)?.notes || (isDisposable ? 'เปลี่ยนใหม่เมื่อครบอายุการใช้งาน' : 'ลับคมตามระยะมาตรฐาน');
+      const defaultSpecs = getPartDefaultSpecs(pm.partName);
 
-      const rawLifeM = ls?.lifeLimitShots ? ls.lifeLimitShots / 1_000_000 : 5.0;
-      const lifeM = normalizeToMillion(rawLifeM);
+      const newSpecNum = typeof (pm as any).newSpecMm === 'number'
+        ? (pm as any).newSpecMm
+        : typeof (ls as any)?.newSpecMm === 'number'
+          ? (ls as any).newSpecMm
+          : defaultSpecs.newSpecMm;
 
-      const getStageM = (stageKey: string) => {
-        const raw = (ls as any)?.shotLifeStandards?.[stageKey];
-        if (raw !== undefined && raw !== null) {
-          return normalizeToMillion(raw);
-        }
-        return lifeM;
-      };
+      const scrapLimitNum = typeof (pm as any).scrapLimitMm === 'number'
+        ? (pm as any).scrapLimitMm
+        : typeof (ls as any)?.scrapLimitMm === 'number'
+          ? (ls as any).scrapLimitMm
+          : typeof (ls as any)?.lowerSpecScrapLimit === 'number'
+            ? Number((ls as any).lowerSpecScrapLimit) || defaultSpecs.scrapLimitMm
+            : defaultSpecs.scrapLimitMm;
+
+      const pmRegrind = (pm as any).regrindStandard;
+      const perGrind = pmRegrind?.perGrindMm || (ls as any)?.regrindStandard?.oneTimeRegrindMm || (ls as any)?.oneTimeRegrindMm || defaultSpecs.perGrindMm;
+      const isDisposable = perGrind.toString().toLowerCase().includes('dispose') || pm.maintenanceType === 'DISPOSE';
+
+      const matrixCalc = calculateRegrindMatrix(newSpecNum, scrapLimitNum, perGrind);
+      const totalGrind = pmRegrind?.totalGrindMm || (ls as any)?.regrindStandard?.totalRegrindMm || (ls as any)?.totalRegrindMm || matrixCalc.totalGrindMm;
+      const maxCycles = pmRegrind?.regrindCycles ?? (ls as any)?.regrindStandard?.maxRegrindCount ?? (ls as any)?.maxRegrindCount ?? matrixCalc.regrindCycles;
+      const note = pmRegrind?.note || (ls as any)?.specialNotes || (ls as any)?.notes || defaultSpecs.note;
+
+      const pmShot = (pm as any).shotLifeCycle;
+      const e1_shot = pmShot?.e1_pcm !== undefined ? normalizeToMillion(pmShot.e1_pcm) : (qE1 > 0 ? normalizeToMillion((ls as any)?.shotLifeStandards?.['E1'] ?? 5.0) : undefined);
+      const e2_shot = pmShot?.e2_gold !== undefined ? normalizeToMillion(pmShot.e2_gold) : (qE2 > 0 ? normalizeToMillion((ls as any)?.shotLifeStandards?.['E2'] ?? 5.0) : undefined);
+      const e3_1_shot = pmShot?.e3_1_pcm !== undefined ? normalizeToMillion(pmShot.e3_1_pcm) : (qE3_1 > 0 ? normalizeToMillion((ls as any)?.shotLifeStandards?.['E3-1'] ?? 5.0) : undefined);
+      const e3_2_shot = pmShot?.e3_2_gold !== undefined ? normalizeToMillion(pmShot.e3_2_gold) : (qE3_2 > 0 ? normalizeToMillion((ls as any)?.shotLifeStandards?.['E3-2'] ?? 5.0) : undefined);
+      const e3_3_shot = pmShot?.e3_3_gold !== undefined ? normalizeToMillion(pmShot.e3_3_gold) : (qE3_3 > 0 ? normalizeToMillion((ls as any)?.shotLifeStandards?.['E3-3'] ?? 5.0) : undefined);
+      const e4_shot = pmShot?.e4_bare !== undefined ? normalizeToMillion(pmShot.e4_bare) : (qE4 > 0 ? normalizeToMillion((ls as any)?.shotLifeStandards?.['E4'] ?? 4.0) : undefined);
+      const e5_shot = pmShot?.e5_bare !== undefined ? normalizeToMillion(pmShot.e5_bare) : (qE5 > 0 ? normalizeToMillion((ls as any)?.shotLifeStandards?.['E5'] ?? 4.0) : undefined);
+
+      const applicableLines: string[] = (pm as any).applicableLines || [];
+      if (applicableLines.length === 0) {
+        if (qE1 > 0) applicableLines.push('E1');
+        if (qE2 > 0) applicableLines.push('E2');
+        if (qE3_1 > 0) applicableLines.push('E3-1');
+        if (qE3_2 > 0) applicableLines.push('E3-2');
+        if (qE3_3 > 0) applicableLines.push('E3-3');
+        if (qE4 > 0) applicableLines.push('E4');
+        if (qE5 > 0) applicableLines.push('E5');
+      }
 
       return {
         no: idx + 1,
@@ -205,6 +336,9 @@ export const PartMasterView: React.FC = () => {
         drawingNo: (pm as any).drawingNumber || pm.partCode,
         material: (pm as any).material || 'SKD11 / Carbide',
         maintenanceType: isDisposable ? 'DISPOSE' : 'REGRIND',
+        newSpecMm: newSpecNum,
+        scrapLimitMm: scrapLimitNum,
+        applicableLines,
         installQty: {
           e1: qE1 || undefined,
           e2: qE2 || undefined,
@@ -216,15 +350,15 @@ export const PartMasterView: React.FC = () => {
           totalQty
         },
         shotLifeCycle: {
-          e1_pcm: getStageM('E1'),
-          e2_gold: getStageM('E2'),
-          e3_1_pcm: getStageM('E3-1'),
-          e3_2_gold: getStageM('E3-2'),
-          e3_3_gold: getStageM('E3-3'),
-          e4_bare: (ls as any)?.shotLifeStandards?.['E4'] !== undefined ? normalizeToMillion((ls as any).shotLifeStandards['E4']) : (lifeM > 4 ? 4.0 : lifeM),
-          e5_bare: (ls as any)?.shotLifeStandards?.['E5'] !== undefined ? normalizeToMillion((ls as any).shotLifeStandards['E5']) : (lifeM > 4 ? 4.0 : lifeM),
-          partsSpec: (pm as any).material || 'SKD11 / Carbide',
-          lowerSpecScrapLimit: (ls as any)?.lowerSpecLimit || (ls as any)?.scrapLimit || '62.50'
+          e1_pcm: e1_shot,
+          e2_gold: e2_shot,
+          e3_1_pcm: e3_1_shot,
+          e3_2_gold: e3_2_shot,
+          e3_3_gold: e3_3_shot,
+          e4_bare: e4_shot,
+          e5_bare: e5_shot,
+          partsSpec: `${newSpecNum.toFixed(2)} mm`,
+          lowerSpecScrapLimit: `${scrapLimitNum.toFixed(2)} mm`
         },
         regrindStandard: {
           perGrindMm: perGrind,
@@ -338,7 +472,7 @@ export const PartMasterView: React.FC = () => {
       tubeSizeCompat: 'BOTH'
     };
 
-    const isDispose = newRowData.perGrindMm.toLowerCase().includes('dispose');
+    const isDispose = newRowData.perGrindMm.toString().toLowerCase().includes('dispose');
     const newLifeStd: PartLifeStandard = {
       id: `STD-ALL-${code}`,
       configKey: {
@@ -381,7 +515,9 @@ export const PartMasterView: React.FC = () => {
       'E4': millionToShots(newRowData.e4_bare),
       'E5': millionToShots(newRowData.e5_bare),
     };
-    (newLifeStd as any).scrapLimit = newRowData.scrapLimit;
+    (newLifeStd as any).scrapLimit = `${newRowData.scrapLimitMm.toFixed(2)}`;
+    (newLifeStd as any).newSpecMm = newRowData.newSpecMm;
+    (newLifeStd as any).scrapLimitMm = newRowData.scrapLimitMm;
 
     storageService.savePartMaster(newMaster);
     storageService.saveLifeStandard(newLifeStd);
@@ -398,10 +534,12 @@ export const PartMasterView: React.FC = () => {
       e3_2_gold: 5.0,
       e3_3_gold: 5.0,
       e4_bare: 4.0,
-      scrapLimit: '62.50',
-      perGrindMm: '0.05 mm',
-      totalGrindMm: '0.50',
-      regrindCycles: 10,
+      e5_bare: 4.0,
+      newSpecMm: 46.20,
+      scrapLimitMm: 44.80,
+      perGrindMm: '0.10 mm',
+      totalGrindMm: '1.40',
+      regrindCycles: 14 as number | string,
       note: 'Standard regular sharpen'
     });
     loadDatabaseData();
@@ -420,10 +558,12 @@ export const PartMasterView: React.FC = () => {
       e3_2_gold: item.shotLifeCycle.e3_2_gold ?? 5.0,
       e3_3_gold: item.shotLifeCycle.e3_3_gold ?? 5.0,
       e4_bare: item.shotLifeCycle.e4_bare ?? 4.0,
-      scrapLimit: item.shotLifeCycle.lowerSpecScrapLimit ?? '62.50',
-      perGrindMm: item.regrindStandard?.perGrindMm ?? '0.05 mm',
-      totalGrindMm: item.regrindStandard?.totalGrindMm ?? '0.50',
-      regrindCycles: item.regrindStandard?.regrindCycles ?? 10,
+      e5_bare: item.shotLifeCycle.e5_bare ?? 4.0,
+      newSpecMm: item.newSpecMm ?? 46.20,
+      scrapLimitMm: item.scrapLimitMm ?? 44.80,
+      perGrindMm: item.regrindStandard?.perGrindMm ?? '0.10 mm',
+      totalGrindMm: item.regrindStandard?.totalGrindMm ?? '1.40',
+      regrindCycles: item.regrindStandard?.regrindCycles ?? 14,
       note: item.regrindStandard?.note ?? ''
     });
   };
@@ -438,12 +578,14 @@ export const PartMasterView: React.FC = () => {
         partName: inlineEditRowData.partName,
         stageName: inlineEditRowData.stage
       };
+      (updatedPm as any).newSpecMm = inlineEditRowData.newSpecMm;
+      (updatedPm as any).scrapLimitMm = inlineEditRowData.scrapLimitMm;
       storageService.savePartMaster(updatedPm);
     }
 
     const ls = lifeStandards.find(s => (s as any).partCode === inlineEditRowData.partCode || s.configKey?.partCode === inlineEditRowData.partCode || s.id === inlineEditRowData.partCode);
+    const isDispose = (inlineEditRowData.perGrindMm || '').toString().toLowerCase().includes('dispose');
     if (ls) {
-      const isDispose = (inlineEditRowData.perGrindMm || '').toLowerCase().includes('dispose');
       const updatedLs: PartLifeStandard = {
         ...ls,
         partName: inlineEditRowData.partName,
@@ -468,8 +610,59 @@ export const PartMasterView: React.FC = () => {
         'E4': millionToShots(inlineEditRowData.e4_bare),
         'E5': millionToShots(inlineEditRowData.e5_bare),
       };
-      (updatedLs as any).scrapLimit = inlineEditRowData.scrapLimit;
+      (updatedLs as any).newSpecMm = inlineEditRowData.newSpecMm;
+      (updatedLs as any).scrapLimitMm = inlineEditRowData.scrapLimitMm;
+      (updatedLs as any).scrapLimit = `${inlineEditRowData.scrapLimitMm}`;
       storageService.saveLifeStandard(updatedLs);
+    } else {
+      // Create dynamic fallback life standard to prevent silent save failure
+      const code = inlineEditRowData.partCode;
+      const newLs: PartLifeStandard = {
+        id: `STD-ALL-${code}`,
+        configKey: {
+          lineId: 'ALL',
+          configurationId: `CFG-ALL-${code}`,
+          dieCode: 'FD-ALL',
+          finType: 'Slit (half)',
+          material: 'PCM' as any,
+          thicknessMm: 0.10,
+          tubeSize: 'Ø7' as any,
+          partCode: code,
+          position: 'ALL',
+          effectiveDate: new Date().toISOString().substring(0, 10)
+        },
+        compositeKeyString: `ALL|PCM|0.10mm|Ø7|${code}`,
+        partName: inlineEditRowData.partName,
+        stagePunchDie: inlineEditRowData.stage,
+        lifeLimitShots: millionToShots(inlineEditRowData.e1_pcm),
+        regrindDepthPerTime: parseFloat(inlineEditRowData.perGrindMm) || 0.05,
+        maxTotalGrindingLimit: parseFloat(inlineEditRowData.totalGrindMm) || 0.50,
+        standardShimThickness: 0.20,
+        notes: inlineEditRowData.note,
+        regrindStandard: {
+          oneTimeRegrindMm: inlineEditRowData.perGrindMm,
+          totalRegrindMm: inlineEditRowData.totalGrindMm,
+          maxRegrindCount: typeof inlineEditRowData.regrindCycles === 'number' ? inlineEditRowData.regrindCycles : 10,
+          disposeAfterUse: isDispose,
+          regrindIntervalNote: inlineEditRowData.note
+        },
+        createdBy: 'System Admin',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      (newLs as any).shotLifeStandards = {
+        'E1': millionToShots(inlineEditRowData.e1_pcm),
+        'E2': millionToShots(inlineEditRowData.e2_gold),
+        'E3-1': millionToShots(inlineEditRowData.e3_1_pcm),
+        'E3-2': millionToShots(inlineEditRowData.e3_2_gold),
+        'E3-3': millionToShots(inlineEditRowData.e3_3_gold),
+        'E4': millionToShots(inlineEditRowData.e4_bare),
+        'E5': millionToShots(inlineEditRowData.e5_bare),
+      };
+      (newLs as any).newSpecMm = inlineEditRowData.newSpecMm;
+      (newLs as any).scrapLimitMm = inlineEditRowData.scrapLimitMm;
+      (newLs as any).scrapLimit = `${inlineEditRowData.scrapLimitMm}`;
+      storageService.saveLifeStandard(newLs);
     }
 
     showToast(`บันทึกการแก้ไข ${inlineEditRowData.partName} (${inlineEditRowData.partCode}) ในตารางสำเร็จแล้ว`);
@@ -492,10 +685,11 @@ export const PartMasterView: React.FC = () => {
         e3_3_gold: item.shotLifeCycle.e3_3_gold ?? 5.0,
         e4_bare: item.shotLifeCycle.e4_bare ?? 4.0,
         e5_bare: item.shotLifeCycle.e5_bare ?? 4.0,
-        scrapLimit: item.shotLifeCycle.lowerSpecScrapLimit ?? '62.50',
-        perGrindMm: item.regrindStandard?.perGrindMm ?? '0.05 mm',
-        totalGrindMm: item.regrindStandard?.totalGrindMm ?? '0.50',
-        regrindCycles: item.regrindStandard?.regrindCycles ?? 10,
+        newSpecMm: item.newSpecMm ?? 46.20,
+        scrapLimitMm: item.scrapLimitMm ?? 44.80,
+        perGrindMm: item.regrindStandard?.perGrindMm ?? '0.10 mm',
+        totalGrindMm: item.regrindStandard?.totalGrindMm ?? '1.40',
+        regrindCycles: item.regrindStandard?.regrindCycles ?? 14,
         note: item.regrindStandard?.note ?? ''
       };
     });
@@ -528,7 +722,10 @@ export const PartMasterView: React.FC = () => {
 
   const handleSaveBatchEdit = () => {
     try {
-      partMasters.forEach(pm => {
+      const updatedParts = [...partMasters];
+      const updatedStds = [...lifeStandards];
+
+      updatedParts.forEach((pm, idx) => {
         const rowEdit = editValues[pm.partCode];
         if (rowEdit) {
           const updatedPm: PartMaster = {
@@ -536,10 +733,14 @@ export const PartMasterView: React.FC = () => {
             partName: rowEdit.partName,
             stageName: rowEdit.stage
           };
-          storageService.savePartMaster(updatedPm);
+          (updatedPm as any).newSpecMm = rowEdit.newSpecMm;
+          (updatedPm as any).scrapLimitMm = rowEdit.scrapLimitMm;
+          
+          updatedParts[idx] = updatedPm;
 
-          const ls = lifeStandards.find(s => (s as any).partCode === pm.partCode || s.configKey?.partCode === pm.partCode || s.id === pm.partCode);
-          if (ls) {
+          const lsIdx = updatedStds.findIndex(s => (s as any).partCode === pm.partCode || s.configKey?.partCode === pm.partCode || s.id === pm.partCode);
+          if (lsIdx >= 0) {
+            const ls = updatedStds[lsIdx];
             const isDispose = (rowEdit.perGrindMm || '').toString().toLowerCase().includes('dispose');
             const updatedLs: PartLifeStandard = {
               ...ls,
@@ -565,11 +766,16 @@ export const PartMasterView: React.FC = () => {
               'E4': millionToShots(rowEdit.e4_bare),
               'E5': millionToShots(rowEdit.e5_bare),
             };
-            (updatedLs as any).scrapLimit = rowEdit.scrapLimit;
-            storageService.saveLifeStandard(updatedLs);
+            (updatedLs as any).newSpecMm = rowEdit.newSpecMm;
+            (updatedLs as any).scrapLimitMm = rowEdit.scrapLimitMm;
+            (updatedLs as any).scrapLimit = `${rowEdit.scrapLimitMm}`;
+            
+            updatedStds[lsIdx] = updatedLs;
           }
         }
       });
+
+      storageService.savePartMastersBulk(updatedParts, updatedStds);
 
       showToast(`บันทึกการแก้ไขข้อมูลตาราง ${partMasters.length} รายการลงในฐานข้อมูลเรียบร้อยแล้ว`);
       setIsEditing(false);
@@ -849,22 +1055,22 @@ export const PartMasterView: React.FC = () => {
               {/* Header Tier 1 (Sticky Top 0) */}
               <tr className="text-white text-[11px] select-none">
                 <th 
-                  colSpan={3} 
+                  colSpan={4} 
                   className="sticky top-0 z-20 py-1.5 px-2 border-b border-r border-[#666666] text-white font-bold text-left bg-[#444455] shadow-xs"
                 >
                   1. PART IDENTIFICATION & SPEC
                 </th>
                 <th 
-                  colSpan={8} 
+                  colSpan={7} 
                   className="sticky top-0 z-20 py-1.5 px-2 border-b border-r border-[#666666] text-[#00FF00] font-bold text-center bg-[#3a3a4a] shadow-xs"
                 >
                   2. STANDARDIZATION OF SHOT USAGE CYCLE (MILLION SHOTS)
                 </th>
                 <th 
-                  colSpan={4} 
+                  colSpan={6} 
                   className="sticky top-0 z-20 py-1.5 px-2 border-b border-r border-[#666666] text-purple-300 font-bold text-center bg-[#444455] shadow-xs"
                 >
-                  3. STANDARD RE-GRINDING
+                  3. STANDARD RE-GRINDING MATRIX (SPEC & AUTO-CALCULATED)
                 </th>
                 <th 
                   colSpan={1} 
@@ -878,10 +1084,14 @@ export const PartMasterView: React.FC = () => {
               <tr className="text-white text-[10px] tracking-wider select-none font-bold">
                 {/* 1. Identification */}
                 <th className="sticky top-[27px] z-20 py-1 px-1.5 text-center w-8 border-b border-r border-[#666666] bg-[#555566]">No</th>
-                <th className="sticky top-[27px] z-20 py-1 px-1.5 border-b border-r border-[#666666] bg-[#555566]">Stage</th>
-                <th className="sticky top-[27px] z-20 py-1 px-1.5 border-b border-r border-[#666666] bg-[#555566] min-w-[150px]">Part Name</th>
+                <th className="sticky top-[27px] z-20 py-1 px-1.5 border-b border-r border-[#666666] bg-[#555566] min-w-[145px] w-36">Stage</th>
+                <th className="sticky top-[27px] z-20 py-1 px-1.5 border-b border-r border-[#666666] bg-[#555566] min-w-[150px]">Part Name & Drawing No.</th>
+                <th className="sticky top-[27px] z-20 py-1 px-1.5 text-center border-b border-r border-[#666666] bg-[#4a4a5a] min-w-[125px]">
+                  <div className="font-bold text-cyan-300 text-[11px]">Installed Lines</div>
+                  <div className="text-[9px] text-slate-300 font-normal">ไลน์ที่ติดตั้ง (E1-E5)</div>
+                </th>
 
-                {/* 2. Shot Usage Standards (Matching PART INSTALL 2-line header reference) */}
+                {/* 2. Shot Usage Standards */}
                 <th className="sticky top-[27px] z-20 py-0.5 px-1 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00] min-w-[56px]">
                   <div className="font-bold text-white text-[11px]">E1</div>
                   <div className="text-[9px] text-slate-300 font-normal">Ø7 Slit</div>
@@ -910,11 +1120,10 @@ export const PartMasterView: React.FC = () => {
                   <div className="font-bold text-white text-[11px]">E5</div>
                   <div className="text-[9px] text-slate-300 font-normal">Ø5 Slit</div>
                 </th>
-                <th className="sticky top-[27px] z-20 py-1 px-1.5 text-center text-slate-300 border-b border-r border-[#666666] bg-[#4a4a5a] min-w-[65px]">
-                  Scrap Limit
-                </th>
 
-                {/* 3. Regrinding Standards */}
+                {/* 3. Regrinding Standards & Specs */}
+                <th className="sticky top-[27px] z-20 py-1 px-1 text-center text-emerald-300 border-b border-r border-[#666666] bg-[#555566] min-w-[70px]">New Spec (mm)</th>
+                <th className="sticky top-[27px] z-20 py-1 px-1 text-center text-amber-300 border-b border-r border-[#666666] bg-[#555566] min-w-[70px]">Scrap Limit</th>
                 <th className="sticky top-[27px] z-20 py-1 px-1 text-center text-purple-300 border-b border-r border-[#666666] bg-[#555566] min-w-[60px]">1 time (mm)</th>
                 <th className="sticky top-[27px] z-20 py-1 px-1 text-center text-purple-300 border-b border-r border-[#666666] bg-[#555566] min-w-[60px]">Total (mm)</th>
                 <th className="sticky top-[27px] z-20 py-1 px-1 text-center text-purple-300 border-b border-r border-[#666666] bg-[#555566] min-w-[60px]">Max Cycles</th>
@@ -937,11 +1146,11 @@ export const PartMasterView: React.FC = () => {
                   <td className="py-1 px-2 text-center text-[#00FF00] font-bold border-r border-[#444444]">
                     NEW
                   </td>
-                  <td className="py-1 px-1 border-r border-[#444444]">
+                  <td className="py-1 px-1 border-r border-[#444444] min-w-[145px]">
                     <select
                       value={newRowData.stage}
                       onChange={e => setNewRowData({ ...newRowData, stage: e.target.value })}
-                      className="w-full bg-[#111111] text-[#00FF00] border border-[#00FF00] p-1 text-[11px] font-bold font-mono focus:outline-none"
+                      className="w-full bg-[#111111] text-[#00FF00] border border-[#00FF00] p-1 text-[11px] font-bold font-mono focus:outline-none min-w-[140px]"
                     >
                       {allStages.length > 0 ? (
                         allStages.map(stg => (
@@ -960,10 +1169,27 @@ export const PartMasterView: React.FC = () => {
                         type="text"
                         placeholder="Part Name (e.g. 1st Piercing Punch)"
                         value={newRowData.partName}
-                        onChange={e => setNewRowData({ ...newRowData, partName: e.target.value })}
+                        onChange={e => {
+                          const pName = e.target.value;
+                          const defs = getPartDefaultSpecs(pName);
+                          const calc = calculateRegrindMatrix(defs.newSpecMm, defs.scrapLimitMm, defs.perGrindMm);
+                          setNewRowData({ 
+                            ...newRowData, 
+                            partName: pName,
+                            newSpecMm: defs.newSpecMm,
+                            scrapLimitMm: defs.scrapLimitMm,
+                            perGrindMm: defs.perGrindMm,
+                            totalGrindMm: calc.totalGrindMm,
+                            regrindCycles: calc.regrindCycles,
+                            note: defs.note
+                          });
+                        }}
                         className="w-full bg-[#111111] text-white border border-[#00FF00] px-1.5 py-0.5 text-xs font-bold font-mono focus:outline-none"
                       />
                     </div>
+                  </td>
+                  <td className="py-1 px-1 border-r border-[#444444] text-center">
+                    <span className="text-[10px] text-slate-400">All Lines</span>
                   </td>
                   <td className="py-1 px-1 border-r border-[#444444]">
                     <input
@@ -1021,17 +1247,65 @@ export const PartMasterView: React.FC = () => {
                   </td>
                   <td className="py-1 px-1 border-r border-[#444444]">
                     <input
-                      type="text"
-                      value={newRowData.scrapLimit}
-                      onChange={e => setNewRowData({ ...newRowData, scrapLimit: e.target.value })}
-                      className="w-full bg-[#111111] text-center text-slate-200 border border-[#666666] py-0.5 text-[11px] font-mono"
+                      type="number"
+                      step="0.5"
+                      value={newRowData.e5_bare}
+                      onChange={e => setNewRowData({ ...newRowData, e5_bare: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-[#111111] text-center text-[#00FF00] border border-[#666666] py-0.5 text-xs font-mono"
+                    />
+                  </td>
+
+                  {/* Section 3 Inputs with Auto-Calculation */}
+                  <td className="py-1 px-1 border-r border-[#444444]">
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={newRowData.newSpecMm}
+                      onChange={e => {
+                        const val = parseFloat(e.target.value) || 0;
+                        const calc = calculateRegrindMatrix(val, newRowData.scrapLimitMm, newRowData.perGrindMm);
+                        setNewRowData({ 
+                          ...newRowData, 
+                          newSpecMm: val, 
+                          totalGrindMm: calc.totalGrindMm, 
+                          regrindCycles: calc.regrindCycles 
+                        });
+                      }}
+                      className="w-full bg-[#111111] text-center text-emerald-300 font-bold border border-[#666666] py-0.5 text-xs font-mono"
+                    />
+                  </td>
+                  <td className="py-1 px-1 border-r border-[#444444]">
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={newRowData.scrapLimitMm}
+                      onChange={e => {
+                        const val = parseFloat(e.target.value) || 0;
+                        const calc = calculateRegrindMatrix(newRowData.newSpecMm, val, newRowData.perGrindMm);
+                        setNewRowData({ 
+                          ...newRowData, 
+                          scrapLimitMm: val, 
+                          totalGrindMm: calc.totalGrindMm, 
+                          regrindCycles: calc.regrindCycles 
+                        });
+                      }}
+                      className="w-full bg-[#111111] text-center text-amber-300 font-bold border border-[#666666] py-0.5 text-xs font-mono"
                     />
                   </td>
                   <td className="py-1 px-1 border-r border-[#444444]">
                     <input
                       type="text"
                       value={newRowData.perGrindMm}
-                      onChange={e => setNewRowData({ ...newRowData, perGrindMm: e.target.value })}
+                      onChange={e => {
+                        const pg = e.target.value;
+                        const calc = calculateRegrindMatrix(newRowData.newSpecMm, newRowData.scrapLimitMm, pg);
+                        setNewRowData({ 
+                          ...newRowData, 
+                          perGrindMm: pg, 
+                          totalGrindMm: calc.totalGrindMm, 
+                          regrindCycles: calc.regrindCycles 
+                        });
+                      }}
                       className="w-full bg-[#111111] text-center text-purple-300 border border-[#666666] py-0.5 text-xs font-mono"
                     />
                   </td>
@@ -1045,9 +1319,9 @@ export const PartMasterView: React.FC = () => {
                   </td>
                   <td className="py-1 px-1 border-r border-[#444444]">
                     <input
-                      type="number"
+                      type="text"
                       value={newRowData.regrindCycles}
-                      onChange={e => setNewRowData({ ...newRowData, regrindCycles: parseInt(e.target.value) || 0 })}
+                      onChange={e => setNewRowData({ ...newRowData, regrindCycles: e.target.value })}
                       className="w-full bg-[#111111] text-center text-purple-300 font-bold border border-[#666666] py-0.5 text-xs font-mono"
                     />
                   </td>
@@ -1086,7 +1360,7 @@ export const PartMasterView: React.FC = () => {
 
               {filteredItems.length === 0 && !isAddingInline ? (
                 <tr>
-                  <td colSpan={15} className="py-8 text-center text-slate-500 bg-[#161616] border-b border-[#666666]">
+                  <td colSpan={17} className="py-8 text-center text-slate-500 bg-[#161616] border-b border-[#666666]">
                     ไม่พบข้อมูลชิ้นส่วนที่ตรงกับคำค้นหาหรือตัวกรอง
                   </td>
                 </tr>
@@ -1103,11 +1377,11 @@ export const PartMasterView: React.FC = () => {
                         <td className="py-1 px-2 text-center font-bold text-[#00FF00] border-r border-[#444444]">
                           {item.no}
                         </td>
-                        <td className="py-1 px-1 border-r border-[#444444]">
+                        <td className="py-1 px-1 border-r border-[#444444] min-w-[145px]">
                           <select
                             value={rowEdit.stage}
                             onChange={e => handleCellEditChange(item.partCode, 'stage', e.target.value)}
-                            className="w-full bg-[#111111] text-[#00FF00] border border-[#00FF00] p-1 text-[11px] font-mono focus:outline-none"
+                            className="w-full bg-[#111111] text-[#00FF00] border border-[#00FF00] p-1 text-[11px] font-mono focus:outline-none min-w-[140px]"
                           >
                             {allStages.map(stg => (
                               <option key={stg} value={stg} className="bg-[#111111] text-white">
@@ -1123,6 +1397,28 @@ export const PartMasterView: React.FC = () => {
                             onChange={e => handleCellEditChange(item.partCode, 'partName', e.target.value)}
                             className="w-full bg-[#111111] text-white border border-[#00FF00] px-1 py-0.5 text-xs font-bold font-mono focus:outline-none"
                           />
+                        </td>
+                        {/* Installed Lines Cell */}
+                        <td className="py-1 px-1 border-r border-[#444444] text-center min-w-[125px]">
+                          <div className="flex flex-wrap items-center justify-center gap-1">
+                            {item.applicableLines && item.applicableLines.length > 0 ? (
+                              item.applicableLines.map((line: string) => {
+                                let badgeColor = 'bg-sky-950 text-sky-300 border-sky-600';
+                                if (line === 'E2') badgeColor = 'bg-amber-950 text-amber-300 border-amber-600';
+                                else if (line.startsWith('E3')) badgeColor = 'bg-purple-950 text-purple-300 border-purple-600';
+                                else if (line === 'E4') badgeColor = 'bg-emerald-950 text-emerald-300 border-emerald-600';
+                                else if (line === 'E5') badgeColor = 'bg-teal-950 text-teal-300 border-teal-600';
+
+                                return (
+                                  <span key={line} className={`px-1 py-0.2 text-[9px] font-bold border rounded ${badgeColor}`}>
+                                    {line}
+                                  </span>
+                                );
+                              })
+                            ) : (
+                              <span className="text-[10px] text-slate-400">E1-E5</span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-1 px-1 border-r border-[#444444]">
                           <input
@@ -1187,19 +1483,49 @@ export const PartMasterView: React.FC = () => {
                             className="w-full bg-[#111111] text-center text-[#00FF00] border border-[#666666] py-0.5 text-xs font-mono"
                           />
                         </td>
+
+                        {/* Batch Edit Matrix Section */}
                         <td className="py-1 px-1 border-r border-[#444444]">
                           <input
-                            type="text"
-                            value={rowEdit.scrapLimit}
-                            onChange={e => handleCellEditChange(item.partCode, 'scrapLimit', e.target.value)}
-                            className="w-full bg-[#111111] text-center text-slate-200 border border-[#666666] py-0.5 text-[11px] font-mono"
+                            type="number"
+                            step="0.1"
+                            value={rowEdit.newSpecMm}
+                            onChange={e => {
+                              const val = parseFloat(e.target.value) || 0;
+                              const calc = calculateRegrindMatrix(val, rowEdit.scrapLimitMm || 0, rowEdit.perGrindMm || '');
+                              handleCellEditChange(item.partCode, 'newSpecMm', val);
+                              handleCellEditChange(item.partCode, 'totalGrindMm', calc.totalGrindMm);
+                              handleCellEditChange(item.partCode, 'regrindCycles', calc.regrindCycles);
+                            }}
+                            className="w-full bg-[#111111] text-center text-emerald-300 font-bold border border-[#666666] py-0.5 text-xs font-mono"
+                          />
+                        </td>
+                        <td className="py-1 px-1 border-r border-[#444444]">
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={rowEdit.scrapLimitMm}
+                            onChange={e => {
+                              const val = parseFloat(e.target.value) || 0;
+                              const calc = calculateRegrindMatrix(rowEdit.newSpecMm || 0, val, rowEdit.perGrindMm || '');
+                              handleCellEditChange(item.partCode, 'scrapLimitMm', val);
+                              handleCellEditChange(item.partCode, 'totalGrindMm', calc.totalGrindMm);
+                              handleCellEditChange(item.partCode, 'regrindCycles', calc.regrindCycles);
+                            }}
+                            className="w-full bg-[#111111] text-center text-amber-300 font-bold border border-[#666666] py-0.5 text-xs font-mono"
                           />
                         </td>
                         <td className="py-1 px-1 border-r border-[#444444]">
                           <input
                             type="text"
                             value={rowEdit.perGrindMm}
-                            onChange={e => handleCellEditChange(item.partCode, 'perGrindMm', e.target.value)}
+                            onChange={e => {
+                              const pg = e.target.value;
+                              const calc = calculateRegrindMatrix(rowEdit.newSpecMm || 0, rowEdit.scrapLimitMm || 0, pg);
+                              handleCellEditChange(item.partCode, 'perGrindMm', pg);
+                              handleCellEditChange(item.partCode, 'totalGrindMm', calc.totalGrindMm);
+                              handleCellEditChange(item.partCode, 'regrindCycles', calc.regrindCycles);
+                            }}
                             className="w-full bg-[#111111] text-center text-purple-300 border border-[#666666] py-0.5 text-xs font-mono"
                           />
                         </td>
@@ -1213,9 +1539,9 @@ export const PartMasterView: React.FC = () => {
                         </td>
                         <td className="py-1 px-1 border-r border-[#444444]">
                           <input
-                            type="number"
+                            type="text"
                             value={rowEdit.regrindCycles}
-                            onChange={e => handleCellEditChange(item.partCode, 'regrindCycles', parseInt(e.target.value) || 0)}
+                            onChange={e => handleCellEditChange(item.partCode, 'regrindCycles', e.target.value)}
                             className="w-full bg-[#111111] text-center text-purple-300 font-bold border border-[#666666] py-0.5 text-xs font-mono"
                           />
                         </td>
@@ -1242,11 +1568,11 @@ export const PartMasterView: React.FC = () => {
                         <td className="py-1 px-2 text-center font-bold text-[#FFCC00] border-r border-[#444444]">
                           {item.no}
                         </td>
-                        <td className="py-1 px-1 border-r border-[#444444]">
+                        <td className="py-1 px-1 border-r border-[#444444] min-w-[145px]">
                           <select
                             value={inlineEditRowData.stage}
                             onChange={e => setInlineEditRowData({ ...inlineEditRowData, stage: e.target.value })}
-                            className="w-full bg-[#111111] text-[#FFCC00] border border-[#FFCC00] p-1 text-[11px] font-mono focus:outline-none"
+                            className="w-full bg-[#111111] text-[#FFCC00] border border-[#FFCC00] p-1 text-[11px] font-mono focus:outline-none min-w-[140px]"
                           >
                             {allStages.map(stg => (
                               <option key={stg} value={stg} className="bg-[#111111] text-white">
@@ -1263,6 +1589,27 @@ export const PartMasterView: React.FC = () => {
                               onChange={e => setInlineEditRowData({ ...inlineEditRowData, partName: e.target.value })}
                               className="w-full bg-[#111111] text-white border border-[#FFCC00] px-1 py-0.5 text-xs font-bold font-mono focus:outline-none"
                             />
+                          </div>
+                        </td>
+                        <td className="py-1 px-1 border-r border-[#444444] text-center min-w-[125px]">
+                          <div className="flex flex-wrap items-center justify-center gap-1">
+                            {item.applicableLines && item.applicableLines.length > 0 ? (
+                              item.applicableLines.map((line: string) => {
+                                let badgeColor = 'bg-sky-950 text-sky-300 border-sky-600';
+                                if (line === 'E2') badgeColor = 'bg-amber-950 text-amber-300 border-amber-600';
+                                else if (line.startsWith('E3')) badgeColor = 'bg-purple-950 text-purple-300 border-purple-600';
+                                else if (line === 'E4') badgeColor = 'bg-emerald-950 text-emerald-300 border-emerald-600';
+                                else if (line === 'E5') badgeColor = 'bg-teal-950 text-teal-300 border-teal-600';
+
+                                return (
+                                  <span key={line} className={`px-1 py-0.2 text-[9px] font-bold border rounded ${badgeColor}`}>
+                                    {line}
+                                  </span>
+                                );
+                              })
+                            ) : (
+                              <span className="text-[10px] text-slate-400">Auto</span>
+                            )}
                           </div>
                         </td>
                         <td className="py-1 px-1 border-r border-[#444444]">
@@ -1321,17 +1668,65 @@ export const PartMasterView: React.FC = () => {
                         </td>
                         <td className="py-1 px-1 border-r border-[#444444]">
                           <input
-                            type="text"
-                            value={inlineEditRowData.scrapLimit}
-                            onChange={e => setInlineEditRowData({ ...inlineEditRowData, scrapLimit: e.target.value })}
-                            className="w-full bg-[#111111] text-center text-slate-200 border border-[#666666] py-0.5 text-[11px] font-mono"
+                            type="number"
+                            step="0.5"
+                            value={inlineEditRowData.e5_bare}
+                            onChange={e => setInlineEditRowData({ ...inlineEditRowData, e5_bare: parseFloat(e.target.value) || 0 })}
+                            className="w-full bg-[#111111] text-center text-[#00FF00] border border-[#666666] py-0.5 text-xs font-mono"
+                          />
+                        </td>
+
+                        {/* Inline Row Direct Edit Matrix Inputs */}
+                        <td className="py-1 px-1 border-r border-[#444444]">
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={inlineEditRowData.newSpecMm}
+                            onChange={e => {
+                              const val = parseFloat(e.target.value) || 0;
+                              const calc = calculateRegrindMatrix(val, inlineEditRowData.scrapLimitMm || 0, inlineEditRowData.perGrindMm || '');
+                              setInlineEditRowData({
+                                ...inlineEditRowData,
+                                newSpecMm: val,
+                                totalGrindMm: calc.totalGrindMm,
+                                regrindCycles: calc.regrindCycles
+                              });
+                            }}
+                            className="w-full bg-[#111111] text-center text-emerald-300 font-bold border border-[#666666] py-0.5 text-xs font-mono"
+                          />
+                        </td>
+                        <td className="py-1 px-1 border-r border-[#444444]">
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={inlineEditRowData.scrapLimitMm}
+                            onChange={e => {
+                              const val = parseFloat(e.target.value) || 0;
+                              const calc = calculateRegrindMatrix(inlineEditRowData.newSpecMm || 0, val, inlineEditRowData.perGrindMm || '');
+                              setInlineEditRowData({
+                                ...inlineEditRowData,
+                                scrapLimitMm: val,
+                                totalGrindMm: calc.totalGrindMm,
+                                regrindCycles: calc.regrindCycles
+                              });
+                            }}
+                            className="w-full bg-[#111111] text-center text-amber-300 font-bold border border-[#666666] py-0.5 text-xs font-mono"
                           />
                         </td>
                         <td className="py-1 px-1 border-r border-[#444444]">
                           <input
                             type="text"
                             value={inlineEditRowData.perGrindMm}
-                            onChange={e => setInlineEditRowData({ ...inlineEditRowData, perGrindMm: e.target.value })}
+                            onChange={e => {
+                              const pg = e.target.value;
+                              const calc = calculateRegrindMatrix(inlineEditRowData.newSpecMm || 0, inlineEditRowData.scrapLimitMm || 0, pg);
+                              setInlineEditRowData({
+                                ...inlineEditRowData,
+                                perGrindMm: pg,
+                                totalGrindMm: calc.totalGrindMm,
+                                regrindCycles: calc.regrindCycles
+                              });
+                            }}
                             className="w-full bg-[#111111] text-center text-purple-300 border border-[#666666] py-0.5 text-xs font-mono"
                           />
                         </td>
@@ -1345,9 +1740,9 @@ export const PartMasterView: React.FC = () => {
                         </td>
                         <td className="py-1 px-1 border-r border-[#444444]">
                           <input
-                            type="number"
+                            type="text"
                             value={inlineEditRowData.regrindCycles}
-                            onChange={e => setInlineEditRowData({ ...inlineEditRowData, regrindCycles: parseInt(e.target.value) || 0 })}
+                            onChange={e => setInlineEditRowData({ ...inlineEditRowData, regrindCycles: e.target.value })}
                             className="w-full bg-[#111111] text-center text-purple-300 font-bold border border-[#666666] py-0.5 text-xs font-mono"
                           />
                         </td>
@@ -1400,14 +1795,99 @@ export const PartMasterView: React.FC = () => {
                       <td className="py-1 px-2 text-center font-bold text-slate-400 border-r border-[#444444]">
                         {item.no}
                       </td>
-                      <td className="py-1 px-2 border-r border-[#444444]">
-                        <span className={`inline-block px-1.5 py-0.5 text-[10px] font-bold border bg-[#111111] uppercase ${getStageColor(item.stage)}`}>
+                      <td className="py-1 px-2 border-r border-[#444444] min-w-[145px]">
+                        <span className={`inline-block px-1.5 py-0.5 text-[10px] font-bold border bg-[#111111] uppercase whitespace-nowrap ${getStageColor(item.stage)}`}>
                           {item.stage}
                         </span>
                       </td>
                       <td className="py-1 px-2 font-bold text-white border-r border-[#444444]">
-                        <div>
-                          <span className="block">{item.partName}</span>
+                        <div className="flex items-center justify-between gap-1 group">
+                          <div>
+                            <span 
+                              onClick={() => setSelectedPartFor3D(item)} 
+                              className="block cursor-pointer hover:text-[#00FF00] transition-colors leading-tight"
+                              title="คลิกเพื่อดู 3D Blueprint และตารางสเปกคำนวณรอบเจียร"
+                            >
+                              {item.partName}
+                            </span>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="text-[10px] font-mono text-slate-400 font-normal">
+                                DWG: {item.drawingNo}
+                              </span>
+                              {item.partName.includes('Ø7') && (
+                                <span className="text-[9px] px-1 py-0.2 rounded bg-sky-950 text-sky-300 border border-sky-700 font-bold">
+                                  Ø7
+                                </span>
+                              )}
+                              {item.partName.includes('Ø5') && (
+                                <span className="text-[9px] px-1 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-700 font-bold">
+                                  Ø5
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedPartFor3D(item);
+                              }}
+                              className="p-1 rounded bg-[#111111] hover:bg-[#00FF00]/20 text-slate-400 hover:text-[#00FF00] border border-[#444444] transition-all cursor-pointer opacity-80 group-hover:opacity-100"
+                              title="เปิดแบบ 3D Blueprint / คำนวณรอบเจียรอัตโนมัติ"
+                            >
+                              <Box className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedPartForQrModal(item);
+                              }}
+                              className="p-1 rounded bg-[#111111] hover:bg-cyan-950 text-slate-400 hover:text-cyan-300 border border-[#444444] transition-all cursor-pointer opacity-80 group-hover:opacity-100"
+                              title="พิมพ์ฉลาก Tooling QR Code & Barcode (Idea 5 & 7)"
+                            >
+                              <QrCode className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Installed Lines Badges (Idea 4) */}
+                      <td className="py-1 px-1.5 border-r border-[#444444] text-center">
+                        <div className="flex flex-wrap items-center justify-center gap-1">
+                          {item.applicableLines && item.applicableLines.length > 0 ? (
+                            item.applicableLines.map((line: string) => {
+                              let badgeColor = 'bg-sky-950 text-sky-300 border-sky-600';
+                              if (line === 'E2') badgeColor = 'bg-amber-950 text-amber-300 border-amber-600';
+                              else if (line.startsWith('E3')) badgeColor = 'bg-purple-950 text-purple-300 border-purple-600';
+                              else if (line === 'E4') badgeColor = 'bg-emerald-950 text-emerald-300 border-emerald-600';
+                              else if (line === 'E5') badgeColor = 'bg-teal-950 text-teal-300 border-teal-600';
+
+                              const lineQtyMap: Record<string, number | undefined> = {
+                                'E1': item.installQty.e1,
+                                'E2': item.installQty.e2,
+                                'E3-1': item.installQty.e3_1,
+                                'E3-2': item.installQty.e3_2,
+                                'E3-3': item.installQty.e3_3,
+                                'E4': item.installQty.e4,
+                                'E5': item.installQty.e5,
+                              };
+                              const qty = lineQtyMap[line];
+
+                              return (
+                                <span
+                                  key={line}
+                                  className={`px-1 py-0.2 rounded text-[10px] font-bold border ${badgeColor}`}
+                                  title={`${line}: ${qty !== undefined ? `${qty} pcs installed` : 'Active'}`}
+                                >
+                                  {line}{qty ? ` (${qty})` : ''}
+                                </span>
+                              );
+                            })
+                          ) : (
+                            <span className="text-slate-600 text-[10px]">-</span>
+                          )}
                         </div>
                       </td>
 
@@ -1433,11 +1913,14 @@ export const PartMasterView: React.FC = () => {
                       <td className="py-1 px-2 text-center text-[#00FF00] border-r border-[#444444]">
                         {item.shotLifeCycle.e5_bare !== undefined ? `${item.shotLifeCycle.e5_bare}M` : '-'}
                       </td>
-                      <td className="py-1 px-2 text-center text-slate-300 border-r border-[#444444] text-[10px]">
-                        {item.shotLifeCycle.lowerSpecScrapLimit ? `${item.shotLifeCycle.lowerSpecScrapLimit} mm` : '-'}
-                      </td>
 
-                      {/* 3. Regrind Standards */}
+                      {/* 3. Regrind Standards Matrix (Specs & Calculated Cycles) */}
+                      <td className="py-1 px-2 text-center text-emerald-300 font-bold border-r border-[#444444]">
+                        {item.newSpecMm ? `${item.newSpecMm.toFixed(2)} mm` : '-'}
+                      </td>
+                      <td className="py-1 px-2 text-center text-amber-300 font-bold border-r border-[#444444]">
+                        {item.scrapLimitMm ? `${item.scrapLimitMm.toFixed(2)} mm` : '-'}
+                      </td>
                       <td className="py-1 px-2 text-center border-r border-[#444444]">
                         {isDisposable ? (
                           <span className="text-[10px] text-[#C40045] bg-[#22000c] px-1 py-0.2 border border-[#C40045]">
@@ -1533,6 +2016,18 @@ export const PartMasterView: React.FC = () => {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
+                              setSelectedPartForQrModal(item);
+                            }}
+                            className="p-1 bg-[#111111] hover:bg-cyan-950 text-cyan-400 hover:text-cyan-300 border border-[#555555] hover:border-cyan-400 transition-colors cursor-pointer"
+                            title="พิมพ์ฉลาก QR Code & Barcode (Idea 5 & 7)"
+                          >
+                            <QrCode className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
                               handleStartInlineEdit(item);
                             }}
                             className="p-1 bg-[#111111] hover:bg-[#333333] text-[#00FF00] border border-[#555555] hover:border-[#00FF00] transition-colors cursor-pointer"
@@ -1584,6 +2079,24 @@ export const PartMasterView: React.FC = () => {
         isOpen={isStageManagerOpen}
         onClose={() => setIsStageManagerOpen(false)}
         onSave={loadDatabaseData}
+      />
+
+      {/* ======================================================== */}
+      {/* 8. 3D BLUEPRINT & REGRIND CALCULATION MODAL */}
+      {/* ======================================================== */}
+      <Part3DBlueprintModal
+        isOpen={!!selectedPartFor3D}
+        onClose={() => setSelectedPartFor3D(null)}
+        partRow={selectedPartFor3D}
+      />
+
+      {/* ======================================================== */}
+      {/* 9. QR CODE & BARCODE TOOLING LABEL MODAL (Idea 5 & 7) */}
+      {/* ======================================================== */}
+      <PartQrLabelModal
+        isOpen={!!selectedPartForQrModal}
+        onClose={() => setSelectedPartForQrModal(null)}
+        partRow={selectedPartForQrModal}
       />
 
     </div>

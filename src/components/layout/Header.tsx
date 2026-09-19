@@ -17,7 +17,8 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({
   settings,
-  onUpdateSettings
+  onUpdateSettings,
+  onNavigate
 }) => {
   const { language, setLanguage } = useLanguage();
   const { t } = useTranslation();
@@ -51,20 +52,35 @@ export const Header: React.FC<HeaderProps> = ({
                 {t('header.title', { defaultValue: 'FIN DIE SHOT CONTROL' })}
               </h1>
               {isSimulation ? (
-                <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[10px] font-bold border rounded-full bg-amber-950/60 text-amber-300 border-amber-500/40 shadow-[0_0_12px_rgba(245,158,11,0.25)] font-mono">
+                <button
+                  type="button"
+                  onClick={() => onNavigate('plc-config')}
+                  className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[10px] font-bold border rounded-full bg-amber-950/60 hover:bg-amber-900/80 text-amber-300 border-amber-500/40 shadow-[0_0_12px_rgba(245,158,11,0.25)] font-mono cursor-pointer transition-all active:scale-95"
+                  title="คลิกเพื่อเปิดหน้าตั้งค่าการเชื่อมต่อ PLC"
+                >
                   <Radio className="w-2.5 h-2.5 animate-pulse text-amber-400" />
                   SIMULATION ACTIVE
-                </span>
+                </button>
               ) : isConnected ? (
-                <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[10px] font-bold border rounded-full bg-emerald-950/60 text-emerald-300 border-emerald-500/40 shadow-[0_0_12px_rgba(16,185,129,0.25)] font-mono">
+                <button
+                  type="button"
+                  onClick={() => onNavigate('plc-config')}
+                  className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[10px] font-bold border rounded-full bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border-emerald-500/40 shadow-[0_0_12px_rgba(16,185,129,0.25)] font-mono cursor-pointer transition-all active:scale-95"
+                  title="คลิกเพื่อเปิดหน้าตั้งค่าการเชื่อมต่อ PLC"
+                >
                   <Radio className="w-2.5 h-2.5 animate-pulse text-emerald-400" />
                   PLC CONNECTED
-                </span>
+                </button>
               ) : (
-                <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[10px] font-bold border rounded-full bg-rose-950/60 text-rose-300 border-rose-500/40 shadow-[0_0_12px_rgba(244,63,94,0.25)] font-mono">
+                <button
+                  type="button"
+                  onClick={() => onNavigate('plc-config')}
+                  className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[10px] font-bold border rounded-full bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 border-rose-500/40 shadow-[0_0_12px_rgba(244,63,94,0.25)] font-mono cursor-pointer transition-all active:scale-95"
+                  title="คลิกเพื่อเปิดหน้าตั้งค่าการเชื่อมต่อ PLC"
+                >
                   <Radio className="w-2.5 h-2.5 text-rose-400" />
                   CONNECTION LOST
-                </span>
+                </button>
               )}
             </div>
             <p className="text-[9.5px] sm:text-[10px] tracking-tight leading-none mt-0.5 text-slate-400 font-sans">

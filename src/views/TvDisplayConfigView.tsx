@@ -15,15 +15,13 @@ import {
 } from 'lucide-react';
 import { storageService } from '../services/storageService';
 import { ProductionLineId, PartMaster } from '../types';
+import { getPartProgressiveRank } from '../services/calculationService';
 
 export const TvDisplayConfigView: React.FC = () => {
   const [selectedLineId, setSelectedLineId] = useState<ProductionLineId>('E1');
   const [partMasters, setPartMasters] = useState<PartMaster[]>([]);
   const [lineConfigs, setLineConfigs] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // Filter toggle for Left Pane: 'INSTALLED_ONLY' (Default) vs 'ALL_PARTS'
-  const [partFilterMode, setPartFilterMode] = useState<'INSTALLED_ONLY' | 'ALL_PARTS'>('INSTALLED_ONLY');
 
   // Local active selections for current line
   const [selectedParts, setSelectedParts] = useState<string[]>([]);
@@ -103,10 +101,8 @@ export const TvDisplayConfigView: React.FC = () => {
       };
     });
 
-    // Concept 1: Filter to ONLY installed parts on this line when mode is INSTALLED_ONLY
-    if (partFilterMode === 'INSTALLED_ONLY') {
-      list = list.filter(p => p.isInstalled || p.isSelected);
-    }
+    // Filter strictly to ONLY installed parts on this line to avoid confusing selection lists
+    list = list.filter(p => p.isInstalled);
 
     // Query filter
     if (searchQuery.trim() !== '') {
@@ -118,13 +114,14 @@ export const TvDisplayConfigView: React.FC = () => {
       );
     }
 
-    // Sort: 1) Installed on this line comes first, 2) Then sorted by partCode
+    // Sort by manufacturing progressive process sequence (getPartProgressiveRank)
     return list.sort((a, b) => {
-      if (a.isInstalled && !b.isInstalled) return -1;
-      if (!a.isInstalled && b.isInstalled) return 1;
+      const rankA = getPartProgressiveRank(a.partName, a.stageName);
+      const rankB = getPartProgressiveRank(b.partName, b.stageName);
+      if (rankA !== rankB) return rankA - rankB;
       return a.partCode.localeCompare(b.partCode);
     });
-  }, [partMasters, installedPartsMap, selectedParts, searchQuery, partFilterMode]);
+  }, [partMasters, installedPartsMap, searchQuery]);
 
   // Retrieve the full PartMaster info for the selected parts in the right pane
   const activeTvPartsList = useMemo(() => {
@@ -214,7 +211,15 @@ export const TvDisplayConfigView: React.FC = () => {
   const handleResetToDefault = () => {
     const installedCodes = partMasters
       .filter(pm => (installedPartsMap[pm.partCode] || 0) > 0)
-      .map(pm => pm.partCode);
+      .map(pm => pm.partCode)
+      .sort((a, b) => {
+        const pmA = partMasters.find(p => p.partCode === a);
+        const pmB = partMasters.find(p => p.partCode === b);
+        const rankA = getPartProgressiveRank(pmA?.partName || '', pmA?.stageName || '');
+        const rankB = getPartProgressiveRank(pmB?.partName || '', pmB?.stageName || '');
+        if (rankA !== rankB) return rankA - rankB;
+        return a.localeCompare(b);
+      });
     setSelectedParts(installedCodes);
   };
 
@@ -311,30 +316,9 @@ export const TvDisplayConfigView: React.FC = () => {
               </button>
             </div>
 
-            {/* Filter Mode Selector: Concept 1 Strict Filter vs All */}
-            <div className="flex items-center gap-1.5 p-1 bg-white/[0.04] rounded-xl border border-white/5">
-              <button
-                type="button"
-                onClick={() => setPartFilterMode('INSTALLED_ONLY')}
-                className={`flex-1 py-1 px-2 text-[10px] font-bold rounded-lg transition-all text-center cursor-pointer ${
-                  partFilterMode === 'INSTALLED_ONLY'
-                    ? 'bg-amber-400 text-slate-950 shadow-sm font-black'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                เฉพาะติดตั้งในไลน์นี้ ({totalInstalledCount})
-              </button>
-              <button
-                type="button"
-                onClick={() => setPartFilterMode('ALL_PARTS')}
-                className={`flex-1 py-1 px-2 text-[10px] font-bold rounded-lg transition-all text-center cursor-pointer ${
-                  partFilterMode === 'ALL_PARTS'
-                    ? 'bg-amber-400 text-slate-950 shadow-sm font-black'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                พาร์ททั้งหมด ({partMasters.length})
-              </button>
+            {/* Information Banner indicating that only installed parts are shown */}
+            <div className="p-2 bg-amber-400/5 border border-amber-400/25 rounded-xl text-[10px] text-amber-300 font-medium leading-relaxed">
+              แสดงเฉพาะพาร์ทที่ติดตั้งในสเตจต่างๆ ของไลน์ <strong>{selectedLineId}</strong> ({totalInstalledCount} พาร์ท) เพื่อป้องกันการสับสน
             </div>
           </div>
 
@@ -354,9 +338,7 @@ export const TvDisplayConfigView: React.FC = () => {
           <div className="flex-1 overflow-y-auto space-y-2 pr-1 text-xs custom-scrollbar">
             {availableParts.length === 0 ? (
               <div className="text-center py-12 text-slate-500 text-xs">
-                {partFilterMode === 'INSTALLED_ONLY' 
-                  ? 'ไม่มีรายการพาร์ทที่ติดตั้งในไลน์นี้ (สามารถสลับเป็น "พาร์ททั้งหมด" ได้)' 
-                  : 'ไม่พบข้อมูลพาร์ท'}
+                ไม่พบข้อมูลพาร์ทที่ติดตั้งในไลน์นี้
               </div>
             ) : (
               availableParts.map((pm) => {
@@ -364,11 +346,7 @@ export const TvDisplayConfigView: React.FC = () => {
                 return (
                   <div 
                     key={pm.partCode}
-                    className={`p-2.5 rounded-xl border transition-all flex items-center justify-between gap-3 ${
-                      pm.isInstalled 
-                        ? 'bg-white/[0.05] border-white/15 hover:border-amber-400/40' 
-                        : 'bg-white/[0.02] border-white/5 opacity-80'
-                    }`}
+                    className="p-2.5 rounded-xl border transition-all flex items-center justify-between gap-3 bg-white/[0.05] border-white/15 hover:border-amber-400/40"
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-1.5">

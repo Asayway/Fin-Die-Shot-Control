@@ -186,6 +186,10 @@ export function usePLCConnection() {
         };
 
         ws.onerror = (err) => {
+          try {
+            (err as any)?.preventDefault?.();
+            (err as any)?.stopPropagation?.();
+          } catch (_) {}
           setStatus('ERROR');
           appendLog(`[PLC DRIVER] WebSocket Gateway connection error. Switching to fallback pulse listener.`);
         };
@@ -215,7 +219,7 @@ export function usePLCConnection() {
 
           if (res && res.ok) {
             setStatus('GATEWAY_ONLINE');
-            const json = await res.json();
+            const json = await res.json().catch(() => null);
             if (Array.isArray(json)) {
               json.forEach((item: any) => {
                 if (item.lineId && item.shots) {
@@ -247,7 +251,9 @@ export function usePLCConnection() {
     return () => {
       if (pollingTimer) clearInterval(pollingTimer);
       if (wsRef.current) {
-        wsRef.current.close();
+        try {
+          wsRef.current.close();
+        } catch (_) {}
         wsRef.current = null;
       }
     };
@@ -291,7 +297,7 @@ export function usePLCConnection() {
 
       const sampleLine = config.lineRegisters['E1'];
       if (sampleLine) {
-        appendLog(`[PLC DRIVER] Sample Register Read: Line ${sampleLine.lineId} (${sampleLine.address}) = ${sampleLine.currentVal.toLocaleString()} shots`);
+        appendLog(`[PLC DRIVER] Sample Register Read: Line ${sampleLine.lineId} (${sampleLine.address}) = ${(sampleLine.currentVal || 0).toLocaleString()} shots`);
       }
     }, 700);
   }, [config.ip, config.port, config.protocol, config.connectionMode, config.slaveId, config.lineRegisters, appendLog]);

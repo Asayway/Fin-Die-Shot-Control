@@ -24,7 +24,7 @@ class GatewayService {
     'E1': 0, 'E2': 0, 'E3-1': 0, 'E3-2': 0, 'E3-3': 0, 'E4': 0, 'E5': 0
   };
   private lastKnownPLCShots: Record<ProductionLineId, number> = {
-    'E1': 153474176, 'E2': 142890520, 'E3-1': 98450120, 'E3-2': 112450890, 'E3-3': 87620340, 'E4': 168920150, 'E5': 135400980
+    'E1': 0, 'E2': 0, 'E3-1': 0, 'E3-2': 0, 'E3-3': 0, 'E4': 0, 'E5': 0
   };
   private lastTelemetryTimestamps: Record<ProductionLineId, number> = {
     'E1': Date.now(), 'E2': Date.now(), 'E3-1': Date.now(), 'E3-2': Date.now(), 'E3-3': Date.now(), 'E4': Date.now(), 'E5': Date.now()
@@ -183,7 +183,8 @@ class GatewayService {
       // Realistic manufacturing SPM (strokes per minute) simulation
       // SPM ranges between 180 - 280 SPM (3 - 5 shots per sec)
       const pulseInc = Math.floor(Math.random() * (settings.autoPulseIncrement || 4) + 1);
-      const prevVal = this.lastKnownPLCShots[lineId] || 100000000;
+      const mon = storageService.getLineMonitoring(lineId);
+      const prevVal = mon ? (mon.machineShotTotal || 0) : 0;
       const newVal = prevVal + pulseInc;
       this.lastKnownPLCShots[lineId] = newVal;
       this.lastTelemetryTimestamps[lineId] = Date.now();
@@ -245,7 +246,8 @@ class GatewayService {
       if (!mapping || !mapping.enabled) return;
 
       const pulseInc = Math.floor(Math.random() * 5 + 1);
-      const prevVal = this.lastKnownPLCShots[lineId] || 100000000;
+      const mon = storageService.getLineMonitoring(lineId);
+      const prevVal = mon ? (mon.machineShotTotal || 0) : 0;
       const newVal = prevVal + pulseInc;
       this.lastKnownPLCShots[lineId] = newVal;
       this.lastTelemetryTimestamps[lineId] = Date.now();

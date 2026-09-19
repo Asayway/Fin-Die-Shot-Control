@@ -23,6 +23,8 @@ import {
 import { getI18n, LanguageCode, useLanguage } from '../../i18n';
 import { TvTableRow } from './TvTableRow';
 
+const LINES_LIST: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
+
 interface TvDashboardViewProps {
   initialLineId?: ProductionLineId;
   isFullscreenMode?: boolean;
@@ -39,11 +41,12 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
   const { t: translate, language } = useLanguage();
   const [selectedLineId, setSelectedLineId] = useState<ProductionLineId>(initialLineId);
   const [lineData, setLineData] = useState<LineLiveMonitoringData | null>(null);
+  const [monitoringData, setMonitoringData] = useState(() => storageService.getLinesMonitoring());
 
   // Auto Cycle (Auto Rotate Lines) State
-  const [isAutoCycleActive, setIsAutoCycleActive] = useState<boolean>(false);
-  const [autoCycleInterval, setAutoCycleInterval] = useState<number>(10); // 5, 10, 15, 20 seconds
-  const [countdown, setCountdown] = useState<number>(10);
+  const [isAutoCycleActive, setIsAutoCycleActive] = useState<boolean>(true);
+  const [autoCycleInterval, setAutoCycleInterval] = useState<number>(5); // Default to 5 seconds as requested
+  const [countdown, setCountdown] = useState<number>(5);
 
   // Active Display Language
   const currentLang = language;
@@ -129,14 +132,11 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
     document.addEventListener('mouseup', onMouseUp);
   };
 
-  // Exact strict sequence of lines requested:
-  // E1 -> E2 -> E3 SLit (E3-1) -> E3 WL (E3-2) -> E3 New corr (E3-3) -> E4 -> E5 (loops back to E1)
-  const linesList: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
+  const linesList = LINES_LIST;
 
   // Helper to get real-time machine status of any line
-  const getLineMachineStatus = (lineId: ProductionLineId): MachineStatus => {
-    const allMonitoring = storageService.getLinesMonitoring();
-    const monitoring = allMonitoring[lineId];
+  const getLineMachineStatus = React.useCallback((lineId: ProductionLineId): MachineStatus => {
+    const monitoring = monitoringData[lineId];
     if (monitoring?.machineStatus) {
       return monitoring.machineStatus;
     }
@@ -146,35 +146,20 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
       return 'IDLE';
     }
     return lineId === 'E5' ? 'STOPPED' : 'RUNNING';
-  };
+  }, [monitoringData]);
 
-  // Check if a line is active/running for cycling (skips IDLE, STOPPED, MAINTENANCE)
-  const isLineActiveForCycle = (lineId: ProductionLineId): boolean => {
+  // Check if a line is active/running
+  const isLineActiveForCycle = React.useCallback((lineId: ProductionLineId): boolean => {
     const status = getLineMachineStatus(lineId);
     return status === 'RUNNING' || status === 'SIMULATION_ACTIVE';
-  };
+  }, [getLineMachineStatus]);
 
-  // Find the next active line in strict sequence: E1 -> E2 -> E3-1 -> E3-2 -> E3-3 -> E4 -> E5
-  const getNextActiveCycleLine = (currentLine: ProductionLineId): ProductionLineId => {
-    const activeLines = linesList.filter(id => isLineActiveForCycle(id));
-    // If no lines are active/running, fallback to all lines
-    const pool = activeLines.length > 0 ? activeLines : linesList;
-
-    const currentIdxInPool = pool.indexOf(currentLine);
-    if (currentIdxInPool >= 0) {
-      return pool[(currentIdxInPool + 1) % pool.length];
-    }
-
-    // If currentLine is idle/stopped, find the nearest next line in linesList that is in the active pool
-    const currentIdxInAll = linesList.indexOf(currentLine);
-    for (let i = 1; i <= linesList.length; i++) {
-      const candidate = linesList[(currentIdxInAll + i) % linesList.length];
-      if (pool.includes(candidate)) {
-        return candidate;
-      }
-    }
-    return pool[0];
-  };
+  // Find the next line in strict sequential order, cycling through all lines without skipping
+  const getNextActiveCycleLine = React.useCallback((currentLine: ProductionLineId): ProductionLineId => {
+    const currentIdx = linesList.indexOf(currentLine);
+    if (currentIdx < 0) return linesList[0];
+    return linesList[(currentIdx + 1) % linesList.length];
+  }, [linesList]);
 
   const reloadData = () => {
     const rawData = storageService.getLineMonitoring(selectedLineId);
@@ -224,18 +209,18 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
     // Reconcile candidate items: combine rawData.items with any installed parts for this line
     const lineInstalledMap = activeConfig?.installedPartQuantities || {};
     const installedPartCodes = Object.keys(lineInstalledMap).filter(code => (lineInstalledMap[code] || 0) > 0);
-    const existingPartCodes = new Set((rawData.items || []).map(i => i.partCode));
+    const existingPartCodes = new Set((rawData.items || []).map(i => (i.partCode || '').trim().toUpperCase()));
 
     const missingInstalledParts = installedPartCodes
-      .filter(code => !existingPartCodes.has(code))
+      .filter(code => !existingPartCodes.has(code.trim().toUpperCase()))
       .map(code => {
         const pm = partMasters.find(p => p.partCode === code);
         const std = standards.find(s => s.configKey?.partCode === code || s.partName === pm?.partName || s.stagePunchDie === pm?.stageName);
         const stock = stocks.find(s => s.partCode === code || s.partName === pm?.partName);
         const installQty = lineInstalledMap[code] || (pm ? 1 : 0);
         const lifeLimit = std?.lifeLimitShots || 15000000;
-        const totalShots = rawData.machineShotTotal || 100000000;
-        const curShot = Math.round(lifeLimit * 0.45);
+        const totalShots = rawData.machineShotTotal || 0;
+        const curShot = 0;
 
         return {
           slotId: `SLOT-${selectedLineId}-${code}`,
@@ -260,9 +245,9 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
     const recalculatedItems = allCandidateItems.map((item) => {
       // Match with Part Master
       const matchedPart = partMasters.find(p => 
-        (item.partCode && p.partCode === item.partCode) || 
-        (item.partName && p.partName === item.partName) ||
-        (item.stagePunchDie && p.stageName === item.stagePunchDie)
+        (item.partCode && p.partCode.toLowerCase() === item.partCode.toLowerCase()) || 
+        (item.partName && p.partName.toLowerCase() === item.partName.toLowerCase()) ||
+        (item.stagePunchDie && p.stageName.toLowerCase() === item.stagePunchDie.toLowerCase())
       );
       
       // Match with Life Standards
@@ -275,24 +260,55 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
       // Match with Spare Stock
       const matchedStock = stocks.find(s => 
         (item.partCode && s.partCode === item.partCode) || 
-        (item.partName && s.partName === item.partName)
+        (item.partName && s.partName === item.partName) ||
+        (matchedPart && s.partCode === matchedPart.partCode)
       );
 
       // Use actual permanent part code or existing slotId without deriving from array indexes
-      const permanentPartCode = item.partCode || matchedPart?.partCode || '';
+      const permanentPartCode = matchedPart?.partCode || item.partCode || '';
+      const legacyCode = item.partCode || '';
       const permanentSlotId = item.slotId || (permanentPartCode ? `SLOT-${permanentPartCode}` : (item.stagePunchDie ? `SLOT-${item.stagePunchDie.replace(/\s+/g, '_')}` : 'SLOT-UNASSIGNED'));
 
-      // Do NOT invent realistic fallback numbers (18,000,000 or 168)
-      const lifeLimitVal = item.lifeLimit > 0 ? item.lifeLimit : (matchedStd?.lifeLimitShots || 0);
-      const installQtyVal = item.installQty > 0 ? item.installQty : (matchedStock?.requiredQuantityPerFullReplacement || 0);
+      // 1. Resolve Install Qty from active line config (Stock Matrix / Part Install Matrix)
+      let installQtyVal: number | undefined = undefined;
+      if (activeConfig && activeConfig.installedPartQuantities) {
+        const normInstallMap = Object.entries(activeConfig.installedPartQuantities).reduce((acc, [k, v]) => {
+          acc[k.trim().toUpperCase()] = v;
+          return acc;
+        }, {} as Record<string, number>);
 
-      // Resolve real-time stock from master/configs to ensure it matches and updates instantly
-      const hasLineStockConfig = activeConfig && activeConfig.stockQuantities && activeConfig.stockQuantities[permanentPartCode] !== undefined;
-      const lineStockQty = hasLineStockConfig ? activeConfig!.stockQuantities![permanentPartCode] : undefined;
-      const totalStockQty = matchedStock 
-        ? (matchedStock.availableQuantity !== undefined ? matchedStock.availableQuantity : (matchedStock.currentStockQty !== undefined ? matchedStock.currentStockQty : matchedStock.onHandQuantity)) 
-        : item.backupQty;
-      const stockQtyVal = lineStockQty !== undefined ? lineStockQty : totalStockQty;
+        const lookupCode = permanentPartCode?.trim().toUpperCase() || legacyCode?.trim().toUpperCase();
+        if (lookupCode && normInstallMap[lookupCode] !== undefined) {
+          installQtyVal = normInstallMap[lookupCode];
+        }
+      }
+      if (installQtyVal === undefined) {
+        installQtyVal = item.installQty > 0 ? item.installQty : (matchedStock?.requiredQuantityPerFullReplacement || 0);
+      }
+
+      // 2. Resolve Stock Qty from active line config (Stock Matrix)
+      let stockQtyVal: number | undefined = undefined;
+      if (activeConfig && activeConfig.stockQuantities) {
+        const normStockMap = Object.entries(activeConfig.stockQuantities).reduce((acc, [k, v]) => {
+          acc[k.trim().toUpperCase()] = v;
+          return acc;
+        }, {} as Record<string, number>);
+
+        const lookupCode = permanentPartCode?.trim().toUpperCase() || legacyCode?.trim().toUpperCase();
+        if (lookupCode && normStockMap[lookupCode] !== undefined) {
+          stockQtyVal = normStockMap[lookupCode];
+        } else {
+          // If stockQuantities map exists on activeConfig, default missing parts to 0 to align with Stock Matrix
+          stockQtyVal = 0;
+        }
+      }
+      if (stockQtyVal === undefined) {
+        stockQtyVal = matchedStock 
+          ? (matchedStock.availableQuantity !== undefined ? matchedStock.availableQuantity : (matchedStock.currentStockQty !== undefined ? matchedStock.currentStockQty : matchedStock.onHandQuantity)) 
+          : (item.backupQty || 0);
+      }
+
+      const lifeLimitVal = item.lifeLimit > 0 ? item.lifeLimit : (matchedStd?.lifeLimitShots || 0);
 
       const partDisplayName = item.partName || matchedPart?.partName || item.stagePunchDie || 'Tooling Component';
       const stageName = item.stagePunchDie || matchedPart?.stageName || item.partName || 'Die Stage';
@@ -364,14 +380,38 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
           matchedList.push(matched);
         } else {
           // Dynamic fallback: If not yet in candidate list, construct metric item on the fly from PartMaster!
-          const pm = partMasters.find(p => p.partCode === targetKey || p.partName === targetKey);
+          const pm = partMasters.find(p => p.partCode === targetKey || p.partName === targetKey || p.stageName === targetKey);
           if (pm) {
             const std = standards.find(s => s.configKey?.partCode === pm.partCode || s.partName === pm.partName || s.stagePunchDie === pm.stageName);
             const stock = stocks.find(s => s.partCode === pm.partCode || s.partName === pm.partName);
-            const installQty = lineInstalledMap[pm.partCode] || 1;
+
+            const normInstallMap = activeConfig?.installedPartQuantities
+              ? Object.entries(activeConfig.installedPartQuantities).reduce((acc, [k, v]) => {
+                  acc[k.trim().toUpperCase()] = v;
+                  return acc;
+                }, {} as Record<string, number>)
+              : {};
+
+            const normStockMap = activeConfig?.stockQuantities
+              ? Object.entries(activeConfig.stockQuantities).reduce((acc, [k, v]) => {
+                  acc[k.trim().toUpperCase()] = v;
+                  return acc;
+                }, {} as Record<string, number>)
+              : {};
+
+            const lookupCode = pm.partCode.trim().toUpperCase();
+
+            const lineInstallQty = normInstallMap[lookupCode] !== undefined 
+              ? normInstallMap[lookupCode] 
+              : (lineInstalledMap[pm.partCode] || 0);
+
+            const lineStockQty = normStockMap[lookupCode] !== undefined 
+              ? normStockMap[lookupCode] 
+              : (activeConfig?.stockQuantities ? 0 : (stock?.availableQuantity ?? 0));
+
             const lifeLimit = std?.lifeLimitShots || 15000000;
-            const totalShots = rawData.machineShotTotal || 100000000;
-            const curShot = Math.round(lifeLimit * 0.45);
+            const totalShots = rawData.machineShotTotal || 0;
+            const curShot = 0;
 
             const dynamicMetric = calculatePartMetrics(
               {
@@ -380,12 +420,12 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
                 partName: pm.partName,
                 stagePunchDie: pm.stageName || 'Die Stage',
                 position: pm.stageName || 'ALL',
-                installQty: installQty,
-                backupQty: stock?.availableQuantity ?? 10,
+                installQty: lineInstallQty,
+                backupQty: lineStockQty,
                 usedShot: curShot,
                 currentShot: curShot,
-                shotAtLastChange: Math.max(0, totalShots - curShot),
-                lastChangeShot: Math.max(0, totalShots - curShot),
+                shotAtLastChange: totalShots,
+                lastChangeShot: totalShots,
                 regrindCount: 0,
                 totalMmGround: 0,
                 lifeLimit: lifeLimit
@@ -440,6 +480,7 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
     reloadData();
     const unsub = storageService.subscribe(() => {
       reloadData();
+      setMonitoringData(storageService.getLinesMonitoring());
     });
     return () => unsub();
   }, [selectedLineId, tvSortMode]);
@@ -483,7 +524,7 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [isAutoCycleActive, autoCycleInterval, linesList]);
+  }, [isAutoCycleActive, autoCycleInterval, getNextActiveCycleLine, selectedLineId]);
 
   if (!lineData) {
     return (
@@ -638,16 +679,6 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
               ) : (
                 <span className="text-xs text-slate-500 uppercase">NO DATA</span>
               )}
-            </span>
-          </div>
-
-          {/* Box 4: Telemetry Source & Freshness */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <span className={`px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-mono font-black border shadow-sm ${freshnessColor}`}>
-              {freshnessLabel}
-            </span>
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-mono font-bold bg-white/[0.05] border border-white/10 text-slate-300">
-              SRC: {dataSourceLabel}
             </span>
           </div>
         </div>
@@ -926,10 +957,10 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
           })}
         </div>
 
-        {/* Right side Bottom-Right Auto Cycle Controls & Status Badge */}
+        {/* Right side Bottom-Right Auto Cycle Controls */}
         <div className="flex items-center gap-2.5">
-          {/* Status Badge in Liquid Glass Capsule */}
-          {lineData && (
+          {/* Machine Operational Status Badge */}
+          {lineData && lineData.machineStatus && lineData.machineStatus !== 'STALE_DATA' && lineData.machineStatus !== 'CONNECTION_LOST' && (
             <div className={`inline-flex items-center gap-2 px-3.5 py-1 text-xs font-mono font-bold rounded-full border shadow-sm ${
               lineData.machineStatus === 'STOPPED' 
                 ? 'bg-red-950/70 border-red-500/60 text-red-200 shadow-[0_0_12px_rgba(239,68,68,0.4)] animate-pulse' :
@@ -941,14 +972,10 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
                 ? 'bg-purple-950/70 border-purple-400/60 text-purple-200 shadow-[0_0_12px_rgba(168,85,247,0.4)] animate-pulse' :
               lineData.machineStatus === 'SIMULATION_ACTIVE'
                 ? 'bg-amber-950/70 border-amber-500/60 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.4)] animate-pulse' :
-              lineData.machineStatus === 'CONNECTION_LOST' || lineData.machineStatus === 'NO_DATA'
-                ? 'bg-red-950/70 border-red-500/60 text-red-200 shadow-[0_0_12px_rgba(239,68,68,0.4)] animate-pulse' :
-              lineData.machineStatus === 'STALE_DATA'
-                ? 'bg-amber-950/70 border-amber-400/60 text-amber-200 animate-pulse' :
               lineData.machineStatus === 'NOT_CONFIGURED'
                 ? 'bg-slate-900/80 border-white/10 text-slate-300' :
                 'bg-emerald-950/70 border-emerald-500/40 text-emerald-300'
-            }`} title={`Current Line Status: ${lineData.machineStatus}`}>
+            }`} title={`Machine Status: ${lineData.machineStatus}`}>
               <span className="w-2 h-2 rounded-full bg-current shadow-[0_0_6px_currentColor]"></span>
               <span className="uppercase tracking-wider">
                 {language === 'TH' ? (
@@ -958,10 +985,7 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
                   lineData.machineStatus === 'MAINTENANCE' ? 'ซ่อมบำรุง' :
                   lineData.machineStatus === 'CHANGEOVER' ? 'เปลี่ยนรุ่น' :
                   lineData.machineStatus === 'SIMULATION_ACTIVE' ? 'จำลองการทำงาน' :
-                  lineData.machineStatus === 'CONNECTION_LOST' ? 'ขาดการเชื่อมต่อ' :
-                  lineData.machineStatus === 'STALE_DATA' ? 'ข้อมูลค้าง' :
                   lineData.machineStatus === 'NOT_CONFIGURED' ? 'ยังไม่ตั้งค่า' :
-                  lineData.machineStatus === 'NO_DATA' ? 'ไม่มีข้อมูล' :
                   lineData.machineStatus
                 ) : language === 'KO' ? (
                   lineData.machineStatus === 'RUNNING' ? '가동 중' :
@@ -970,10 +994,7 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
                   lineData.machineStatus === 'MAINTENANCE' ? '보전 작업' :
                   lineData.machineStatus === 'CHANGEOVER' ? '모델 교체' :
                   lineData.machineStatus === 'SIMULATION_ACTIVE' ? '시뮬레이션 활성' :
-                  lineData.machineStatus === 'CONNECTION_LOST' ? '통신 끊김' :
-                  lineData.machineStatus === 'STALE_DATA' ? '데이터 지연' :
                   lineData.machineStatus === 'NOT_CONFIGURED' ? '미설정' :
-                  lineData.machineStatus === 'NO_DATA' ? '데이터 없음' :
                   lineData.machineStatus
                 ) : (
                   lineData.machineStatus.replace(/_/g, ' ')
@@ -1007,11 +1028,6 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
           {(() => {
             const nextLineId = getNextActiveCycleLine(selectedLineId);
             const nextLineLabel = getLineLabel(nextLineId);
-            const activeLines = linesList.filter(id => isLineActiveForCycle(id));
-            const skippedLines = linesList.filter(id => !isLineActiveForCycle(id));
-
-            const skippedNames = skippedLines.map(id => getLineLabel(id)).join(', ');
-            const activeSequence = activeLines.map(id => getLineLabel(id)).join(' → ');
 
             return (
               <button
@@ -1026,17 +1042,14 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
                     : 'bg-white/[0.05] hover:bg-white/[0.1] border-white/15 text-slate-200 hover:text-white'
                 }`}
                 title={isAutoCycleActive 
-                  ? `ลำดับหมุนเวียน (เฉพาะไลน์ RUNNING): ${activeSequence}${skippedLines.length > 0 ? ` [ข้ามไลน์ Idle/หยุด: ${skippedNames}]` : ''} | ถัดไป: ${nextLineLabel} ใน ${countdown} วินาที` 
-                  : `เปิดการหมุนเวียนอัตโนมัติ (ข้ามไลน์ Idle / หยุดตาม Line Spec โดยอัตโนมัติ)`}
+                  ? `หมุนเวียนอัตโนมัติเรียงตามไลน์ (E1 → E2 → E3 SLit → E3 WL → E3 New corr → E4 → E5) | ถัดไป: ${nextLineLabel} ใน ${countdown} วินาที` 
+                  : `เปิดการหมุนเวียนอัตโนมัติ (สลับไลน์เรียงกันตามลำดับทุกๆ ${autoCycleInterval} วินาที)`}
               >
                 {isAutoCycleActive ? (
                   <>
                     <RotateCw className="w-3.5 h-3.5 animate-spin text-emerald-400" />
                     <span className="font-black flex items-center gap-1.5">
                       <span>{language === 'TH' ? `หมุนเวียน (${countdown}s)` : language === 'KO' ? `순환 (${countdown}s)` : `CYCLING (${countdown}s)`}</span>
-                      <span className="text-[10px] text-cyan-300 font-mono bg-cyan-950/80 px-1.5 py-0.2 rounded-full border border-cyan-500/40">
-                        → {nextLineLabel}
-                      </span>
                     </span>
                   </>
                 ) : (
@@ -1045,11 +1058,6 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
                     <span>
                       {language === 'TH' ? 'หมุนเวียนอัตโนมัติ' : language === 'KO' ? '자동 순환' : 'AUTO CYCLE'}
                     </span>
-                    {skippedLines.length > 0 && (
-                      <span className="text-[9px] text-amber-300/90 bg-amber-950/60 px-1.5 py-0.2 rounded-full border border-amber-500/30">
-                        ข้าม {skippedLines.length} ไลน์ Idle
-                      </span>
-                    )}
                   </>
                 )}
               </button>

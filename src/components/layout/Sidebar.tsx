@@ -5,7 +5,8 @@ import {
   Database,
   Settings,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Network
 } from 'lucide-react';
 import { UserRole, AppTheme } from '../../types';
 import { useTranslation, LanguageCode } from '../../i18n';
@@ -69,8 +70,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ]
     },
     {
-      title: t('sidebar.settings', { defaultValue: 'SETTINGS' }),
+      title: t('sidebar.settings', { defaultValue: 'SETTINGS & IT' }),
       items: [
+        {
+          id: 'plc-config',
+          label: t('sidebar.plcConfig', { defaultValue: 'PLC & Data Gateway' }),
+          icon: Network
+        },
         {
           id: 'system-settings',
           label: t('sidebar.systemSettings', { defaultValue: 'System Settings' }),
