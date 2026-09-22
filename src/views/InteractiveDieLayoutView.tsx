@@ -57,6 +57,13 @@ import { LineFilterSelector } from '../components/common/LineFilterSelector';
 import { useLanguage } from '../i18n';
 import { LINE_DIE_MATRIX_CONFIG, LineStageGridConfig, StageBlockConfig } from '../data/lineDieMatrixConfig';
 import { isPartMatchingInteractiveStage } from '../utils/stageUtils';
+import {
+  MasterLogClearModal,
+  MasterLogSetModal,
+  MasterLogDeleteModal,
+  loadStoredMasterLogs,
+  saveStoredMasterLogs
+} from '../components/die/MasterLogModals';
 
 // Pin status definition: Strictly 3 industrial states (Active/Normal, Warning, Broken)
 export type PinStatus = 'normal' | 'warning' | 'broken';
@@ -381,10 +388,15 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
 
   // History table filters
   const [historySearch, setHistorySearch] = useState<string>('');
+  const [historyLineFilter, setHistoryLineFilter] = useState<string>('ALL');
   const [historyStageFilter, setHistoryStageFilter] = useState<string>('ALL');
   const [historyActionFilter, setHistoryActionFilter] = useState<string>('ALL');
   const [historyStartDate, setHistoryStartDate] = useState<string>('');
   const [historyEndDate, setHistoryEndDate] = useState<string>('');
+  const [isClearLogModalOpen, setIsClearLogModalOpen] = useState<boolean>(false);
+  const [isSetLogModalOpen, setIsSetLogModalOpen] = useState<boolean>(false);
+  const [deletingLog, setDeletingLog] = useState<PinHistoryEntry | null>(null);
+  const [logsUpdateCounter, setLogsUpdateCounter] = useState<number>(0);
 
   // Toast notification
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error' | 'info' | 'warning'; message: string } | null>(null);
@@ -608,18 +620,51 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
     });
   }, [pins, selectedStageFilter, selectedStatusFilter, searchQuery]);
 
-  // Aggregate Master History Logs across all pins
+  // Aggregate Master History Logs across all pins and stored master history
   const masterHistoryLogs = useMemo(() => {
-    const logs: PinHistoryEntry[] = [];
-    pins.forEach(pin => {
-      if (pin.historyLogs && Array.isArray(pin.historyLogs) && pin.historyLogs.length > 0) {
-        logs.push(...pin.historyLogs);
+    const logsMap = new Map<string, PinHistoryEntry>();
+
+    // 1. Logs from stored master history logs
+    const storedLogs = loadStoredMasterLogs();
+    storedLogs.forEach(log => {
+      if (log && log.id) {
+        logsMap.set(log.id, log);
       }
     });
 
-    return logs
+    // 2. Logs from current line pins in memory
+    pins.forEach(pin => {
+      if (pin.historyLogs && Array.isArray(pin.historyLogs)) {
+        pin.historyLogs.forEach(l => {
+          if (l && l.id) logsMap.set(l.id, l);
+        });
+      }
+    });
+
+    // 3. If viewing ALL lines or another line, scan compact overrides
+    const linesToScan: ProductionLineId[] = historyLineFilter === 'ALL'
+      ? ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5']
+      : [historyLineFilter as ProductionLineId];
+
+    linesToScan.forEach(lineId => {
+      if (lineId !== selectedLineId) {
+        const overrides = loadPinOverrides(lineId);
+        Object.values(overrides).forEach(override => {
+          if (override?.historyLogs && Array.isArray(override.historyLogs)) {
+            override.historyLogs.forEach(l => {
+              if (l && l.id) logsMap.set(l.id, l);
+            });
+          }
+        });
+      }
+    });
+
+    const allLogs = Array.from(logsMap.values());
+
+    return allLogs
       .filter(log => {
         if (!log) return false;
+        const matchLine = historyLineFilter === 'ALL' || log.lineId === historyLineFilter;
         const matchStage = historyStageFilter === 'ALL' || log.stageId === historyStageFilter;
         const matchAction = historyActionFilter === 'ALL' || log.actionType === historyActionFilter;
         const q = (historySearch || '').toLowerCase();
@@ -635,14 +680,14 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
         if (historyStartDate && logDate < historyStartDate) matchDate = false;
         if (historyEndDate && logDate > historyEndDate) matchDate = false;
 
-        return matchStage && matchAction && matchSearch && matchDate;
+        return matchLine && matchStage && matchAction && matchSearch && matchDate;
       })
       .sort((a, b) => {
         const dateA = a.dateTime ? String(a.dateTime) : '';
         const dateB = b.dateTime ? String(b.dateTime) : '';
         return dateB.localeCompare(dateA);
       });
-  }, [pins, historyStageFilter, historyActionFilter, historySearch, historyStartDate, historyEndDate]);
+  }, [pins, selectedLineId, historyLineFilter, historyStageFilter, historyActionFilter, historySearch, historyStartDate, historyEndDate, logsUpdateCounter]);
 
   // Handle pin click
   const handlePinClick = (pin: DiePinItem) => {
@@ -1003,37 +1048,30 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
     XLSX.writeFile(workbook, `FinDie_Layout_Maintenance_Log_${selectedLineId}_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
-  // Delete individual history log entry
-  const handleDeleteLog = (logId: string) => {
-    const updatedPins = pins.map(pin => {
-      if (pin.historyLogs && pin.historyLogs.some(log => log.id === logId)) {
-        return {
-          ...pin,
-          historyLogs: pin.historyLogs.filter(log => log.id !== logId)
-        };
-      }
-      return pin;
-    });
-    persistPins(updatedPins);
-    setFeedback({
-      type: 'success',
-      message: language === 'TH' ? 'ลบรายการประวัติสำเร็จแล้ว' : 'History log entry deleted successfully'
-    });
-    setTimeout(() => setFeedback(null), 2500);
-  };
+  // 1. Clear Master History (Supports current line or all lines, and system replacements)
+  const handleClearMasterHistory = (scope: 'CURRENT_LINE' | 'ALL_LINES', clearSystemReplacements: boolean) => {
+    // 1. Clear stored master logs
+    const stored = loadStoredMasterLogs();
+    if (scope === 'ALL_LINES') {
+      saveStoredMasterLogs([]);
+    } else {
+      const filtered = stored.filter(l => l.lineId !== selectedLineId);
+      saveStoredMasterLogs(filtered);
+    }
 
-  // Clear all history logs for the current line and across all lines
-  const handleClearAllHistory = () => {
-    // 1. Clear for the current line's pins
+    // 2. Clear current line pins in memory
     const updatedPins = pins.map(pin => ({
       ...pin,
       historyLogs: []
     }));
     persistPins(updatedPins);
 
-    // 2. Clear for all lines in localStorage
-    const linesList: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
-    linesList.forEach(lineId => {
+    // 3. Clear compact overrides
+    const linesToClear: ProductionLineId[] = scope === 'ALL_LINES'
+      ? ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5']
+      : [selectedLineId];
+
+    linesToClear.forEach(lineId => {
       try {
         const savedCompact = localStorage.getItem(`${COMPACT_PIN_OVERRIDES_KEY}${lineId}`);
         if (savedCompact) {
@@ -1054,9 +1092,167 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
       }
     });
 
+    // 4. Optionally clear system replacement records
+    if (clearSystemReplacements) {
+      try {
+        if (scope === 'ALL_LINES') {
+          localStorage.setItem('fin_press_replacements', JSON.stringify([]));
+        } else {
+          const currentReplacements = storageService.getReplacements();
+          const filteredReplacements = currentReplacements.filter(r => r.lineId !== selectedLineId);
+          localStorage.setItem('fin_press_replacements', JSON.stringify(filteredReplacements));
+        }
+      } catch (err) {
+        console.warn('Error clearing system replacements:', err);
+      }
+    }
+
+    setLogsUpdateCounter(c => c + 1);
+    loadLinePins(false);
+
     setFeedback({
       type: 'success',
-      message: language === 'TH' ? 'ล้างประวัติจำลองทั้งหมดสำเร็จแล้ว' : 'All history logs cleared successfully'
+      message: language === 'TH' 
+        ? `ล้างประวัติ Master Log (${scope === 'ALL_LINES' ? 'ทุกไลน์ทั้งหมด' : `Line ${selectedLineId}`}) เรียบร้อยแล้ว` 
+        : `Master history cleared successfully (${scope === 'ALL_LINES' ? 'All Lines' : `Line ${selectedLineId}`})`
+    });
+    setTimeout(() => setFeedback(null), 3000);
+  };
+
+  // 2. Set / Seed Master History
+  const handleApplySeedLogs = (seededLogs: PinHistoryEntry[], scope: ProductionLineId | 'ALL') => {
+    // 1. Merge into stored master logs
+    const currentStored = loadStoredMasterLogs();
+    const storedMap = new Map<string, PinHistoryEntry>();
+    currentStored.forEach(l => storedMap.set(l.id, l));
+    seededLogs.forEach(l => storedMap.set(l.id, l));
+    saveStoredMasterLogs(Array.from(storedMap.values()));
+
+    // 2. Attach relevant logs to current line pins if line matches
+    const updatedPins = pins.map(pin => {
+      const matchingLogs = seededLogs.filter(l => l.lineId === selectedLineId && (l.pinCode === pin.pinCode || l.stageId === pin.stageId));
+      if (matchingLogs.length > 0) {
+        return {
+          ...pin,
+          historyLogs: [...matchingLogs, ...(pin.historyLogs || [])].slice(0, 10)
+        };
+      }
+      return pin;
+    });
+    persistPins(updatedPins);
+
+    // 3. Attach to other lines' compact overrides
+    const targetLines: ProductionLineId[] = scope === 'ALL'
+      ? ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5']
+      : [scope];
+
+    targetLines.forEach(lineId => {
+      if (lineId !== selectedLineId) {
+        const overrides = loadPinOverrides(lineId);
+        const lineLogs = seededLogs.filter(l => l.lineId === lineId);
+        if (lineLogs.length > 0) {
+          const firstKey = Object.keys(overrides)[0] || `${lineId}-stage-log`;
+          if (!overrides[firstKey]) overrides[firstKey] = {};
+          overrides[firstKey].historyLogs = [
+            ...lineLogs,
+            ...(overrides[firstKey].historyLogs || [])
+          ].slice(0, 10);
+          savePinOverrides(lineId, overrides);
+        }
+      }
+    });
+
+    setLogsUpdateCounter(c => c + 1);
+    loadLinePins(false);
+
+    setFeedback({
+      type: 'success',
+      message: language === 'TH' 
+        ? `Set ประวัติของ Master Log สำเร็จแล้ว (${seededLogs.length} รายการ)` 
+        : `Master history seeded successfully (${seededLogs.length} entries)`
+    });
+    setTimeout(() => setFeedback(null), 3000);
+  };
+
+  // 3. Add Manual Log Entry
+  const handleAddManualLog = (newLog: PinHistoryEntry) => {
+    // 1. Save to stored master logs
+    const currentStored = loadStoredMasterLogs();
+    saveStoredMasterLogs([newLog, ...currentStored]);
+
+    // 2. If it belongs to current line, attach to matching pin if found
+    if (newLog.lineId === selectedLineId) {
+      const updatedPins = pins.map(pin => {
+        if (pin.stageId === newLog.stageId && (pin.pinCode === newLog.pinCode || newLog.pinCode === 'ALL')) {
+          return {
+            ...pin,
+            historyLogs: [newLog, ...(pin.historyLogs || [])].slice(0, 10)
+          };
+        }
+        return pin;
+      });
+      persistPins(updatedPins);
+    } else {
+      // Save in overrides of that line
+      const overrides = loadPinOverrides(newLog.lineId);
+      const key = `${newLog.lineId}-${newLog.stageId}-${newLog.pinCode}`;
+      if (!overrides[key]) overrides[key] = {};
+      overrides[key].historyLogs = [newLog, ...(overrides[key].historyLogs || [])].slice(0, 10);
+      savePinOverrides(newLog.lineId, overrides);
+    }
+
+    setLogsUpdateCounter(c => c + 1);
+    loadLinePins(false);
+
+    setFeedback({
+      type: 'success',
+      message: language === 'TH'
+        ? `บันทึกรายการ "${newLog.partName}" (${newLog.pinCode}) ลงใน Master Log เรียบร้อยแล้ว`
+        : `Log entry for ${newLog.pinCode} recorded in Master Log`
+    });
+    setTimeout(() => setFeedback(null), 3000);
+  };
+
+  // 4. Delete individual history log entry
+  const handleDeleteLog = (logId: string) => {
+    // Remove from stored master logs
+    const currentStored = loadStoredMasterLogs();
+    saveStoredMasterLogs(currentStored.filter(l => l.id !== logId));
+
+    // Remove from current line pins
+    const updatedPins = pins.map(pin => {
+      if (pin.historyLogs && pin.historyLogs.some(log => log.id === logId)) {
+        return {
+          ...pin,
+          historyLogs: pin.historyLogs.filter(log => log.id !== logId)
+        };
+      }
+      return pin;
+    });
+    persistPins(updatedPins);
+
+    // Remove from other lines' overrides
+    const linesList: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
+    linesList.forEach(lineId => {
+      const overrides = loadPinOverrides(lineId);
+      let modified = false;
+      Object.keys(overrides).forEach(key => {
+        if (overrides[key]?.historyLogs?.some(l => l.id === logId)) {
+          overrides[key].historyLogs = overrides[key].historyLogs!.filter(l => l.id !== logId);
+          modified = true;
+        }
+      });
+      if (modified) {
+        savePinOverrides(lineId, overrides);
+      }
+    });
+
+    setLogsUpdateCounter(c => c + 1);
+    loadLinePins(false);
+
+    setFeedback({
+      type: 'success',
+      message: language === 'TH' ? 'ลบรายการประวัติสำเร็จแล้ว' : 'History log entry deleted successfully'
     });
     setTimeout(() => setFeedback(null), 2500);
   };
@@ -1200,7 +1396,9 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
                 onChange={e => setSelectedStageFilter(e.target.value)}
                 className="liquid-input bg-[#090d16] border border-white/20 rounded-xl px-3 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-cyan-400 cursor-pointer shadow-md"
               >
-                <option value="ALL" className="bg-[#090d16] text-white font-bold py-1.5">ทุก STAGE (All 9 Stages)</option>
+                <option value="ALL" className="bg-[#090d16] text-white font-bold py-1.5">
+                  ทุก STAGE (All {activeStageConfigs.length} Stages)
+                </option>
                 {activeStageConfigs.map(s => (
                   <option key={s.stageId} value={s.stageId} className="bg-[#090d16] text-slate-100 py-1">
                     {s.shortName}
@@ -2268,6 +2466,22 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
                 />
               </div>
 
+              {/* Line Filter */}
+              <select
+                value={historyLineFilter}
+                onChange={e => setHistoryLineFilter(e.target.value)}
+                className="bg-[#090d16] border border-white/20 rounded-lg px-3 py-2 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-400 cursor-pointer shadow-sm font-bold"
+              >
+                <option value="ALL" className="bg-[#090d16] text-white font-bold py-1">ทุกสายการผลิต (All Lines)</option>
+                <option value="E1" className="bg-[#090d16] text-cyan-300 py-1">LINE E1 (Ø7 Slit)</option>
+                <option value="E2" className="bg-[#090d16] text-cyan-300 py-1">LINE E2 (Ø5 Slit)</option>
+                <option value="E3-1" className="bg-[#090d16] text-cyan-300 py-1">LINE E3-1 (3P)</option>
+                <option value="E3-2" className="bg-[#090d16] text-cyan-300 py-1">LINE E3-2 (4P)</option>
+                <option value="E3-3" className="bg-[#090d16] text-cyan-300 py-1">LINE E3-3 (4P)</option>
+                <option value="E4" className="bg-[#090d16] text-cyan-300 py-1">LINE E4 (Ø5 Slit)</option>
+                <option value="E5" className="bg-[#090d16] text-cyan-300 py-1">LINE E5 (Ø5 Slit)</option>
+              </select>
+
               <select
                 value={historyStageFilter}
                 onChange={e => setHistoryStageFilter(e.target.value)}
@@ -2303,24 +2517,33 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
               />
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Set Master Log button */}
               <button
                 type="button"
-                onClick={() => {
-                  if (window.confirm(language === 'TH' ? 'คุณแน่ใจหรือไม่ที่จะล้างประวัติจำลองทั้งหมดในทุกๆ ไลน์?' : 'Are you sure you want to clear all history logs across all lines?')) {
-                    handleClearAllHistory();
-                  }
-                }}
-                className="px-3.5 py-2 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 hover:text-rose-100 text-xs font-mono font-bold border border-rose-800/40 flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+                onClick={() => setIsSetLogModalOpen(true)}
+                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-cyan-500/30 to-blue-500/30 hover:from-cyan-500/50 hover:to-blue-500/50 text-cyan-300 hover:text-white text-xs font-mono font-bold border border-cyan-500/50 flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all shadow-[0_0_12px_rgba(6,182,212,0.25)]"
+                title="Set ประวัติมาตรฐานโรงงาน หรือบันทึกประวัติย้อนหลังด้วยตนเอง"
+              >
+                <Sparkles className="w-4 h-4 text-cyan-400" />
+                <span>SET ประวัติ</span>
+              </button>
+
+              {/* Clear Master History button */}
+              <button
+                type="button"
+                onClick={() => setIsClearLogModalOpen(true)}
+                className="px-3.5 py-2 rounded-xl bg-rose-950/60 hover:bg-rose-900 text-rose-300 hover:text-rose-100 text-xs font-mono font-bold border border-rose-800/40 flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all shadow-sm"
+                title="ล้างประวัติ Master Log เฉพาะไลน์หรือทุกไลน์"
               >
                 <Trash2 className="w-4 h-4 text-rose-400" />
-                <span>{language === 'TH' ? 'ล้างประวัติทั้งหมด' : 'CLEAR ALL HISTORY'}</span>
+                <span>ล้างประวัติ</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleExportCSV}
-                className="px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-mono font-bold shadow-lg shadow-emerald-600/30 flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+                className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-mono font-bold shadow-lg shadow-emerald-600/30 flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
               >
                 <FileSpreadsheet className="w-4 h-4" />
                 <span>EXPORT EXCEL (.XLSX)</span>
@@ -2401,11 +2624,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
                         <td className="p-3 text-center">
                           <button
                             type="button"
-                            onClick={() => {
-                              if (window.confirm(language === 'TH' ? `ลบรายการประวัติตำแหน่ง ${log.pinCode} ใช่หรือไม่?` : `Are you sure you want to delete this history log for ${log.pinCode}?`)) {
-                                handleDeleteLog(log.id || '');
-                              }
-                            }}
+                            onClick={() => setDeletingLog(log)}
                             className="p-1.5 rounded bg-rose-950/40 hover:bg-rose-900 border border-rose-800 text-rose-400 hover:text-rose-100 cursor-pointer transition-all inline-flex items-center justify-center active:scale-90"
                             title={language === 'TH' ? 'ลบรายการนี้' : 'Delete log entry'}
                           >
@@ -2510,6 +2729,30 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
           </div>
         </div>
       )}
+      {/* 1. Master Log Clear Modal */}
+      <MasterLogClearModal
+        isOpen={isClearLogModalOpen}
+        onClose={() => setIsClearLogModalOpen(false)}
+        selectedLineId={selectedLineId}
+        onConfirmClear={handleClearMasterHistory}
+      />
+
+      {/* 2. Master Log Set / Seed / Manual Add Modal */}
+      <MasterLogSetModal
+        isOpen={isSetLogModalOpen}
+        onClose={() => setIsSetLogModalOpen(false)}
+        selectedLineId={selectedLineId}
+        onApplySeed={handleApplySeedLogs}
+        onAddManualLog={handleAddManualLog}
+      />
+
+      {/* 3. Master Log Single Delete Modal */}
+      <MasterLogDeleteModal
+        log={deletingLog}
+        onClose={() => setDeletingLog(null)}
+        onConfirmDelete={handleDeleteLog}
+      />
+
     </div>
   );
 };

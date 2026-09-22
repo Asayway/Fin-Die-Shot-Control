@@ -11,11 +11,17 @@ import {
   AlertCircle,
   Factory,
   Save,
-  RotateCw
+  RotateCw,
+  Sliders
 } from 'lucide-react';
-import { storageService } from '../services/storageService';
+import { storageService, DEFAULT_TV_DISPLAY_CONFIGS } from '../services/storageService';
 import { ProductionLineId, PartMaster } from '../types';
 import { getPartProgressiveRank } from '../services/calculationService';
+import { 
+  TvAutoCycleConfig, 
+  TvAutoCycleOrderModal, 
+  getSavedAutoCycleConfig 
+} from '../components/tv/TvAutoCycleOrderModal';
 
 export const TvDisplayConfigView: React.FC = () => {
   const [selectedLineId, setSelectedLineId] = useState<ProductionLineId>('E1');
@@ -26,6 +32,8 @@ export const TvDisplayConfigView: React.FC = () => {
   // Local active selections for current line
   const [selectedParts, setSelectedParts] = useState<string[]>([]);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+  const [isCycleModalOpen, setIsCycleModalOpen] = useState(false);
+  const [cycleConfig, setCycleConfig] = useState<TvAutoCycleConfig>(getSavedAutoCycleConfig);
 
   // Line labels matching the main application
   const lineDisplayNames: Record<ProductionLineId, string> = {
@@ -207,8 +215,13 @@ export const TvDisplayConfigView: React.FC = () => {
     }
   };
 
-  // Reset to default (all installed parts on this line)
+  // Reset to default (progressive key tooling order for this line)
   const handleResetToDefault = () => {
+    const defaultCodes = DEFAULT_TV_DISPLAY_CONFIGS[selectedLineId];
+    if (defaultCodes && defaultCodes.length > 0) {
+      setSelectedParts([...defaultCodes]);
+      return;
+    }
     const installedCodes = partMasters
       .filter(pm => (installedPartsMap[pm.partCode] || 0) > 0)
       .map(pm => pm.partCode)
@@ -220,7 +233,7 @@ export const TvDisplayConfigView: React.FC = () => {
         if (rankA !== rankB) return rankA - rankB;
         return a.localeCompare(b);
       });
-    setSelectedParts(installedCodes);
+    setSelectedParts(installedCodes.slice(0, 14));
   };
 
   return (
@@ -239,6 +252,15 @@ export const TvDisplayConfigView: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsCycleModalOpen(true)}
+            className="liquid-pill px-3.5 py-1.5 bg-cyan-950/40 hover:bg-cyan-950/70 text-cyan-300 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer border border-cyan-500/30 active:scale-95 shadow-sm"
+            title="ตั้งค่าลำดับการหมุนเวียนสายการผลิตบนหน้าจอ TV (Auto Cycle Order)"
+          >
+            <Sliders className="w-3.5 h-3.5" />
+            <span>ลำดับหมุนเวียนไลน์</span>
+          </button>
+
           <button
             onClick={handleResetToDefault}
             className="liquid-pill px-3.5 py-1.5 bg-white/[0.05] hover:bg-white/[0.1] text-slate-200 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer border border-white/10 active:scale-95 shadow-sm"
@@ -517,6 +539,40 @@ export const TvDisplayConfigView: React.FC = () => {
         </div>
 
       </div>
+
+      {/* Auto Cycle Line Order Configuration Modal */}
+      <TvAutoCycleOrderModal
+        isOpen={isCycleModalOpen}
+        onClose={() => setIsCycleModalOpen(false)}
+        config={cycleConfig}
+        onSaveConfig={(newCfg) => setCycleConfig(newCfg)}
+        currentLineId={selectedLineId}
+        getLineMachineStatus={(id) => {
+          const monitoring = storageService.getLinesMonitoring()[id];
+          if (monitoring?.machineStatus) return monitoring.machineStatus;
+          return id === 'E5' ? 'STOPPED' : 'RUNNING';
+        }}
+        getLineLabel={(id) => {
+          if (id === 'E1') return 'E1';
+          if (id === 'E2') return 'E2';
+          if (id === 'E3-1') return 'E3 SLit';
+          if (id === 'E3-2') return 'E3 WL';
+          if (id === 'E3-3') return 'E3 New corr';
+          if (id === 'E4') return 'E4';
+          if (id === 'E5') return 'E5';
+          return id;
+        }}
+        getLineSubTag={(id) => {
+          if (id === 'E1') return 'Ø7 Slit';
+          if (id === 'E2') return 'Ø5 Slit';
+          if (id === 'E3-1') return '3P';
+          if (id === 'E3-2') return '4P';
+          if (id === 'E3-3') return '4P';
+          if (id === 'E4') return 'Ø5 Slit';
+          if (id === 'E5') return 'Ø5 Slit';
+          return '';
+        }}
+      />
 
     </div>
   );

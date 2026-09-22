@@ -70,13 +70,11 @@ export function cleanStageName(stageStr: string): string {
   let cleaned = stageStr.replace(/^Stage\s+\d+:\s*/i, '');
   // 2. Remove Thai characters inside parentheses, e.g. "(เจาะรู / ลบคม)"
   cleaned = cleaned.replace(/\s*\([^)]*[\u0E00-\u0E7F][^)]*\)\s*/g, ' ');
-  // 3. Remove any other Thai characters directly
-  cleaned = cleaned.replace(/[\u0E00-\u0E7F]+/g, '');
-  // 4. Remove any trailing slashes or random punctuation left behind
+  // 3. Remove any trailing slashes or random punctuation left behind
   cleaned = cleaned.replace(/\s*\/\s*$/g, '');
   cleaned = cleaned.trim();
   
-  // Match to canonical 12 stages if close
+  // Match to canonical default stages if case matches
   const upper = cleaned.toUpperCase();
   for (const def of DEFAULT_STAGE_GROUPS) {
     if (def.toUpperCase() === upper) return def;
@@ -85,68 +83,100 @@ export function cleanStageName(stageStr: string): string {
 }
 
 /**
- * Normalizes raw stage names into standard 12 Stage Groups
+ * Normalizes raw stage names into standard Stage Groups, strictly honoring customStageGroups
  */
 export function deriveLogicalStage(partName: string, currentStageName?: string, customStageGroups?: string[]): string {
   let stageStr = (currentStageName || '').trim();
   const partStr = (partName || '').trim().toUpperCase();
-  const groupsToUse = customStageGroups || DEFAULT_STAGE_GROUPS;
+  const groupsToUse = customStageGroups && customStageGroups.length > 0 ? customStageGroups : DEFAULT_STAGE_GROUPS;
+
+  const findInGroups = (target: string): string | undefined => {
+    return groupsToUse.find(g => g.trim().toUpperCase() === target.trim().toUpperCase());
+  };
 
   // Strip prefix if exists
   const stripped = cleanStageName(stageStr);
 
-  // If already one of standard groups, return it
+  // If already one of the active groups, return it directly
   if (groupsToUse.includes(stripped)) {
     return stripped;
   }
 
   // Exact uppercase match against groupsToUse
-  const match = groupsToUse.find(g => g.toUpperCase() === stripped.toUpperCase());
+  const match = findInGroups(stripped);
   if (match) return match;
 
   // Combine stageStr and partStr for matching
   const combined = `${stageStr} ${partStr}`.toUpperCase();
 
   if (combined.includes('PIERCE') || combined.includes('BURRING') || combined.includes('PIERCING')) {
-    return 'PIERCE & BURRING';
+    const m = findInGroups('PIERCE & BURRING') || findInGroups('PIERCE') || findInGroups('BURRING');
+    if (m) return m;
   }
   if (combined.includes('IRONING') || combined.includes('IRON')) {
-    return 'IRONING';
+    const m = findInGroups('IRONING');
+    if (m) return m;
   }
   if (combined.includes('LOUVER')) {
-    return 'LOUVER';
+    const m = findInGroups('LOUVER');
+    if (m) return m;
   }
   if (combined.includes('REFLARE') || combined.includes('REFLAIRE') || combined.includes('REFL')) {
-    return 'REFLARE';
+    const m = findInGroups('REFLARE');
+    if (m) return m;
   }
   if (combined.includes('ROW SLIT') || combined.includes('ROW SLID')) {
-    return 'ROW SLIT';
+    const m = findInGroups('ROW SLIT');
+    if (m) return m;
   }
   if (combined.includes('SLIT')) {
-    return 'SLIT';
+    const m = findInGroups('SLIT');
+    if (m) return m;
   }
   if (combined.includes('WIDE LOWER') || combined.includes('FORMING')) {
-    return 'WIDE LOWER';
+    const m = findInGroups('WIDE LOWER');
+    if (m) return m;
   }
   if (combined.includes('CUT OFF') || combined.includes('CUTOFF')) {
-    return 'CUT OFF';
+    const m = findInGroups('CUT OFF');
+    if (m) return m;
   }
   if (combined.includes('SIDE CUT') || combined.includes('SIDECUT')) {
-    return 'SIDE CUT';
+    const m = findInGroups('SIDE CUT');
+    if (m) return m;
   }
-  if (combined.includes('S5') || combined.includes('CENTER NOTCH') || combined.includes('S1/S0')) {
-    return 'S5 CENTER NOTCH';
+  if (combined.includes('S5') || (combined.includes('CENTER NOTCH') && combined.includes('S5'))) {
+    const m = findInGroups('S5 CENTER NOTCH');
+    if (m) return m;
+  }
+  if (combined.includes('S1') || (combined.includes('CENTER NOTCH') && combined.includes('S1'))) {
+    const m = findInGroups('S1 CENTER NOTCH');
+    if (m) return m;
+  }
+  if (combined.includes('CENTER NOTCH') || combined.includes('NOTCH')) {
+    const m = findInGroups('S5 CENTER NOTCH') || findInGroups('S1 CENTER NOTCH') || findInGroups('CORNER CUT');
+    if (m) return m;
   }
   if (combined.includes('CORNER CUT')) {
-    return 'CORNER CUT';
+    const m = findInGroups('CORNER CUT');
+    if (m) return m;
   }
   if (combined.includes('HITCH') || combined.includes('SIECH') || combined.includes('FEED PIN') || combined.includes('PILOT')) {
-    return 'HITCH FEED';
+    const m = findInGroups('HITCH FEED');
+    if (m) return m;
+  }
+
+  // Check if any custom stage in groupsToUse is contained in combined
+  for (const g of groupsToUse) {
+    if (g && g.length > 2 && combined.includes(g.toUpperCase())) {
+      return g;
+    }
   }
 
   // If it's a custom stage name created by user that isn't raw part name
   if (stripped && stripped !== '-' && !stripped.toUpperCase().includes('DIE') && !stripped.toUpperCase().includes('PUNCH')) {
-    return stripped;
+    const userMatch = findInGroups(stripped);
+    if (userMatch) return userMatch;
   }
 
   return groupsToUse[0] || 'PIERCE & BURRING';

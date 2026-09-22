@@ -291,18 +291,65 @@ export function calculatePartMetrics(
   // Baseline data validation (negative shots or corrupted integers)
   const isDataError = isNaN(usedShotVal) || usedShotVal < 0 || isNaN(shotAtLastChangeVal);
 
+  const rawCode = (part.partCode || '').trim();
+  const normCode = rawCode.toUpperCase();
+  const strippedCode = normCode.replace(/^(E\d+(?:-\d+)?-)/i, '').trim();
+
   const standard = activeConfig ? findMatchingLifeStandard(standards, activeConfig, part.partCode, part.position) : null;
-  const stock = stockItems.find(s => s.partCode === part.partCode);
+  const stock = stockItems.find(s => 
+    s.partCode.toUpperCase() === normCode || 
+    s.partCode.toUpperCase() === strippedCode ||
+    (s.partName && part.partName && s.partName.trim().toLowerCase() === part.partName.trim().toLowerCase())
+  );
 
   const totalStockQty = stock 
     ? (stock.availableQuantity !== undefined ? stock.availableQuantity : (stock.currentStockQty !== undefined ? stock.currentStockQty : stock.onHandQuantity)) 
     : (part.backupQty || 0);
 
-  const hasLineStockConfig = activeConfig && activeConfig.stockQuantities && activeConfig.stockQuantities[part.partCode] !== undefined;
-  const lineStockQty = hasLineStockConfig ? activeConfig!.stockQuantities![part.partCode] : undefined;
+  // Normalize line stock quantities lookup from activeConfig
+  let lineStockQty: number | undefined = undefined;
+  if (activeConfig && activeConfig.stockQuantities) {
+    const normStockMap = Object.entries(activeConfig.stockQuantities).reduce((acc, [k, v]) => {
+      const cleanK = k.trim().toUpperCase();
+      acc[cleanK] = v;
+      const strippedK = cleanK.replace(/^(E\d+(?:-\d+)?-)/i, '').trim();
+      if (strippedK) acc[strippedK] = v;
+      return acc;
+    }, {} as Record<string, number>);
+
+    if (normCode && normStockMap[normCode] !== undefined) {
+      lineStockQty = normStockMap[normCode];
+    } else if (strippedCode && normStockMap[strippedCode] !== undefined) {
+      lineStockQty = normStockMap[strippedCode];
+    } else if (stock && normStockMap[stock.partCode.trim().toUpperCase()] !== undefined) {
+      lineStockQty = normStockMap[stock.partCode.trim().toUpperCase()];
+    } else {
+      lineStockQty = 0;
+    }
+  }
+
+  // Normalize line installed part quantities lookup from activeConfig if installQty is not explicitly set
+  let resolvedInstallQty = part.installQty;
+  if (activeConfig && activeConfig.installedPartQuantities) {
+    const normInstallMap = Object.entries(activeConfig.installedPartQuantities).reduce((acc, [k, v]) => {
+      const cleanK = k.trim().toUpperCase();
+      acc[cleanK] = v;
+      const strippedK = cleanK.replace(/^(E\d+(?:-\d+)?-)/i, '').trim();
+      if (strippedK) acc[strippedK] = v;
+      return acc;
+    }, {} as Record<string, number>);
+
+    if (normCode && normInstallMap[normCode] !== undefined) {
+      resolvedInstallQty = normInstallMap[normCode];
+    } else if (strippedCode && normInstallMap[strippedCode] !== undefined) {
+      resolvedInstallQty = normInstallMap[strippedCode];
+    } else if (stock && normInstallMap[stock.partCode.trim().toUpperCase()] !== undefined) {
+      resolvedInstallQty = normInstallMap[stock.partCode.trim().toUpperCase()];
+    }
+  }
 
   const availableSpare = lineStockQty !== undefined ? lineStockQty : (part.backupQty !== undefined ? part.backupQty : totalStockQty);
-  const stockStatus = determineStockStatus(stock, part.installQty);
+  const stockStatus = determineStockStatus(stock, resolvedInstallQty);
   const orderStatus = stock ? stock.orderStatus : 'NOT REQUIRED';
   const etaDeliveryDate = stock?.poEtaDate;
 
@@ -315,7 +362,7 @@ export function calculatePartMetrics(
       partName: part.partName,
       stagePunchDie: part.stagePunchDie,
       position: part.position,
-      installQty: part.installQty,
+      installQty: resolvedInstallQty,
       backupQty: availableSpare,
       availableSpare,
       lineStockQty,
@@ -388,7 +435,7 @@ export function calculatePartMetrics(
     partName: standard?.partName || part.partName,
     stagePunchDie: standard?.stagePunchDie || part.stagePunchDie,
     position: part.position,
-    installQty: part.installQty,
+    installQty: resolvedInstallQty,
     backupQty: availableSpare,
     availableSpare,
     lineStockQty,

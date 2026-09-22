@@ -76,8 +76,8 @@ export const createStandardStages = (
   // 1. BURRING PUNCH STAGE
   const burringPunch: LineStageGridConfig = {
     stageId: 's-burr',
-    stageName: 'PIERCE & BURRING STAGE',
-    shortName: 'PIERCE & BURRING',
+    stageName: 'BURRING STAGE',
+    shortName: 'BURRING',
     stageCategory: 'PUNCH_MATRIX',
     partCode: `P-BURR-${lineId}`,
     partName: `BURRING PUNCH (${tubeSize})`,
@@ -95,8 +95,8 @@ export const createStandardStages = (
   // 2. PIERCE PUNCH STAGE
   const piercePunch: LineStageGridConfig = {
     stageId: 's-pierce',
-    stageName: 'PIERCE & BURRING STAGE',
-    shortName: 'PIERCE & BURRING',
+    stageName: 'PIERCE STAGE',
+    shortName: 'PIERCE',
     stageCategory: 'PUNCH_MATRIX',
     partCode: `P-PIERCE-${lineId}`,
     partName: `PIERCE PUNCH (${tubeSize})`,
@@ -152,8 +152,8 @@ export const createStandardStages = (
   // 5. SLIT / LOUVER PUNCH STAGE
   const slitLouverPunch: LineStageGridConfig = {
     stageId: 's-slit-punch',
-    stageName: isLouver ? 'LOUVER STAGE' : 'SLIT STAGE',
-    shortName: isLouver ? 'LOUVER' : 'SLIT',
+    stageName: isLouver ? 'LOUVER PUNCH STAGE' : 'SLIT PUNCH STAGE',
+    shortName: isLouver ? 'LOUVER PUNCH' : 'SLIT PUNCH',
     stageCategory: 'PUNCH_MATRIX',
     partCode: isLouver ? `P-LOUV-${lineId}` : `P-SLIT-${lineId}`,
     partName: isLouver ? `LOUVER PUNCH (${tubeSize})` : `SLIT PUNCH (${tubeSize})`,
@@ -171,8 +171,8 @@ export const createStandardStages = (
   // 6. SLIT / LOUVER DIE STAGE
   const slitLouverDie: LineStageGridConfig = {
     stageId: 's-slit-die',
-    stageName: isLouver ? 'LOUVER STAGE' : 'SLIT STAGE',
-    shortName: isLouver ? 'LOUVER' : 'SLIT',
+    stageName: isLouver ? 'LOUVER DIE STAGE' : 'SLIT DIE STAGE',
+    shortName: isLouver ? 'LOUVER DIE' : 'SLIT DIE',
     stageCategory: 'DIE_SEGMENT',
     partCode: `D-SLIT-${lineId}`,
     partName: isLouver ? `LOUVER DIE A & B (${tubeSize})` : `SLIT DIE A & B (${tubeSize})`,

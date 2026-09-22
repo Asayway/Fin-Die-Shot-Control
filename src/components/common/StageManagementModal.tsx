@@ -18,6 +18,7 @@ import {
 import { storageService } from '../../services/storageService';
 import { PartMaster } from '../../types';
 import { DEFAULT_STAGE_GROUPS, deriveLogicalStage, sortStagesInOrder } from '../../utils/stageUtils';
+import { DeleteConfirmationModal } from './DeleteConfirmationModal';
 
 interface StageManagementModalProps {
   isOpen: boolean;
@@ -44,6 +45,10 @@ export const StageManagementModal: React.FC<StageManagementModalProps> = ({
   // Editing Stage
   const [editingStage, setEditingStage] = useState<string | null>(null);
   const [editStageInput, setEditStageInput] = useState('');
+
+  // Delete & Merge Confirmation State (No window.confirm in iframe)
+  const [stageToDelete, setStageToDelete] = useState<string | null>(null);
+  const [mergeTarget, setMergeTarget] = useState<{ oldName: string; newName: string } | null>(null);
 
   // Toast Notification
   const [toast, setToast] = useState<string | null>(null);
@@ -158,46 +163,58 @@ export const StageManagementModal: React.FC<StageManagementModalProps> = ({
     setEditStageInput(stageName);
   };
 
+  const cancelEditingStage = () => {
+    setEditingStage(null);
+    setEditStageInput('');
+  };
+
+  const executeRenameStage = (oldName: string, newName: string) => {
+    storageService.renameStageGroup(oldName, newName);
+    loadData();
+    if (onSave) onSave();
+    setEditingStage(null);
+    setEditStageInput('');
+    setMergeTarget(null);
+    showToast(`✅ เปลี่ยนชื่อ Stage เป็น "${newName}" สำเร็จ`);
+  };
+
   // Handler: Save Edited Stage
   const saveEditedStage = (oldName: string) => {
     const newName = editStageInput.trim();
     if (!newName || !newName.length) {
-      setEditingStage(null);
+      cancelEditingStage();
       return;
     }
     
     if (newName === oldName) {
-      setEditingStage(null);
+      cancelEditingStage();
       return;
     }
 
-    // Check if the new name already exists (excluding oldName)
-    if (managedStageGroups.some(g => g.toLowerCase() === newName.toLowerCase() && g !== oldName)) {
-      if (!confirm(`ชื่อ Stage "${newName}" มีอยู่ในระบบแล้ว\nคุณต้องการรวม (Merge) Stage "${oldName}" เข้ากับ "${newName}" หรือไม่?`)) {
-        return;
-      }
+    // Check if the new name already exists in managedStageGroups (excluding oldName, case-insensitive)
+    const existing = managedStageGroups.find(
+      g => g.trim().toLowerCase() === newName.toLowerCase() && g.trim().toLowerCase() !== oldName.toLowerCase()
+    );
+
+    if (existing) {
+      setMergeTarget({ oldName, newName: existing });
+      return;
     }
 
-    // Use centralized service to update everywhere
-    storageService.renameStageGroup(oldName, newName);
-    
-    loadData();
-    if (onSave) onSave();
-
-    setEditingStage(null);
-    showToast(`✅ เปลี่ยนชื่อ Stage เป็น "${newName}" สำเร็จ`);
+    executeRenameStage(oldName, newName);
   };
 
-  // Handler: Delete Stage
+  // Handler: Trigger Delete Modal
   const handleDeleteStage = (stageName: string) => {
-    if (!confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบ Stage: ${stageName}? รายการพาร์ทที่อยู่ในสเตจนี้จะถูกรีเซ็ตเป็นสเตจเริ่มต้น`)) return;
+    setStageToDelete(stageName);
+  };
 
-    // Use centralized service to delete everywhere
+  // Handler: Confirm Delete Stage from Modal
+  const handleConfirmDeleteStage = (stageName: string) => {
     storageService.deleteStageGroup(stageName);
-    
     loadData();
     if (onSave) onSave();
-    
+    setStageToDelete(null);
     showToast(`🗑️ ลบ Stage "${stageName}" เรียบร้อย`);
   };
 
@@ -467,22 +484,25 @@ export const StageManagementModal: React.FC<StageManagementModalProps> = ({
                 <ul className="divide-y divide-slate-800/80 flex-1 min-h-0 overflow-y-auto custom-scrollbar p-1 pb-8">
                   {managedStageGroups.map((stg, idx) => (
                     <li key={`${stg}-${idx}`} className="p-3 flex items-center justify-between hover:bg-[#1a2536] transition-colors">
-                      <div className="flex items-center gap-3">
-                        <span className="text-slate-500 font-mono text-xs w-6 text-right">{idx + 1}.</span>
+                      <div className="flex items-center gap-3 flex-1 min-w-0 mr-3">
+                        <span className="text-slate-500 font-mono text-xs w-6 text-right flex-none">{idx + 1}.</span>
                         {editingStage === stg ? (
-                          <input
-                            type="text"
-                            value={editStageInput}
-                            onChange={e => setEditStageInput(e.target.value)}
-                            className="bg-[#111827] border border-[#00FF00] text-[#00FF00] px-2 py-1 text-sm font-bold rounded-lg focus:outline-none"
-                            autoFocus
-                            onKeyDown={e => {
-                              if (e.key === 'Enter') saveEditedStage(stg);
-                              if (e.key === 'Escape') setEditingStage(null);
-                            }}
-                          />
+                          <div className="flex items-center gap-2 flex-1">
+                            <input
+                              type="text"
+                              value={editStageInput}
+                              onChange={e => setEditStageInput(e.target.value)}
+                              className="bg-[#111827] border border-[#00FF00] text-[#00FF00] px-3 py-1.5 text-sm font-bold rounded-lg focus:outline-none w-full shadow-inner"
+                              autoFocus
+                              placeholder="ระบุชื่อ Stage..."
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') saveEditedStage(stg);
+                                if (e.key === 'Escape') cancelEditingStage();
+                              }}
+                            />
+                          </div>
                         ) : (
-                          <span className={`inline-block px-2 py-0.5 text-xs font-bold border bg-[#111111] uppercase tracking-wider rounded-sm ${
+                          <span className={`inline-block px-2.5 py-1 text-xs font-bold border bg-[#111111] uppercase tracking-wider rounded-md ${
                             stg.toUpperCase().includes('PIERCE') || stg.toUpperCase().includes('BURRING') ? 'border-[#FFCC00] text-[#FFCC00]' :
                             stg.toUpperCase().includes('IRONING') ? 'border-blue-400 text-blue-400' :
                             stg.toUpperCase().includes('LOUVER') || stg.toUpperCase().includes('SLIT') ? 'border-emerald-400 text-emerald-400' :
@@ -497,32 +517,48 @@ export const StageManagementModal: React.FC<StageManagementModalProps> = ({
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 flex-none">
                         {editingStage === stg ? (
-                          <button
-                            onClick={() => saveEditedStage(stg)}
-                            className="p-1.5 text-[#00FF00] hover:bg-[#00FF00]/10 rounded-lg transition-colors cursor-pointer"
-                            title="บันทึก"
-                          >
-                            <Check className="w-4 h-4" />
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => saveEditedStage(stg)}
+                              className="px-2.5 py-1 text-black bg-[#00FF00] hover:bg-[#00FF00]/80 rounded-lg transition-colors font-bold text-xs flex items-center gap-1 cursor-pointer shadow"
+                              title="บันทึก (Enter)"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>บันทึก</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={cancelEditingStage}
+                              className="px-2.5 py-1 text-slate-300 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors font-bold text-xs flex items-center gap-1 cursor-pointer"
+                              title="ยกเลิก (Esc)"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                              <span>ยกเลิก</span>
+                            </button>
+                          </>
                         ) : (
-                          <button
-                            onClick={() => startEditingStage(stg)}
-                            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
-                            title="แก้ไขชื่อ Stage"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => startEditingStage(stg)}
+                              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                              title="แก้ไขชื่อ Stage"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteStage(stg)}
+                              className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded-lg transition-colors cursor-pointer"
+                              title="ลบ Stage"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
                         )}
-                        
-                        <button
-                          onClick={() => handleDeleteStage(stg)}
-                          className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded-lg transition-colors cursor-pointer"
-                          title="ลบ Stage"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
                       </div>
                     </li>
                   ))}
@@ -544,6 +580,74 @@ export const StageManagementModal: React.FC<StageManagementModalProps> = ({
             เสร็จสิ้น (Done)
           </button>
         </div>
+
+        {/* Delete Confirmation Modal (Replaces window.confirm) */}
+        <DeleteConfirmationModal
+          isOpen={!!stageToDelete}
+          onClose={() => setStageToDelete(null)}
+          onConfirm={() => {
+            if (stageToDelete) {
+              handleConfirmDeleteStage(stageToDelete);
+            }
+          }}
+          title="ยืนยันการลบ Stage (Delete Stage Group)"
+          itemName={stageToDelete ? `Stage: ${stageToDelete}` : ''}
+          itemDetails="ชิ้นส่วนและสเปกแม่พิมพ์ที่อยู่ในกลุ่มนี้จะถูกปรับย้ายไปยังสเตจเริ่มต้นอัตโนมัติ"
+          warningText="การลบสเตจนี้จะมีผลต่อการแสดงผลของ Layout, Matrix และ Part Master ทั้งหมดทันที"
+          confirmButtonText="ยืนยันการลบ Stage"
+          cancelButtonText="ยกเลิก"
+        />
+
+        {/* Merge Confirmation Modal (Replaces window.confirm) */}
+        {mergeTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+            <div className="bg-[#0F172A] border border-blue-900/60 rounded-xl max-w-md w-full shadow-2xl overflow-hidden animate-scaleUp">
+              <div className="bg-blue-950/40 border-b border-blue-900/50 p-4 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-lg bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-400">
+                    <Layers className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white font-thai">ยืนยันการรวม Stage (Merge Stages)</h3>
+                    <p className="text-[11px] text-blue-300 font-thai">Duplicate Stage Detected</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setMergeTarget(null)}
+                  className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-5 space-y-4">
+                <p className="text-sm text-slate-300 font-thai leading-relaxed">
+                  ชื่อ Stage <strong className="text-[#00FF00]">"{mergeTarget.newName}"</strong> มีอยู่ในระบบอยู่แล้ว
+                </p>
+                <div className="p-3 bg-[#172131] border border-slate-700 rounded-lg text-xs text-slate-300">
+                  คุณต้องการรวม (Merge) รายการพาร์ททั้งหมดจากสเตจ <span className="text-rose-400 font-bold font-mono">"{mergeTarget.oldName}"</span> เข้ากับสเตจ <span className="text-[#00FF00] font-bold font-mono">"{mergeTarget.newName}"</span> ใช่หรือไม่?
+                </div>
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setMergeTarget(null)}
+                    className="px-4 py-2 rounded-lg text-xs font-bold text-slate-300 bg-slate-800 hover:bg-slate-700 transition-colors cursor-pointer"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      executeRenameStage(mergeTarget.oldName, mergeTarget.newName);
+                    }}
+                    className="px-4 py-2 rounded-lg text-xs font-bold text-black bg-[#00FF00] hover:bg-[#00FF00]/80 transition-colors cursor-pointer"
+                  >
+                    ยืนยันรวม Stage
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>

@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Maximize2, 
   Minimize2, 
   X,
   Play,
   Pause,
-  RotateCw
+  RotateCw,
+  Sliders
 } from 'lucide-react';
 import { 
   LineLiveMonitoringData, 
@@ -22,6 +23,12 @@ import {
 } from '../../services/calculationService';
 import { getI18n, LanguageCode, useLanguage } from '../../i18n';
 import { TvTableRow } from './TvTableRow';
+import { 
+  TvAutoCycleConfig, 
+  TvAutoCycleOrderModal, 
+  getSavedAutoCycleConfig, 
+  saveAutoCycleConfig 
+} from './TvAutoCycleOrderModal';
 
 const LINES_LIST: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
 
@@ -43,10 +50,12 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
   const [lineData, setLineData] = useState<LineLiveMonitoringData | null>(null);
   const [monitoringData, setMonitoringData] = useState(() => storageService.getLinesMonitoring());
 
-  // Auto Cycle (Auto Rotate Lines) State
+  // Auto Cycle (Auto Rotate Lines) State & Order Configuration
   const [isAutoCycleActive, setIsAutoCycleActive] = useState<boolean>(true);
   const [autoCycleInterval, setAutoCycleInterval] = useState<number>(5); // Default to 5 seconds as requested
   const [countdown, setCountdown] = useState<number>(5);
+  const [cycleConfig, setCycleConfig] = useState<TvAutoCycleConfig>(getSavedAutoCycleConfig);
+  const [isOrderModalOpen, setIsOrderModalOpen] = useState<boolean>(false);
 
   // Active Display Language
   const currentLang = language;
@@ -134,6 +143,29 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
 
   const linesList = LINES_LIST;
 
+  // Format line display title
+  const getLineLabel = useCallback((id: ProductionLineId) => {
+    if (id === 'E1') return 'E1';
+    if (id === 'E2') return 'E2';
+    if (id === 'E3-1') return 'E3 SLit';
+    if (id === 'E3-2') return 'E3 WL';
+    if (id === 'E3-3') return 'E3 New corr';
+    if (id === 'E4') return 'E4';
+    if (id === 'E5') return 'E5';
+    return id;
+  }, []);
+
+  const getLineSubTag = useCallback((id: ProductionLineId) => {
+    if (id === 'E1') return 'Ø7 Slit';
+    if (id === 'E2') return 'Ø5 Slit';
+    if (id === 'E3-1') return '3P';
+    if (id === 'E3-2') return '4P';
+    if (id === 'E3-3') return '4P';
+    if (id === 'E4') return 'Ø5 Slit';
+    if (id === 'E5') return 'Ø5 Slit';
+    return '';
+  }, []);
+
   // Helper to get real-time machine status of any line
   const getLineMachineStatus = React.useCallback((lineId: ProductionLineId): MachineStatus => {
     const monitoring = monitoringData[lineId];
@@ -154,12 +186,40 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
     return status === 'RUNNING' || status === 'SIMULATION_ACTIVE';
   }, [getLineMachineStatus]);
 
-  // Find the next line in strict sequential order, cycling through all lines without skipping
+  // Find the next line in strict sequential order based on user-configured order and active selections
   const getNextActiveCycleLine = React.useCallback((currentLine: ProductionLineId): ProductionLineId => {
-    const currentIdx = linesList.indexOf(currentLine);
-    if (currentIdx < 0) return linesList[0];
-    return linesList[(currentIdx + 1) % linesList.length];
-  }, [linesList]);
+    let pool: ProductionLineId[] = [];
+
+    if (cycleConfig.mode === 'RUNNING_ONLY') {
+      pool = cycleConfig.order.filter(lineId => {
+        const st = getLineMachineStatus(lineId);
+        return st === 'RUNNING' || st === 'SIMULATION_ACTIVE';
+      });
+    } else {
+      pool = cycleConfig.order.filter(lineId => cycleConfig.enabledLines[lineId] !== false);
+    }
+
+    if (pool.length === 0) {
+      pool = cycleConfig.order.length > 0 ? cycleConfig.order : LINES_LIST;
+    }
+
+    const currentIdx = pool.indexOf(currentLine);
+    if (currentIdx < 0) {
+      // If current line is not in active pool (e.g. user manually clicked an inactive line),
+      // look forward in the configured order to find the next available line
+      const orderIdx = cycleConfig.order.indexOf(currentLine);
+      if (orderIdx >= 0) {
+        for (let offset = 1; offset <= cycleConfig.order.length; offset++) {
+          const nextCandidate = cycleConfig.order[(orderIdx + offset) % cycleConfig.order.length];
+          if (pool.includes(nextCandidate)) {
+            return nextCandidate;
+          }
+        }
+      }
+      return pool[0];
+    }
+    return pool[(currentIdx + 1) % pool.length];
+  }, [cycleConfig, getLineMachineStatus]);
 
   const reloadData = () => {
     const rawData = storageService.getLineMonitoring(selectedLineId);
@@ -174,7 +234,7 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
     const lineConfigs = storageService.getLineConfigs();
     
     // Find active configuration from lineConfigs or rawData
-    const activeConfig = lineConfigs.find(c => c.lineId === selectedLineId && c.isActive) || rawData.activeConfig;
+    const activeConfig = lineConfigs.find(c => c.lineId === selectedLineId && c.isActive) || lineConfigs.find(c => c.lineId === selectedLineId) || rawData.activeConfig;
 
     // Check if configuration exists
     const hasConfig = !!activeConfig;
@@ -243,29 +303,45 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
     const allCandidateItems = [...(rawData.items || []), ...missingInstalledParts];
 
     const recalculatedItems = allCandidateItems.map((item) => {
-      // Match with Part Master
-      const matchedPart = partMasters.find(p => 
-        (item.partCode && p.partCode.toLowerCase() === item.partCode.toLowerCase()) || 
-        (item.partName && p.partName.toLowerCase() === item.partName.toLowerCase()) ||
-        (item.stagePunchDie && p.stageName.toLowerCase() === item.stagePunchDie.toLowerCase())
+      // Match with Part Master using strict precedence (partCode -> partName)
+      // Never match purely on stage name alone, which would cause all parts in the same stage to collapse to one part
+      const rawCode = (item.partCode || '').trim();
+      const strippedCode = rawCode.replace(/^(E\d+(?:-\d+)?-)/i, '').trim();
+      const rawName = (item.partName || '').trim();
+      const cleanName = rawName.replace(/\s*\(.*?\)/g, '').trim().toLowerCase();
+
+      let matchedPart = partMasters.find(p => 
+        p.partCode.toLowerCase() === rawCode.toLowerCase() ||
+        p.partCode.toLowerCase() === strippedCode.toLowerCase()
       );
+
+      if (!matchedPart && rawName) {
+        matchedPart = partMasters.find(p => 
+          p.partName.toLowerCase() === rawName.toLowerCase() ||
+          p.partName.replace(/\s*\(.*?\)/g, '').trim().toLowerCase() === cleanName
+        );
+      }
       
       // Match with Life Standards
       const matchedStd = standards.find(s => 
         (item.partCode && ((s as any).partCode === item.partCode || s.configKey?.partCode === item.partCode)) || 
+        (strippedCode && ((s as any).partCode === strippedCode || s.configKey?.partCode === strippedCode)) ||
+        (matchedPart && ((s as any).partCode === matchedPart.partCode || s.configKey?.partCode === matchedPart.partCode)) ||
         (item.partName && s.partName === item.partName) ||
-        (item.stagePunchDie && s.stagePunchDie === item.stagePunchDie)
+        (matchedPart && s.partName === matchedPart.partName)
       );
 
       // Match with Spare Stock
       const matchedStock = stocks.find(s => 
         (item.partCode && s.partCode === item.partCode) || 
+        (strippedCode && s.partCode === strippedCode) ||
+        (matchedPart && s.partCode === matchedPart.partCode) ||
         (item.partName && s.partName === item.partName) ||
-        (matchedPart && s.partCode === matchedPart.partCode)
+        (matchedPart && s.partName === matchedPart.partName)
       );
 
       // Use actual permanent part code or existing slotId without deriving from array indexes
-      const permanentPartCode = matchedPart?.partCode || item.partCode || '';
+      const permanentPartCode = matchedPart?.partCode || strippedCode || item.partCode || '';
       const legacyCode = item.partCode || '';
       const permanentSlotId = item.slotId || (permanentPartCode ? `SLOT-${permanentPartCode}` : (item.stagePunchDie ? `SLOT-${item.stagePunchDie.replace(/\s+/g, '_')}` : 'SLOT-UNASSIGNED'));
 
@@ -337,7 +413,7 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
       );
     });
 
-    // Filter and sort items according to the TV display configurations for the selected line (Concept 2: Multi-Layer Key Binding)
+    // Filter and sort items according to the TV display configurations for the selected line
     const tvConfigs = storageService.getTvDisplayConfigs();
     const lineTvConfig = tvConfigs[selectedLineId] || [];
 
@@ -349,29 +425,61 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
       const usedSlots = new Set<string>();
 
       lineTvConfig.forEach(targetKey => {
+        if (!targetKey) return;
         const targetNorm = targetKey.trim().toLowerCase();
+        const targetCleanCode = targetNorm.replace(/^(e\d+(?:-\d+)?-)/i, '').trim();
+        const targetCleanName = targetNorm.replace(/\s*\(.*?\)/g, '').trim();
 
-        // 1. Exact partCode match
-        let matched = recalculatedItems.find(item => 
-          !usedSlots.has(item.slotId) && item.partCode === targetKey
-        );
+        // 1. Exact or normalized partCode match
+        let matched = recalculatedItems.find(item => {
+          if (usedSlots.has(item.slotId)) return false;
+          const iCode = (item.partCode || '').trim().toLowerCase();
+          const iCleanCode = iCode.replace(/^(e\d+(?:-\d+)?-)/i, '').trim();
+          return iCode === targetNorm || iCleanCode === targetCleanCode || iCode === targetCleanCode;
+        });
+
         // 2. Exact slotId match
         if (!matched) {
           matched = recalculatedItems.find(item => 
-            !usedSlots.has(item.slotId) && item.slotId === targetKey
+            !usedSlots.has(item.slotId) && item.slotId.toLowerCase() === targetNorm
           );
         }
-        // 3. Normalized partName or partCode match
+
+        // 3. Normalized partName match
         if (!matched) {
-          matched = recalculatedItems.find(item => 
-            !usedSlots.has(item.slotId) && 
-            (item.partName.toLowerCase() === targetNorm || item.partCode.toLowerCase() === targetNorm)
-          );
+          matched = recalculatedItems.find(item => {
+            if (usedSlots.has(item.slotId)) return false;
+            const iName = (item.partName || '').trim().toLowerCase();
+            const iCleanName = iName.replace(/\s*\(.*?\)/g, '').trim();
+            return iName === targetNorm || (targetCleanName && iCleanName === targetCleanName);
+          });
         }
-        // 4. Normalized stagePunchDie match
+
+        // 4. Match via PartMaster lookup
+        if (!matched) {
+          const pm = partMasters.find(p => 
+            p.partCode.toLowerCase() === targetNorm ||
+            p.partCode.toLowerCase() === targetCleanCode ||
+            p.partName.toLowerCase() === targetNorm ||
+            p.partName.replace(/\s*\(.*?\)/g, '').trim().toLowerCase() === targetCleanName
+          );
+          if (pm) {
+            matched = recalculatedItems.find(item => {
+              if (usedSlots.has(item.slotId)) return false;
+              const iCode = (item.partCode || '').trim().toLowerCase();
+              const iCleanCode = iCode.replace(/^(e\d+(?:-\d+)?-)/i, '').trim();
+              const pmCode = pm.partCode.toLowerCase();
+              const pmName = pm.partName.toLowerCase();
+              const iName = (item.partName || '').trim().toLowerCase();
+              return iCode === pmCode || iCleanCode === pmCode || iName === pmName;
+            });
+          }
+        }
+
+        // 5. Fallback: match by stagePunchDie only if no code/name match
         if (!matched) {
           matched = recalculatedItems.find(item => 
-            !usedSlots.has(item.slotId) && item.stagePunchDie.toLowerCase() === targetNorm
+            !usedSlots.has(item.slotId) && item.stagePunchDie && item.stagePunchDie.toLowerCase() === targetNorm
           );
         }
 
@@ -380,7 +488,12 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
           matchedList.push(matched);
         } else {
           // Dynamic fallback: If not yet in candidate list, construct metric item on the fly from PartMaster!
-          const pm = partMasters.find(p => p.partCode === targetKey || p.partName === targetKey || p.stageName === targetKey);
+          const pm = partMasters.find(p => 
+            p.partCode.toLowerCase() === targetNorm || 
+            p.partCode.toLowerCase() === targetCleanCode || 
+            p.partName.toLowerCase() === targetNorm || 
+            p.partName.replace(/\s*\(.*?\)/g, '').trim().toLowerCase() === targetCleanName
+          );
           if (pm) {
             const std = standards.find(s => s.configKey?.partCode === pm.partCode || s.partName === pm.partName || s.stagePunchDie === pm.stageName);
             const stock = stocks.find(s => s.partCode === pm.partCode || s.partName === pm.partName);
@@ -441,15 +554,11 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
         }
       });
 
-      // If sort mode is custom (e.g. Critical first), apply it; otherwise keep exact manual user order
-      if (tvSortMode && tvSortMode !== 'STAGE_ORDER') {
-        sortedItems = sortTrackingItems(matchedList, tvSortMode);
-      } else {
-        sortedItems = matchedList;
-      }
+      // Strict User Intent: When custom TV display order is configured, keep the EXACT manual sequence
+      sortedItems = matchedList;
     } else {
-      // If no custom config is saved, display all items sorted by the chosen sort mode
-      sortedItems = sortTrackingItems(recalculatedItems, tvSortMode);
+      // If no custom config is saved, display items in standard stage order
+      sortedItems = sortTrackingItems(recalculatedItems, 'STAGE_ORDER');
     }
 
     // Explicit machine status based on connection and config
@@ -502,21 +611,33 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
     return () => clearInterval(timer);
   }, []);
 
-  // Auto Cycle (Auto Switch Line) Effect - strictly following sequence and skipping idle/stopped lines
+  // Listen for storage events when auto-cycle config changes in other views/modals
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'findie_tv_autocycle_config_v2') {
+        const updated = getSavedAutoCycleConfig();
+        setCycleConfig(updated);
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
+  // Auto Cycle (Auto Switch Line) Engine - single deterministic interval, no race conditions
   useEffect(() => {
     if (!isAutoCycleActive) {
       setCountdown(autoCycleInterval);
       return;
     }
 
+    // Reset countdown to the full interval whenever active state or interval changes
     setCountdown(autoCycleInterval);
 
     const timer = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
-          setSelectedLineId(currentLine => {
-            return getNextActiveCycleLine(currentLine);
-          });
+          // Time reached: Advance strictly to the next line in the configured cycle order
+          setSelectedLineId(currentLine => getNextActiveCycleLine(currentLine));
           return autoCycleInterval;
         }
         return prev - 1;
@@ -524,7 +645,7 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [isAutoCycleActive, autoCycleInterval, getNextActiveCycleLine, selectedLineId]);
+  }, [isAutoCycleActive, autoCycleInterval, getNextActiveCycleLine]);
 
   if (!lineData) {
     return (
@@ -540,29 +661,6 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
   const rawItems = lineData.items || [];
   // Filter out any blank or empty rows
   const items = rawItems.filter(item => item && (item.stagePunchDie || item.partName || item.partCode));
-  
-  // Format line display title
-  const getLineLabel = (id: ProductionLineId) => {
-    if (id === 'E1') return 'E1';
-    if (id === 'E2') return 'E2';
-    if (id === 'E3-1') return 'E3 SLit';
-    if (id === 'E3-2') return 'E3 WL';
-    if (id === 'E3-3') return 'E3 New corr';
-    if (id === 'E4') return 'E4';
-    if (id === 'E5') return 'E5';
-    return id;
-  };
-
-  const getLineSubTag = (id: ProductionLineId) => {
-    if (id === 'E1') return 'Ø7 Slit';
-    if (id === 'E2') return 'Ø5 Slit';
-    if (id === 'E3-1') return '3P';
-    if (id === 'E3-2') return '4P';
-    if (id === 'E3-3') return '4P';
-    if (id === 'E4') return 'Ø5 Slit';
-    if (id === 'E5') return 'Ø5 Slit';
-    return '';
-  };
 
   const lineLabel = getLineLabel(selectedLineId);
   const lineDisplayName = selectedLineId === 'E1' ? 'LINE E1 (HE1 Ø7)' :
@@ -905,9 +1003,9 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
       {/* 4. BOTTOM BAR: LIQUID PILL LINE SELECTOR BAR (HE1 - HE5) */}
       {/* ========================================================= */}
       <div className="flex-none bg-[#090d15]/85 backdrop-blur-xl border-t border-white/10 px-3.5 sm:px-5 py-2 flex items-center justify-between gap-3 overflow-x-auto shadow-lg">
-        {/* Left: Line Selection Buttons (E1 - E5) in Segmented Capsule Track */}
+        {/* Left: Line Selection Buttons ordered according to user-configured sequence */}
         <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap bg-black/30 p-1 rounded-full border border-white/10">
-          {linesList.map((lineId) => {
+          {cycleConfig.order.map((lineId, idx) => {
             const isSelected = selectedLineId === lineId;
             const label = getLineLabel(lineId);
             const subTag = getLineSubTag(lineId);
@@ -915,6 +1013,9 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
             const isRunning = status === 'RUNNING' || status === 'SIMULATION_ACTIVE';
             const isIdle = status === 'IDLE';
             const isStopped = status === 'STOPPED' || status === 'MAINTENANCE';
+            const isEnabledInCycle = cycleConfig.mode === 'RUNNING_ONLY' 
+              ? isRunning 
+              : cycleConfig.enabledLines[lineId] !== false;
 
             return (
               <button
@@ -927,13 +1028,15 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
                 className={`liquid-pill px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-mono font-bold cursor-pointer flex items-center justify-center gap-1.5 min-w-[105px] sm:min-w-[125px] flex-shrink-0 active:scale-95 transition-all ${
                   isSelected
                     ? 'bg-gradient-to-r from-emerald-400 to-cyan-400 text-slate-950 font-black shadow-[0_0_15px_rgba(6,182,212,0.4)] border-none'
+                    : !isEnabledInCycle
+                    ? 'bg-white/[0.02] text-slate-400 border border-white/5 opacity-70 hover:opacity-100 hover:text-white'
                     : isIdle
                     ? 'bg-amber-950/30 text-amber-300/80 hover:text-amber-200 hover:bg-amber-950/50 border border-amber-500/30'
                     : isStopped
                     ? 'bg-rose-950/30 text-rose-300/80 hover:text-rose-200 hover:bg-rose-950/50 border border-rose-500/30'
                     : 'bg-white/[0.04] text-slate-200 hover:text-white hover:bg-white/[0.08] border border-white/10'
                 }`}
-                title={`Line ${lineId} - Status: ${status} ${isIdle || isStopped ? '(ข้ามใน Auto Cycle)' : '(เปิด Auto Cycle ได้)'}`}
+                title={`Line ${lineId} (ลำดับที่ ${idx + 1}) - Status: ${status} ${!isEnabledInCycle ? '(ปิดไว้ใน Auto Cycle - คลิกเพื่อดูเฉพาะไลน์)' : '(หมุนเวียนใน Auto Cycle)'}`}
               >
                 <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
                   isSelected 
@@ -1024,43 +1127,67 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
             ))}
           </div>
 
-          {/* Single Auto Cycle Toggle & Status Button */}
+          {/* Auto Cycle Controls with Sequence Preview and Order Settings */}
           {(() => {
             const nextLineId = getNextActiveCycleLine(selectedLineId);
             const nextLineLabel = getLineLabel(nextLineId);
 
+            // Compute active sequence string for tooltip
+            const activePool = cycleConfig.mode === 'RUNNING_ONLY'
+              ? cycleConfig.order.filter(l => {
+                  const s = getLineMachineStatus(l);
+                  return s === 'RUNNING' || s === 'SIMULATION_ACTIVE';
+                })
+              : cycleConfig.order.filter(l => cycleConfig.enabledLines[l] !== false);
+            const sequenceStr = activePool.map(l => getLineLabel(l)).join(' → ');
+
             return (
-              <button
-                type="button"
-                onClick={() => {
-                  setIsAutoCycleActive(prev => !prev);
-                  setCountdown(autoCycleInterval);
-                }}
-                className={`liquid-pill inline-flex items-center gap-2 px-3.5 py-1.5 text-xs font-mono font-bold cursor-pointer active:scale-95 transition-all ${
-                  isAutoCycleActive
-                    ? 'bg-emerald-950/70 border-emerald-400 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.5)]'
-                    : 'bg-white/[0.05] hover:bg-white/[0.1] border-white/15 text-slate-200 hover:text-white'
-                }`}
-                title={isAutoCycleActive 
-                  ? `หมุนเวียนอัตโนมัติเรียงตามไลน์ (E1 → E2 → E3 SLit → E3 WL → E3 New corr → E4 → E5) | ถัดไป: ${nextLineLabel} ใน ${countdown} วินาที` 
-                  : `เปิดการหมุนเวียนอัตโนมัติ (สลับไลน์เรียงกันตามลำดับทุกๆ ${autoCycleInterval} วินาที)`}
-              >
-                {isAutoCycleActive ? (
-                  <>
-                    <RotateCw className="w-3.5 h-3.5 animate-spin text-emerald-400" />
-                    <span className="font-black flex items-center gap-1.5">
-                      <span>{language === 'TH' ? `หมุนเวียน (${countdown}s)` : language === 'KO' ? `순환 (${countdown}s)` : `CYCLING (${countdown}s)`}</span>
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-3 h-3 text-cyan-400 fill-current" />
-                    <span>
-                      {language === 'TH' ? 'หมุนเวียนอัตโนมัติ' : language === 'KO' ? '자동 순환' : 'AUTO CYCLE'}
-                    </span>
-                  </>
-                )}
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAutoCycleActive(prev => !prev);
+                    setCountdown(autoCycleInterval);
+                  }}
+                  className={`liquid-pill inline-flex items-center gap-2 px-3.5 py-1.5 text-xs font-mono font-bold cursor-pointer active:scale-95 transition-all ${
+                    isAutoCycleActive
+                      ? 'bg-emerald-950/70 border-emerald-400 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.5)]'
+                      : 'bg-white/[0.05] hover:bg-white/[0.1] border-white/15 text-slate-200 hover:text-white'
+                  }`}
+                  title={isAutoCycleActive 
+                    ? `หมุนเวียนตามลำดับ: ${sequenceStr} | ถัดไป: ${nextLineLabel} ใน ${countdown} วินาที (คลิกปุ่ม ⚙️ ด้านข้างเพื่อจัดเรียงลำดับใหม่)` 
+                    : `เปิดการหมุนเวียนอัตโนมัติ (ตามลำดับ: ${sequenceStr})`}
+                >
+                  {isAutoCycleActive ? (
+                    <>
+                      <RotateCw className="w-3.5 h-3.5 animate-spin text-emerald-400 flex-shrink-0" />
+                      <span className="font-black flex items-center gap-1.5">
+                        <span>{language === 'TH' ? `หมุนเวียน (${countdown}s)` : language === 'KO' ? `순환 (${countdown}s)` : `CYCLING (${countdown}s)`}</span>
+                      </span>
+                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-400/20 text-emerald-300 font-bold border border-emerald-400/30">
+                        → {nextLineLabel}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-3 h-3 text-cyan-400 fill-current" />
+                      <span>
+                        {language === 'TH' ? 'หมุนเวียนอัตโนมัติ' : language === 'KO' ? '자동 순환' : 'AUTO CYCLE'}
+                      </span>
+                    </>
+                  )}
+                </button>
+
+                {/* Settings Gear to customize line cycle order */}
+                <button
+                  type="button"
+                  onClick={() => setIsOrderModalOpen(true)}
+                  className="liquid-pill p-1.5 text-xs font-mono font-bold cursor-pointer active:scale-95 transition-all bg-white/[0.05] hover:bg-white/[0.12] border border-white/15 text-slate-300 hover:text-amber-300 rounded-full"
+                  title="ตั้งค่าลำดับการสลับไลน์ (Auto Cycle Order Settings)"
+                >
+                  <Sliders className="w-3.5 h-3.5" />
+                </button>
+              </div>
             );
           })()}
         </div>
@@ -1154,6 +1281,21 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Auto Cycle Line Order Configuration Modal */}
+      <TvAutoCycleOrderModal
+        isOpen={isOrderModalOpen}
+        onClose={() => setIsOrderModalOpen(false)}
+        config={cycleConfig}
+        onSaveConfig={(newCfg) => {
+          setCycleConfig(newCfg);
+          setCountdown(autoCycleInterval);
+        }}
+        currentLineId={selectedLineId}
+        getLineMachineStatus={getLineMachineStatus}
+        getLineLabel={getLineLabel}
+        getLineSubTag={getLineSubTag}
+      />
 
     </div>
   );

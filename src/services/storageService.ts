@@ -629,88 +629,160 @@ class StorageService {
   }
 
   public renameStageGroup(oldStageName: string, newStageName: string): void {
+    const oldNorm = oldStageName.trim().toUpperCase();
+    const cleanNewName = newStageName.trim();
+    const newNorm = cleanNewName.toUpperCase();
+
     const groups = this.getStageGroups();
-    const newGroups = groups.map(g => {
-      if (g === oldStageName || g.trim().toLowerCase() === oldStageName.trim().toLowerCase()) {
-        return newStageName.trim();
+    const newGroups: string[] = [];
+    const seen = new Set<string>();
+
+    groups.forEach(g => {
+      const gNorm = g.trim().toUpperCase();
+      if (gNorm === oldNorm) {
+        if (!seen.has(newNorm)) {
+          seen.add(newNorm);
+          newGroups.push(cleanNewName);
+        }
+      } else {
+        if (!seen.has(gNorm)) {
+          seen.add(gNorm);
+          newGroups.push(g.trim());
+        }
       }
-      return g;
     });
+
+    if (!seen.has(newNorm)) {
+      newGroups.push(cleanNewName);
+    }
     
     this.saveStageGroups(newGroups);
 
+    // Update Part Masters
     const list = this.getPartMasters();
     let updatedCount = 0;
     list.forEach(p => {
-      if (p.stageName === oldStageName || (p.stageName && p.stageName.trim().toLowerCase() === oldStageName.trim().toLowerCase())) {
-        p.stageName = newStageName.trim();
+      if (p.stageName && p.stageName.trim().toUpperCase() === oldNorm) {
+        p.stageName = cleanNewName;
         updatedCount++;
       }
     });
-
     if (updatedCount > 0) {
       localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(list));
-      
-      // Also update Life Standards
-      const lifeStds = this.getLifeStandards();
-      lifeStds.forEach(std => {
-        if (std.stagePunchDie === oldStageName || (std.stagePunchDie && std.stagePunchDie.trim().toLowerCase() === oldStageName.trim().toLowerCase())) {
-          std.stagePunchDie = newStageName.trim();
-        }
-      });
-      localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(lifeStds));
-
-      // Also update Regrind Standards
-      const regrindStds = this.getRegrindMasterStandards();
-      regrindStds.forEach(std => {
-        if (std.stagePunchDie === oldStageName || (std.stagePunchDie && std.stagePunchDie.trim().toLowerCase() === oldStageName.trim().toLowerCase())) {
-          std.stagePunchDie = newStageName.trim();
-        }
-      });
-      localStorage.setItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(regrindStds));
-
-      this.addAuditLog('SYSTEM', `Renamed Stage Group from "${oldStageName}" to "${newStageName}" across ${updatedCount} parts`);
     }
+
+    // Also update Life Standards
+    const lifeStds = this.getLifeStandards();
+    let lifeUpdated = false;
+    lifeStds.forEach(std => {
+      if (std.stagePunchDie && std.stagePunchDie.trim().toUpperCase() === oldNorm) {
+        std.stagePunchDie = cleanNewName;
+        lifeUpdated = true;
+      }
+    });
+    if (lifeUpdated) {
+      localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(lifeStds));
+    }
+
+    // Also update Regrind Standards
+    const regrindStds = this.getRegrindMasterStandards();
+    let regrindUpdated = false;
+    regrindStds.forEach(std => {
+      if (std.stagePunchDie && std.stagePunchDie.trim().toUpperCase() === oldNorm) {
+        std.stagePunchDie = cleanNewName;
+        regrindUpdated = true;
+      }
+    });
+    if (regrindUpdated) {
+      localStorage.setItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(regrindStds));
+    }
+
+    // Also update Line items in production lines monitoring
+    const allMonitoring = this.getLinesMonitoring();
+    let monUpdated = false;
+    if (allMonitoring && typeof allMonitoring === 'object') {
+      Object.values(allMonitoring).forEach(mon => {
+        mon?.items?.forEach(item => {
+          if (item.stagePunchDie && item.stagePunchDie.trim().toUpperCase() === oldNorm) {
+            item.stagePunchDie = cleanNewName;
+            monUpdated = true;
+          }
+        });
+      });
+    }
+    if (monUpdated) {
+      localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(allMonitoring));
+    }
+
+    this.addAuditLog('SYSTEM', `Renamed Stage Group from "${oldStageName}" to "${cleanNewName}" across ${updatedCount} parts`);
     this.notify();
   }
 
   public deleteStageGroup(stageName: string): void {
+    const stageNorm = stageName.trim().toUpperCase();
     const groups = this.getStageGroups();
-    const newGroups = groups.filter(g => g !== stageName && g.trim().toLowerCase() !== stageName.trim().toLowerCase());
+    const newGroups = groups.filter(g => g.trim().toUpperCase() !== stageNorm);
     this.saveStageGroups(newGroups);
 
+    const fallbackStage = newGroups[0] || 'UNASSIGNED';
+
+    // Update Part Masters
     const list = this.getPartMasters();
     let updatedCount = 0;
     list.forEach(p => {
-      if (p.stageName === stageName || (p.stageName && p.stageName.trim().toLowerCase() === stageName.trim().toLowerCase())) {
-        p.stageName = '';
+      if (p.stageName && p.stageName.trim().toUpperCase() === stageNorm) {
+        p.stageName = fallbackStage;
         updatedCount++;
       }
     });
-
     if (updatedCount > 0) {
       localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(list));
-      
-      // Update Life Standards
-      const lifeStds = this.getLifeStandards();
-      lifeStds.forEach(std => {
-        if (std.stagePunchDie === stageName || (std.stagePunchDie && std.stagePunchDie.trim().toLowerCase() === stageName.trim().toLowerCase())) {
-          std.stagePunchDie = '';
-        }
-      });
-      localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(lifeStds));
-
-      // Update Regrind Standards
-      const regrindStds = this.getRegrindMasterStandards();
-      regrindStds.forEach(std => {
-        if (std.stagePunchDie === stageName || (std.stagePunchDie && std.stagePunchDie.trim().toLowerCase() === stageName.trim().toLowerCase())) {
-          std.stagePunchDie = '';
-        }
-      });
-      localStorage.setItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(regrindStds));
-
-      this.addAuditLog('SYSTEM', `Deleted Stage Group "${stageName}" and cleared it from ${updatedCount} parts`);
     }
+
+    // Update Life Standards
+    const lifeStds = this.getLifeStandards();
+    let lifeUpdated = false;
+    lifeStds.forEach(std => {
+      if (std.stagePunchDie && std.stagePunchDie.trim().toUpperCase() === stageNorm) {
+        std.stagePunchDie = fallbackStage;
+        lifeUpdated = true;
+      }
+    });
+    if (lifeUpdated) {
+      localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(lifeStds));
+    }
+
+    // Update Regrind Standards
+    const regrindStds = this.getRegrindMasterStandards();
+    let regrindUpdated = false;
+    regrindStds.forEach(std => {
+      if (std.stagePunchDie && std.stagePunchDie.trim().toUpperCase() === stageNorm) {
+        std.stagePunchDie = fallbackStage;
+        regrindUpdated = true;
+      }
+    });
+    if (regrindUpdated) {
+      localStorage.setItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(regrindStds));
+    }
+
+    // Update Line items in production lines monitoring
+    const allMonitoring = this.getLinesMonitoring();
+    let monUpdated = false;
+    if (allMonitoring && typeof allMonitoring === 'object') {
+      Object.values(allMonitoring).forEach(mon => {
+        mon?.items?.forEach(item => {
+          if (item.stagePunchDie && item.stagePunchDie.trim().toUpperCase() === stageNorm) {
+            item.stagePunchDie = fallbackStage;
+            monUpdated = true;
+          }
+        });
+      });
+    }
+    if (monUpdated) {
+      localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(allMonitoring));
+    }
+
+    this.addAuditLog('SYSTEM', `Deleted Stage Group "${stageName}" and reassigned ${updatedCount} parts to "${fallbackStage}"`);
     this.notify();
   }
 
@@ -760,6 +832,40 @@ class StorageService {
 
   public saveLineConfigs(configs: LineActiveConfiguration[]): void {
     localStorage.setItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
+
+    // Synchronize activeConfig and items' installedQty, backupQty, lineStockQty in LINE_MONITORING
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.LINE_MONITORING);
+      if (raw) {
+        const allMonitoring = JSON.parse(raw);
+        if (allMonitoring && typeof allMonitoring === 'object') {
+          const standards = this.getLifeStandards();
+          const stocks = this.getSpareStocks();
+          let changed = false;
+
+          configs.forEach(cfg => {
+            const lineId = cfg.lineId;
+            if (allMonitoring[lineId]) {
+              allMonitoring[lineId].activeConfig = { ...cfg };
+
+              if (allMonitoring[lineId].items && Array.isArray(allMonitoring[lineId].items)) {
+                allMonitoring[lineId].items = allMonitoring[lineId].items.map((item: any) => {
+                  return calculatePartMetrics(item, cfg, standards, stocks, allMonitoring[lineId].dailyShot || 0);
+                });
+              }
+              changed = true;
+            }
+          });
+
+          if (changed) {
+            localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(allMonitoring));
+          }
+        }
+      }
+    } catch {
+      // Ignore parse failure if any
+    }
+
     this.addAuditLog('CONFIGURATION', `Updated ${configs.length} Line Active Configurations & Install Quantities`);
     this.notify();
   }
@@ -3405,6 +3511,36 @@ class StorageService {
 
   public saveSpareStocksList(stocks: SpareStockItem[]): void {
     localStorage.setItem(STORAGE_KEYS.SPARE_STOCKS, JSON.stringify(stocks));
+
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.LINE_MONITORING);
+      if (raw) {
+        const allMonitoring = JSON.parse(raw);
+        if (allMonitoring && typeof allMonitoring === 'object') {
+          const standards = this.getLifeStandards();
+          const lineConfigs = this.getLineConfigs();
+          let changed = false;
+
+          (Object.keys(allMonitoring) as ProductionLineId[]).forEach(lineId => {
+            const lineData = allMonitoring[lineId];
+            const lineCfg = lineConfigs.find(c => c.lineId === lineId) || lineData.activeConfig;
+            if (lineData && lineData.items && Array.isArray(lineData.items)) {
+              lineData.items = lineData.items.map((item: any) => {
+                return calculatePartMetrics(item, lineCfg, standards, stocks, lineData.dailyShot || 0);
+              });
+              changed = true;
+            }
+          });
+
+          if (changed) {
+            localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(allMonitoring));
+          }
+        }
+      }
+    } catch {
+      // Ignore parse failure if any
+    }
+
     this.notify();
   }
 
@@ -4079,31 +4215,37 @@ class StorageService {
 
     lines.forEach(lineId => {
       if (!parsed[lineId] || parsed[lineId].length === 0) {
-        // Generate line-specific default list of installed parts sorted progressively
-        const lineConfig = this.getLineConfigs().find(c => c.lineId === lineId);
-        const installedMap = lineConfig?.installedPartQuantities || {};
-        const installedCodes = Object.keys(installedMap).filter(code => (installedMap[code] || 0) > 0);
-        const partMasters = this.getPartMasters();
+        // Use curated progressive tooling order for the line if available
+        if (DEFAULT_TV_DISPLAY_CONFIGS[lineId] && DEFAULT_TV_DISPLAY_CONFIGS[lineId].length > 0) {
+          parsed[lineId] = [...DEFAULT_TV_DISPLAY_CONFIGS[lineId]];
+          needsSave = true;
+        } else {
+          // Generate line-specific default list of installed parts sorted progressively
+          const lineConfig = this.getLineConfigs().find(c => c.lineId === lineId);
+          const installedMap = lineConfig?.installedPartQuantities || {};
+          const installedCodes = Object.keys(installedMap).filter(code => (installedMap[code] || 0) > 0);
+          const partMasters = this.getPartMasters();
 
-        const sortedCodes = installedCodes
-          .map(code => {
-            const pm = partMasters.find(p => p.partCode === code);
-            return {
-              code,
-              name: pm?.partName || '',
-              stage: pm?.stageName || ''
-            };
-          })
-          .sort((a, b) => {
-            const rankA = getPartProgressiveRank(a.name, a.stage);
-            const rankB = getPartProgressiveRank(b.name, b.stage);
-            if (rankA !== rankB) return rankA - rankB;
-            return a.code.localeCompare(b.code);
-          })
-          .map(p => p.code);
+          const sortedCodes = installedCodes
+            .map(code => {
+              const pm = partMasters.find(p => p.partCode === code);
+              return {
+                code,
+                name: pm?.partName || '',
+                stage: pm?.stageName || ''
+              };
+            })
+            .sort((a, b) => {
+              const rankA = getPartProgressiveRank(a.name, a.stage);
+              const rankB = getPartProgressiveRank(b.name, b.stage);
+              if (rankA !== rankB) return rankA - rankB;
+              return a.code.localeCompare(b.code);
+            })
+            .map(p => p.code);
 
-        parsed[lineId] = sortedCodes;
-        needsSave = true;
+          parsed[lineId] = sortedCodes.slice(0, 14);
+          needsSave = true;
+        }
       }
     });
 
@@ -4121,5 +4263,114 @@ class StorageService {
 }
 
 export const storageService = new StorageService();
+
+export const DEFAULT_TV_DISPLAY_CONFIGS: Record<ProductionLineId, string[]> = {
+  'E1': [
+    'DWG-PB-002', // PIERCE PUNCH (Ø7)
+    'DWG-PB-004', // BURRING PUNCH (Ø7)
+    'DWG-IR-003', // IRONING PUNCH (Ø7)
+    'DWG-IR-004', // IRONING DIE (Ø7)
+    'DWG-RF-002', // REFLARE PUNCH 7mm
+    'DWG-RF-004', // REFLARE DIE (Ø7)
+    'DWG-SL-010', // SLIT PUNCE NEW SLIT (Ø7)
+    'DWG-SL-011', // SLIT DIE NEW SLIT (Ø7)
+    'DWG-RS-001', // ROW SLIT BLADE (Ø7)
+    'DWG-CO-004', // CUT OFF PUNCH (Ø7)
+    'DWG-CO-006', // CUT OFF DIE (Ø7)
+    'DWG-SC-002', // SIDE CUT PUNCH (3P) (Ø7)
+    'DWG-SC-004', // SIDE CUT DIE (3P) (Ø7)
+    'DWG-CC-001'  // CORNER CUT PUNCH A (Ø7)
+  ],
+  'E2': [
+    'DWG-PB-001', // PIERCE PUNCH (Ø5)
+    'DWG-PB-003', // BURRING PUNCH (Ø5)
+    'DWG-IR-001', // IRONING PUNCH (Ø5)
+    'DWG-IR-002', // IRONING DIE (Ø5)
+    'DWG-RF-001', // REFLARE PUNCH 5mm
+    'DWG-RF-003', // REFLARE DIE (Ø5)
+    'DWG-RF-004', // REFLARE DIE (Ø7)
+    'DWG-RS-002', // ROW SLIT BLADE (Ø5) A
+    'DWG-RS-003', // ROW SLIT BLADE (Ø5) B
+    'DWG-SL-001', // SLIT PUNCH (Ø5)
+    'DWG-SL-002', // SLIT DIE A (Ø5) 3Row
+    'DWG-SL-003', // SLIT DIE A (Ø5) 4Row
+    'DWG-SL-004', // SLIT DIE B (Ø5) 3Row
+    'DWG-SL-005'  // SLIT DIE B (Ø5) 4Row
+  ],
+  'E3-1': [
+    'DWG-PB-002', // PIERCE PUNCH (Ø7)
+    'DWG-PB-004', // BURRING PUNCH (Ø7)
+    'DWG-IR-003', // IRONING PUNCH (Ø7)
+    'DWG-IR-004', // IRONING DIE (Ø7)
+    'DWG-RF-002', // REFLARE PUNCH 7mm
+    'DWG-RF-004', // REFLARE DIE (Ø7)
+    'DWG-SL-010', // SLIT PUNCE NEW SLIT (Ø7)
+    'DWG-SL-011', // SLIT DIE NEW SLIT (Ø7)
+    'DWG-RS-001', // ROW SLIT BLADE (Ø7)
+    'DWG-CO-004', // CUT OFF PUNCH (Ø7)
+    'DWG-CO-006', // CUT OFF DIE (Ø7)
+    'DWG-SC-002', // SIDE CUT PUNCH (3P) (Ø7)
+    'DWG-SC-004', // SIDE CUT DIE (3P) (Ø7)
+    'DWG-SL-006'  // SLIT PUNCH A (Ø7) (Old)
+  ],
+  'E3-2': [
+    'DWG-PB-005', // BURRING (WIDE LOWER)
+    'DWG-LV-001', // LOUVER PUNCH (U)
+    'DWG-LV-002', // LOUVER PUNCH (L)
+    'DWG-WL-001', // LOUVER PUNCH (WIDE LOWER) UP
+    'DWG-WL-002', // LOUVER PUNCH (WIDE LOWER) DOWN
+    'DWG-RS-004', // ROW SLID BLADE (WIDE LOWER) 4P
+    'DWG-CO-001', // CUT OFF PUNCH (WIDE LOWER)
+    'DWG-CO-002', // CUT OFF DIE (WIDE LOWER)
+    'DWG-SC-005', // SIDE CUT PUNCH (WIDE LOWER) 4P
+    'DWG-SC-006', // SIDE CUT DIE (WIDE LOWER) 4P
+    'DWG-HF-002'  // HITCH FEED PIN (Ø7)
+  ],
+  'E3-3': [
+    'DWG-PB-005', // BURRING (WIDE LOWER)
+    'DWG-WL-001', // LOUVER PUNCH (WIDE LOWER) UP
+    'DWG-WL-002', // LOUVER PUNCH (WIDE LOWER) DOWN
+    'DWG-RS-002', // ROW SLIT BLADE (Ø5) A
+    'DWG-RS-003', // ROW SLIT BLADE (Ø5) B
+    'DWG-RS-004', // ROW SLID BLADE (WIDE LOWER) 4P
+    'DWG-CO-001', // CUT OFF PUNCH (WIDE LOWER)
+    'DWG-CO-002', // CUT OFF DIE (WIDE LOWER)
+    'DWG-SC-005', // SIDE CUT PUNCH (WIDE LOWER) 4P
+    'DWG-SC-006', // SIDE CUT DIE (WIDE LOWER) 4P
+    'DWG-HF-002'  // HITCH FEED PIN (Ø7)
+  ],
+  'E4': [
+    'DWG-PB-001', // PIERCE PUNCH (Ø5)
+    'DWG-PB-003', // BURRING PUNCH (Ø5)
+    'DWG-IR-001', // IRONING PUNCH (Ø5)
+    'DWG-IR-002', // IRONING DIE (Ø5)
+    'DWG-RF-001', // REFLARE PUNCH 5mm
+    'DWG-RF-003', // REFLARE DIE (Ø5)
+    'DWG-RF-004', // REFLARE DIE (Ø7)
+    'DWG-RS-002', // ROW SLIT BLADE (Ø5) A
+    'DWG-RS-003', // ROW SLIT BLADE (Ø5) B
+    'DWG-SL-001', // SLIT PUNCH (Ø5)
+    'DWG-SL-002', // SLIT DIE A (Ø5) 3Row
+    'DWG-SL-003', // SLIT DIE A (Ø5) 4Row
+    'DWG-SL-004', // SLIT DIE B (Ø5) 3Row
+    'DWG-SL-005'  // SLIT DIE B (Ø5) 4Row
+  ],
+  'E5': [
+    'DWG-PB-001', // PIERCE PUNCH (Ø5)
+    'DWG-PB-003', // BURRING PUNCH (Ø5)
+    'DWG-IR-001', // IRONING PUNCH (Ø5)
+    'DWG-IR-002', // IRONING DIE (Ø5)
+    'DWG-RF-001', // REFLARE PUNCH 5mm
+    'DWG-RF-003', // REFLARE DIE (Ø5)
+    'DWG-RF-004', // REFLARE DIE (Ø7)
+    'DWG-SL-001', // SLIT PUNCH (Ø5)
+    'DWG-SL-002', // SLIT DIE A (Ø5) 3Row
+    'DWG-SL-003', // SLIT DIE A (Ø5) 4Row
+    'DWG-SL-004', // SLIT DIE B (Ø5) 3Row
+    'DWG-SL-005', // SLIT DIE B (Ø5) 4Row
+    'DWG-SC-001', // SIDE CUT PUNCH (3P) (Ø5)
+    'DWG-SC-003'  // SIDE CUT DIE (3P) (Ø5)
+  ]
+};
 
 
