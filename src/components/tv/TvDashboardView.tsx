@@ -40,6 +40,56 @@ interface TvDashboardViewProps {
 
 export type TvLayoutMode = 'DETAILED' | 'COMPACT';
 
+// Pure deterministic helper to calculate the next line in the active rotation flow
+export const computeNextCycleLine = (
+  currentLine: ProductionLineId,
+  config: TvAutoCycleConfig,
+  currentMonitoring?: Record<string, LineLiveMonitoringData>
+): ProductionLineId => {
+  const order = config?.order && config.order.length > 0
+    ? config.order
+    : (['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'] as ProductionLineId[]);
+
+  let activePool: ProductionLineId[] = [];
+
+  if (config.mode === 'RUNNING_ONLY') {
+    activePool = order.filter(lineId => {
+      const mon = currentMonitoring?.[lineId];
+      const status = mon?.machineStatus;
+      if (status) {
+        return status === 'RUNNING' || status === 'SIMULATION_ACTIVE';
+      }
+      return lineId !== 'E5'; // Default fallback
+    });
+  } else {
+    activePool = order.filter(lineId => config.enabledLines?.[lineId] !== false);
+  }
+
+  // If no lines in pool, fallback to entire order
+  if (activePool.length === 0) {
+    activePool = order;
+  }
+
+  const currentIdx = activePool.indexOf(currentLine);
+  if (currentIdx >= 0) {
+    return activePool[(currentIdx + 1) % activePool.length];
+  }
+
+  // If currentLine is not in active pool (e.g. user manually selected an excluded line),
+  // search forward in the full order to find the next active line:
+  const orderIdx = order.indexOf(currentLine);
+  if (orderIdx >= 0) {
+    for (let offset = 1; offset <= order.length; offset++) {
+      const candidate = order[(orderIdx + offset) % order.length];
+      if (activePool.includes(candidate)) {
+        return candidate;
+      }
+    }
+  }
+
+  return activePool[0];
+};
+
 export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
   initialLineId = 'E1',
   isFullscreenMode = false,
@@ -52,10 +102,23 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
 
   // Auto Cycle (Auto Rotate Lines) State & Order Configuration
   const [isAutoCycleActive, setIsAutoCycleActive] = useState<boolean>(true);
-  const [autoCycleInterval, setAutoCycleInterval] = useState<number>(5); // Default to 5 seconds as requested
+  const [autoCycleInterval, setAutoCycleInterval] = useState<number>(5); // Default to 5 seconds
   const [countdown, setCountdown] = useState<number>(5);
   const [cycleConfig, setCycleConfig] = useState<TvAutoCycleConfig>(getSavedAutoCycleConfig);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState<boolean>(false);
+
+  // Synchronized refs to avoid stale closures in high-frequency / timer callbacks
+  const selectedLineIdRef = useRef<ProductionLineId>(selectedLineId);
+  selectedLineIdRef.current = selectedLineId;
+
+  const cycleConfigRef = useRef<TvAutoCycleConfig>(cycleConfig);
+  cycleConfigRef.current = cycleConfig;
+
+  const autoCycleIntervalRef = useRef<number>(autoCycleInterval);
+  autoCycleIntervalRef.current = autoCycleInterval;
+
+  const isAutoCycleActiveRef = useRef<boolean>(isAutoCycleActive);
+  isAutoCycleActiveRef.current = isAutoCycleActive;
 
   // Active Display Language
   const currentLang = language;
@@ -188,38 +251,8 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
 
   // Find the next line in strict sequential order based on user-configured order and active selections
   const getNextActiveCycleLine = React.useCallback((currentLine: ProductionLineId): ProductionLineId => {
-    let pool: ProductionLineId[] = [];
-
-    if (cycleConfig.mode === 'RUNNING_ONLY') {
-      pool = cycleConfig.order.filter(lineId => {
-        const st = getLineMachineStatus(lineId);
-        return st === 'RUNNING' || st === 'SIMULATION_ACTIVE';
-      });
-    } else {
-      pool = cycleConfig.order.filter(lineId => cycleConfig.enabledLines[lineId] !== false);
-    }
-
-    if (pool.length === 0) {
-      pool = cycleConfig.order.length > 0 ? cycleConfig.order : LINES_LIST;
-    }
-
-    const currentIdx = pool.indexOf(currentLine);
-    if (currentIdx < 0) {
-      // If current line is not in active pool (e.g. user manually clicked an inactive line),
-      // look forward in the configured order to find the next available line
-      const orderIdx = cycleConfig.order.indexOf(currentLine);
-      if (orderIdx >= 0) {
-        for (let offset = 1; offset <= cycleConfig.order.length; offset++) {
-          const nextCandidate = cycleConfig.order[(orderIdx + offset) % cycleConfig.order.length];
-          if (pool.includes(nextCandidate)) {
-            return nextCandidate;
-          }
-        }
-      }
-      return pool[0];
-    }
-    return pool[(currentIdx + 1) % pool.length];
-  }, [cycleConfig, getLineMachineStatus]);
+    return computeNextCycleLine(currentLine, cycleConfig, monitoringData);
+  }, [cycleConfig, monitoringData]);
 
   const reloadData = () => {
     const rawData = storageService.getLineMonitoring(selectedLineId);
@@ -617,6 +650,7 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
       if (e.key === 'findie_tv_autocycle_config_v2') {
         const updated = getSavedAutoCycleConfig();
         setCycleConfig(updated);
+        cycleConfigRef.current = updated;
       }
     };
     window.addEventListener('storage', handleStorage);
@@ -637,15 +671,25 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
       setCountdown(prev => {
         if (prev <= 1) {
           // Time reached: Advance strictly to the next line in the configured cycle order
-          setSelectedLineId(currentLine => getNextActiveCycleLine(currentLine));
-          return autoCycleInterval;
+          const currentLine = selectedLineIdRef.current;
+          const currentCfg = cycleConfigRef.current;
+          const liveMonitoring = storageService.getLinesMonitoring();
+          const nextLine = computeNextCycleLine(currentLine, currentCfg, liveMonitoring);
+
+          // Asynchronously trigger selected line switch outside of setCountdown reducer
+          setTimeout(() => {
+            setSelectedLineId(nextLine);
+            selectedLineIdRef.current = nextLine;
+          }, 0);
+
+          return autoCycleIntervalRef.current;
         }
         return prev - 1;
       });
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [isAutoCycleActive, autoCycleInterval, getNextActiveCycleLine]);
+  }, [isAutoCycleActive, autoCycleInterval]);
 
   if (!lineData) {
     return (
@@ -1023,6 +1067,7 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
                 type="button"
                 onClick={() => {
                   setSelectedLineId(lineId);
+                  selectedLineIdRef.current = lineId;
                   setCountdown(autoCycleInterval);
                 }}
                 className={`liquid-pill px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-mono font-bold cursor-pointer flex items-center justify-center gap-1.5 min-w-[105px] sm:min-w-[125px] flex-shrink-0 active:scale-95 transition-all ${
@@ -1289,6 +1334,7 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
         config={cycleConfig}
         onSaveConfig={(newCfg) => {
           setCycleConfig(newCfg);
+          cycleConfigRef.current = newCfg;
           setCountdown(autoCycleInterval);
         }}
         currentLineId={selectedLineId}
