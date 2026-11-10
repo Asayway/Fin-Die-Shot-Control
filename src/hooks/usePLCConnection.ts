@@ -162,6 +162,11 @@ export function usePLCConnection() {
       setStatus('GATEWAY_CONNECTING');
 
       try {
+        if (!config.wsUrl || typeof config.wsUrl !== 'string' || !config.wsUrl.trim()) {
+          setStatus('GATEWAY_OFFLINE');
+          appendLog(`[PLC DRIVER] WebSocket URL is not configured. Waiting for configuration...`);
+          return;
+        }
         const ws = new WebSocket(config.wsUrl);
         wsRef.current = ws;
 

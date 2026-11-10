@@ -74,6 +74,7 @@ export const StockQuantityMatrixView: React.FC<StockQuantityMatrixViewProps> = (
   const [editMaxValues, setEditMaxValues] = useState<Record<string, number>>({});
   const [editSafetyValues, setEditSafetyValues] = useState<Record<string, number>>({});
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   // Inline Add State
@@ -128,7 +129,8 @@ export const StockQuantityMatrixView: React.FC<StockQuantityMatrixViewProps> = (
 
   const handleSaveNewRowInline = () => {
     if (!newRowData.partName.trim()) {
-      alert('กรุณากรอก Part Name');
+      setErrorMsg('กรุณากรอก Part Name');
+      setTimeout(() => setErrorMsg(null), 4000);
       return;
     }
     const finalPartCode = newRowData.partCode.trim() 
@@ -137,7 +139,8 @@ export const StockQuantityMatrixView: React.FC<StockQuantityMatrixViewProps> = (
 
     const exists = partMasters.some(p => p.partCode.toUpperCase() === finalPartCode);
     if (exists) {
-      alert(`รหัส Part Code "${finalPartCode}" มีอยู่ในระบบแล้ว กรุณาใช้รหัสอื่น`);
+      setErrorMsg(`รหัส Part Code "${finalPartCode}" มีอยู่ในระบบแล้ว กรุณาใช้รหัสอื่น`);
+      setTimeout(() => setErrorMsg(null), 4000);
       return;
     }
 
@@ -192,7 +195,8 @@ export const StockQuantityMatrixView: React.FC<StockQuantityMatrixViewProps> = (
       setSaveSuccessMsg(`เพิ่มชิ้นส่วน "${newPart.partName}" (${finalPartCode}) สำเร็จแล้ว`);
       setTimeout(() => setSaveSuccessMsg(null), 4000);
     } catch (err: any) {
-      alert(`เกิดข้อผิดพลาด: ${err.message}`);
+      setErrorMsg(`เกิดข้อผิดพลาด: ${err.message}`);
+      setTimeout(() => setErrorMsg(null), 4000);
     }
   };
 
@@ -479,21 +483,24 @@ export const StockQuantityMatrixView: React.FC<StockQuantityMatrixViewProps> = (
         const name = pm ? pm.partName : pCode;
 
         if (minVal < 0 || maxVal < 0 || safetyVal < 0) {
-          alert(language === 'TH' ? 'ค่าสต็อกต้องไม่ติดลบ' : 'Stock values cannot be negative');
+          setErrorMsg(language === 'TH' ? 'ค่าสต็อกต้องไม่ติดลบ' : 'Stock values cannot be negative');
+          setTimeout(() => setErrorMsg(null), 4000);
           return;
         }
         if (minVal > maxVal) {
-          alert(language === 'TH' 
+          setErrorMsg(language === 'TH' 
             ? `พาร์ท ${name}: ค่าสต็อกขั้นต่ำ (Min: ${minVal}) ต้องไม่มากกว่าสต็อกสูงสุด (Max: ${maxVal})` 
             : `Part ${name}: Min Stock (${minVal}) cannot be greater than Max Stock (${maxVal})`
           );
+          setTimeout(() => setErrorMsg(null), 4000);
           return;
         }
         if (safetyVal > maxVal) {
-          alert(language === 'TH' 
+          setErrorMsg(language === 'TH' 
             ? `พาร์ท ${name}: ค่าสต็อกเพื่อความปลอดภัย (Safety: ${safetyVal}) ต้องไม่มากกว่าสต็อกสูงสุด (Max: ${maxVal})` 
             : `Part ${name}: Safety Stock (${safetyVal}) cannot be greater than Max Stock (${maxVal})`
           );
+          setTimeout(() => setErrorMsg(null), 4000);
           return;
         }
       }
@@ -604,7 +611,8 @@ export const StockQuantityMatrixView: React.FC<StockQuantityMatrixViewProps> = (
       setTimeout(() => setSaveSuccessMsg(null), 4000);
       loadData();
     } catch (err: any) {
-      alert(`เกิดข้อผิดพลาดในการบันทึก: ${err.message}`);
+      setErrorMsg(`เกิดข้อผิดพลาดในการบันทึก: ${err.message}`);
+      setTimeout(() => setErrorMsg(null), 4000);
     }
   };
 
@@ -617,7 +625,8 @@ export const StockQuantityMatrixView: React.FC<StockQuantityMatrixViewProps> = (
       setDeleteTargetPart(null);
       loadData();
     } catch (err: any) {
-      alert(`ลบไม่สำเร็จ: ${err.message}`);
+      setErrorMsg(`ลบไม่สำเร็จ: ${err.message}`);
+      setTimeout(() => setErrorMsg(null), 4000);
     }
   };
 
@@ -653,6 +662,19 @@ export const StockQuantityMatrixView: React.FC<StockQuantityMatrixViewProps> = (
             <span className="text-xs font-mono font-bold">{saveSuccessMsg}</span>
           </div>
           <button onClick={() => setSaveSuccessMsg(null)} className="text-slate-400 hover:text-white cursor-pointer">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Alert Banner for Errors */}
+      {errorMsg && (
+        <div className="bg-[#111111] border border-rose-500 text-rose-400 px-3 py-2 flex items-center justify-between shadow-lg">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+            <span className="text-xs font-mono font-bold">{errorMsg}</span>
+          </div>
+          <button onClick={() => setErrorMsg(null)} className="text-slate-400 hover:text-white cursor-pointer">
             <X className="w-4 h-4" />
           </button>
         </div>

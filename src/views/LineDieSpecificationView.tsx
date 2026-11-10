@@ -190,7 +190,7 @@ export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> =
   const handleSaveNewPart = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPartData.partName.trim()) {
-      alert('กรุณากรอกชื่ออะไหล่ (Part Name)');
+      setFeedback({ type: 'error', message: 'กรุณากรอกชื่ออะไหล่ (Part Name)' });
       return;
     }
 
@@ -200,7 +200,7 @@ export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> =
 
     const currentParts = storageService.getPartMasters();
     if (currentParts.some(p => p.partCode.toUpperCase() === code)) {
-      alert(`ชิ้นส่วน ${newPartData.partName} มีอยู่ในระบบแล้ว`);
+      setFeedback({ type: 'error', message: `ชิ้นส่วน ${newPartData.partName} มีอยู่ในระบบแล้ว` });
       return;
     }
 

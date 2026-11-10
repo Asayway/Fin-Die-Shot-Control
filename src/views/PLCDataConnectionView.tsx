@@ -80,7 +80,11 @@ export const PLCDataConnectionView: React.FC = () => {
   };
 
   const handleCopyTerminalLogs = () => {
-    navigator.clipboard.writeText(diagnosticLogs.join('\n'));
+    try {
+      if (navigator?.clipboard?.writeText) {
+        navigator.clipboard.writeText(diagnosticLogs.join('\n')).catch(() => {});
+      }
+    } catch (_) {}
     triggerNotification('คัดลอกบันทึก Diagnostic Terminal ไปยัง Clipboard แล้ว');
   };
 

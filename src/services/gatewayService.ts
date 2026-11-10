@@ -354,7 +354,7 @@ class GatewayService {
   private alertThrottle: Record<string, number> = {};
 
   private checkPartThresholdAlerts(part: any, lineId: ProductionLineId, settings: any) {
-    const percent = part.lifeUsedPercent || 0;
+    const percent = part.usagePercent !== undefined ? part.usagePercent : (part.lifeUsedPercent || 0);
     const throttleKey = `${lineId}_${part.partCode}`;
     const lastAlertTime = this.alertThrottle[throttleKey] || 0;
     const now = Date.now();
@@ -362,13 +362,26 @@ class GatewayService {
     // Only alert once per 10 minutes per part to prevent spam
     if (now - lastAlertTime < 600000) return;
 
+    const remaining = part.remainingShot !== undefined ? part.remainingShot : (part.shotsRemaining || 0);
+
     if (percent >= (settings.criticalThresholdPercent || 95)) {
       this.alertThrottle[throttleKey] = now;
       storageService.addSystemAlert({
         level: 'CRITICAL',
         title: `CRITICAL: ${part.partName} reached ${percent}% life limit`,
         titleTh: `วิกฤต: ${part.partName} สาย ${lineId} ถึง ${percent}% ของอายุการใช้งาน`,
-        message: `Part ${part.partCode} (${part.stagePunchDie || part.stageName}) on Line ${lineId} has ${part.shotsRemaining?.toLocaleString() || 0} shots remaining. Immediate replacement or re-ground set swap required.`,
+        message: `Part ${part.partCode} (${part.stagePunchDie || part.stageName}) on Line ${lineId} has ${remaining.toLocaleString()} shots remaining. Immediate replacement or re-ground set swap required.`,
+        lineId,
+        partCode: part.partCode,
+        source: 'PART_LIFE'
+      });
+    } else if (percent >= 90) {
+      this.alertThrottle[throttleKey] = now;
+      storageService.addSystemAlert({
+        level: 'WARNING',
+        title: `WARNING: ${part.partName} reached ${percent}% life limit`,
+        titleTh: `เตือน: ${part.partName} สาย ${lineId} ถึง ${percent}% ของอายุการใช้งานที่กำหนด`,
+        message: `Tool ${part.partCode} (${part.stagePunchDie || part.stageName}) on Line ${lineId} reached ${percent}% of designated life (${(part.usedShot || part.currentShot || 0).toLocaleString()} / ${(part.lifeLimit || 0).toLocaleString()} shots). Schedule tool replacement or regrinding.`,
         lineId,
         partCode: part.partCode,
         source: 'PART_LIFE'
@@ -379,7 +392,7 @@ class GatewayService {
         level: 'WARNING',
         title: `PREPARE: ${part.partName} at ${percent}% life limit`,
         titleTh: `เตรียมการ: ${part.partName} สาย ${lineId} ใช้งานไปแล้ว ${percent}%`,
-        message: `Part ${part.partCode} on Line ${lineId} has reached 85% threshold. Please verify spare stock in warehouse (Available: ${part.stockQuantity || 0} EA).`,
+        message: `Part ${part.partCode} on Line ${lineId} has reached 85% threshold. Please verify spare stock in warehouse (Available: ${part.availableSpare ?? part.backupQty ?? 0} EA).`,
         lineId,
         partCode: part.partCode,
         source: 'PART_LIFE'

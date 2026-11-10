@@ -181,7 +181,11 @@ export const PartQrLabelModal: React.FC<PartQrLabelModalProps> = ({
   });
 
   const handleCopyCode = () => {
-    navigator.clipboard.writeText(serialCode);
+    try {
+      if (navigator?.clipboard?.writeText) {
+        navigator.clipboard.writeText(serialCode).catch(() => {});
+      }
+    } catch (_) {}
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

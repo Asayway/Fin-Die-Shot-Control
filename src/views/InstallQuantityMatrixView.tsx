@@ -68,6 +68,7 @@ export const InstallQuantityMatrixView: React.FC<InstallQuantityMatrixViewProps>
   const [isEditing, setIsEditing] = useState(false);
   const [editMatrixValues, setEditMatrixValues] = useState<Record<string, number>>({});
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   // Inline Add State
@@ -120,7 +121,8 @@ export const InstallQuantityMatrixView: React.FC<InstallQuantityMatrixViewProps>
 
   const handleSaveNewRowInline = () => {
     if (!newRowData.partName.trim()) {
-      alert('กรุณากรอก Part Name');
+      setErrorMsg('กรุณากรอก Part Name');
+      setTimeout(() => setErrorMsg(null), 4000);
       return;
     }
     const finalPartCode = newRowData.partCode.trim() 
@@ -129,7 +131,8 @@ export const InstallQuantityMatrixView: React.FC<InstallQuantityMatrixViewProps>
 
     const exists = partMasters.some(p => p.partCode.toUpperCase() === finalPartCode);
     if (exists) {
-      alert(`รหัส Part Code "${finalPartCode}" มีอยู่ในระบบแล้ว กรุณาใช้รหัสอื่น`);
+      setErrorMsg(`รหัส Part Code "${finalPartCode}" มีอยู่ในระบบแล้ว กรุณาใช้รหัสอื่น`);
+      setTimeout(() => setErrorMsg(null), 4000);
       return;
     }
 
@@ -184,7 +187,8 @@ export const InstallQuantityMatrixView: React.FC<InstallQuantityMatrixViewProps>
       setSaveSuccessMsg(`เพิ่มชิ้นส่วน "${newPart.partName}" (${finalPartCode}) สำเร็จแล้ว`);
       setTimeout(() => setSaveSuccessMsg(null), 4000);
     } catch (err: any) {
-      alert(`เกิดข้อผิดพลาด: ${err.message}`);
+      setErrorMsg(`เกิดข้อผิดพลาด: ${err.message}`);
+      setTimeout(() => setErrorMsg(null), 4000);
     }
   };
 
@@ -443,7 +447,8 @@ export const InstallQuantityMatrixView: React.FC<InstallQuantityMatrixViewProps>
       setSaveSuccessMsg(`บันทึกจำนวนติดตั้ง ${partMasters.length} รายการลงในฐานข้อมูลสำเร็จแล้ว`);
       setTimeout(() => setSaveSuccessMsg(null), 4000);
     } catch (err: any) {
-      alert(`เกิดข้อผิดพลาดในการบันทึก: ${err.message}`);
+      setErrorMsg(`เกิดข้อผิดพลาดในการบันทึก: ${err.message}`);
+      setTimeout(() => setErrorMsg(null), 4000);
     }
   };
 
@@ -456,7 +461,8 @@ export const InstallQuantityMatrixView: React.FC<InstallQuantityMatrixViewProps>
       setDeleteTargetPart(null);
       loadData();
     } catch (err: any) {
-      alert(`ลบไม่สำเร็จ: ${err.message}`);
+      setErrorMsg(`ลบไม่สำเร็จ: ${err.message}`);
+      setTimeout(() => setErrorMsg(null), 4000);
     }
   };
 
@@ -483,6 +489,19 @@ export const InstallQuantityMatrixView: React.FC<InstallQuantityMatrixViewProps>
             <span className="text-xs font-mono font-bold">{saveSuccessMsg}</span>
           </div>
           <button onClick={() => setSaveSuccessMsg(null)} className="text-slate-400 hover:text-white cursor-pointer">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Alert Banner for Errors */}
+      {errorMsg && (
+        <div className="bg-[#111111] border border-rose-500 text-rose-400 px-3 py-2 flex items-center justify-between shadow-lg">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+            <span className="text-xs font-mono font-bold">{errorMsg}</span>
+          </div>
+          <button onClick={() => setErrorMsg(null)} className="text-slate-400 hover:text-white cursor-pointer">
             <X className="w-4 h-4" />
           </button>
         </div>

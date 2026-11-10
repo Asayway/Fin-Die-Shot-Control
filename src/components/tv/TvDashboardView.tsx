@@ -6,7 +6,9 @@ import {
   Play,
   Pause,
   RotateCw,
-  Sliders
+  Sliders,
+  BellRing,
+  AlertTriangle
 } from 'lucide-react';
 import { 
   LineLiveMonitoringData, 
@@ -29,6 +31,8 @@ import {
   getSavedAutoCycleConfig, 
   saveAutoCycleConfig 
 } from './TvAutoCycleOrderModal';
+import { TvToolingAlertToast } from './TvToolingAlertToast';
+import { toolingAlertService, ToolingLifeAlert } from '../../services/toolingAlertService';
 
 const LINES_LIST: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
 
@@ -144,6 +148,9 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
   
   const [currentTime, setCurrentTime] = useState<string>('');
   const [selectedModalItem, setSelectedModalItem] = useState<PartLiveTrackingItem | null>(null);
+
+  // Automated Alert Notification System: 90% Tooling Life Limit Alerts
+  const [toolingAlerts, setToolingAlerts] = useState<ToolingLifeAlert[]>([]);
 
   // Exact 8-column layout matching the LG Monitor dashboard aesthetic (sum = 100%)
   const DEFAULT_TV_COL_WIDTHS: Record<string, number> = {
@@ -627,6 +634,52 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
     return () => unsub();
   }, [selectedLineId, tvSortMode]);
 
+  // Automated Tooling Life Check: continuously checks against 90% designated life threshold
+  const runToolingLifeCheck = useCallback(() => {
+    const currentItems = lineData?.items || [];
+    const detected = toolingAlertService.checkToolingAlerts(selectedLineId, currentItems);
+    setToolingAlerts(detected);
+  }, [lineData?.items, selectedLineId]);
+
+  useEffect(() => {
+    runToolingLifeCheck();
+    const unsub = toolingAlertService.subscribe((alerts) => {
+      setToolingAlerts(alerts);
+    });
+    // Automated periodic check every 3 seconds to catch live PLC and simulation wear
+    const interval = setInterval(runToolingLifeCheck, 3000);
+    return () => {
+      unsub();
+      clearInterval(interval);
+    };
+  }, [runToolingLifeCheck]);
+
+  // Quick simulation helper to test / demonstrate 90% tooling life limit warning
+  const handleSimulate90PercentWear = useCallback(() => {
+    try {
+      const allMonitoring = storageService.getLinesMonitoring();
+      const line = allMonitoring[selectedLineId];
+      if (line && line.items && line.items.length > 0) {
+        const targetTool = line.items[0];
+        const limit = targetTool.lifeLimit > 0 ? targetTool.lifeLimit : 15000000;
+        const currentShots = targetTool.usedShot !== undefined ? targetTool.usedShot : (targetTool.currentShot || 0);
+        const isHigh = (currentShots / limit) >= 0.90;
+
+        const newShots = isHigh ? 0 : Math.round(limit * 0.925); // 92.5% wear threshold
+        targetTool.usedShot = newShots;
+        targetTool.currentShot = newShots;
+        targetTool.usagePercent = isHigh ? 0 : 92.5;
+        targetTool.remainingShot = limit - newShots;
+
+        storageService.saveLinesMonitoring(allMonitoring);
+        toolingAlertService.clearDismissed();
+        reloadData();
+      }
+    } catch (err) {
+      console.warn('Error simulating 90% wear:', err);
+    }
+  }, [selectedLineId]);
+
   // Exact timestamp format matching the LG Monitor: YYYY.MM.DD HH:mm:ss
   useEffect(() => {
     const updateTime = () => {
@@ -671,17 +724,18 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
       setCountdown(prev => {
         if (prev <= 1) {
           // Time reached: Advance strictly to the next line in the configured cycle order
-          const currentLine = selectedLineIdRef.current;
-          const currentCfg = cycleConfigRef.current;
-          const liveMonitoring = storageService.getLinesMonitoring();
-          const nextLine = computeNextCycleLine(currentLine, currentCfg, liveMonitoring);
-
-          // Asynchronously trigger selected line switch outside of setCountdown reducer
-          setTimeout(() => {
-            setSelectedLineId(nextLine);
-            selectedLineIdRef.current = nextLine;
-          }, 0);
-
+          try {
+            const currentLine = selectedLineIdRef.current;
+            const currentCfg = cycleConfigRef.current;
+            const liveMonitoring = storageService.getLinesMonitoring();
+            const nextLine = computeNextCycleLine(currentLine, currentCfg, liveMonitoring);
+            if (nextLine && nextLine !== currentLine) {
+              setSelectedLineId(nextLine);
+              selectedLineIdRef.current = nextLine;
+            }
+          } catch (err) {
+            console.warn('[TvDashboard] Cycle advance error handled:', err);
+          }
           return autoCycleIntervalRef.current;
         }
         return prev - 1;
@@ -890,6 +944,21 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
               title="Reset Columns"
             >
               {t.tv.autoWidth || 'Auto Width'}
+            </button>
+
+            {/* 90% Tooling Life Limit Alert Quick Test / Indicator */}
+            <button
+              type="button"
+              onClick={handleSimulate90PercentWear}
+              className={`liquid-pill px-2.5 sm:px-3 py-1 text-[10.5px] sm:text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 active:scale-95 whitespace-nowrap ${
+                toolingAlerts.length > 0
+                  ? 'bg-amber-950/90 border-amber-400 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.5)] animate-pulse'
+                  : 'bg-white/[0.06] hover:bg-white/[0.12] border-white/15 text-slate-300 hover:text-white'
+              }`}
+              title="Test / Toggle automated 90% tooling life limit warning toast on this line"
+            >
+              <BellRing className={`w-3.5 h-3.5 ${toolingAlerts.length > 0 ? 'text-amber-300 animate-bounce' : 'text-slate-400'}`} />
+              <span>{toolingAlerts.length > 0 ? `90%+ Alerts (${toolingAlerts.length})` : 'Simulate 90% Alert'}</span>
             </button>
           </div>
         </div>
@@ -1341,6 +1410,25 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
         getLineMachineStatus={getLineMachineStatus}
         getLineLabel={getLineLabel}
         getLineSubTag={getLineSubTag}
+      />
+
+      {/* Automated Tooling Life Limit Warning Toast (warns operators when a tool reaches >= 90% designated life) */}
+      <TvToolingAlertToast
+        alerts={toolingAlerts}
+        currentLineId={selectedLineId}
+        onSelectLine={(targetLine) => {
+          setSelectedLineId(targetLine);
+          selectedLineIdRef.current = targetLine;
+          setCountdown(autoCycleInterval);
+        }}
+        onDismissAlert={(alertId) => {
+          toolingAlertService.dismissAlert(alertId);
+          setToolingAlerts(prev => prev.filter(a => a.id !== alertId));
+        }}
+        onSnoozeAlert={(alertId, mins) => {
+          toolingAlertService.snoozeAlert(alertId, mins);
+          setToolingAlerts(prev => prev.filter(a => a.id !== alertId));
+        }}
       />
 
     </div>
