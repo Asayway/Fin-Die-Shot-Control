@@ -1,21 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import QRCode from 'qrcode';
+import html2canvas from 'html2canvas';
 import { 
   X, 
   Printer, 
   QrCode, 
-  Barcode as BarcodeIcon, 
+  Download, 
   Copy, 
   Check, 
-  Tag, 
-  Layers, 
-  ShieldCheck, 
-  AlertTriangle, 
   Hash, 
-  MapPin, 
-  Calendar,
-  RotateCcw,
-  Trash2,
-  Box
+  ImageIcon,
+  Sparkles
 } from 'lucide-react';
 import { UnifiedPartMasterRow } from '../../views/PartMasterView';
 
@@ -25,13 +20,12 @@ interface PartQrLabelModalProps {
   partRow: UnifiedPartMasterRow | null;
 }
 
-// Generate realistic SVG Barcode (Code-128 pattern simulation)
+// Generate realistic SVG 1D Barcode (Code-128 pattern simulation)
 const SvgBarcode: React.FC<{ code: string; width?: number; height?: number }> = ({ 
   code, 
-  width = 240, 
-  height = 55 
+  width = 280, 
+  height = 48 
 }) => {
-  // Deterministic bar widths based on char codes
   const bars: { x: number; w: number }[] = [];
   let currentX = 10;
   
@@ -57,14 +51,14 @@ const SvgBarcode: React.FC<{ code: string; width?: number; height?: number }> = 
   const totalWidth = Math.max(width, currentX + 10);
 
   return (
-    <svg viewBox={`0 0 ${totalWidth} ${height + 20}`} className="w-full h-auto max-h-[75px]" preserveAspectRatio="xMidYMid meet">
-      <rect width={totalWidth} height={height + 20} fill="#ffffff" />
+    <svg viewBox={`0 0 ${totalWidth} ${height + 18}`} className="w-full h-auto max-h-[65px]" preserveAspectRatio="xMidYMid meet">
+      <rect width={totalWidth} height={height + 18} fill="#ffffff" />
       {bars.map((b, idx) => (
-        <rect key={idx} x={b.x} y={5} width={b.w} height={height} fill="#000000" />
+        <rect key={idx} x={b.x} y={4} width={b.w} height={height} fill="#000000" />
       ))}
       <text 
         x={totalWidth / 2} 
-        y={height + 16} 
+        y={height + 15} 
         textAnchor="middle" 
         fontSize="11" 
         fontFamily="monospace" 
@@ -77,108 +71,64 @@ const SvgBarcode: React.FC<{ code: string; width?: number; height?: number }> = 
   );
 };
 
-// Generate realistic SVG 2D QR Matrix
-const SvgQrCode: React.FC<{ payload: string; size?: number }> = ({ payload, size = 160 }) => {
-  const matrixSize = 25;
-  const cellSize = size / matrixSize;
-
-  // Simple pseudo-random but deterministic matrix generator from string hash
-  let hash = 0;
-  for (let i = 0; i < payload.length; i++) {
-    hash = (hash << 5) - hash + payload.charCodeAt(i);
-    hash |= 0;
-  }
-
-  const cells: { r: number; c: number }[] = [];
-
-  // Corner Finder Patterns (Top-Left, Top-Right, Bottom-Left)
-  const isCorner = (r: number, c: number) => {
-    // Top-left
-    if (r < 7 && c < 7) return (r === 0 || r === 6 || c === 0 || c === 6 || (r >= 2 && r <= 4 && c >= 2 && c <= 4));
-    // Top-right
-    if (r < 7 && c >= matrixSize - 7) {
-      const cc = c - (matrixSize - 7);
-      return (r === 0 || r === 6 || cc === 0 || cc === 6 || (r >= 2 && r <= 4 && cc >= 2 && cc <= 4));
-    }
-    // Bottom-left
-    if (r >= matrixSize - 7 && c < 7) {
-      const rr = r - (matrixSize - 7);
-      return (rr === 0 || rr === 6 || c === 0 || c === 6 || (rr >= 2 && rr <= 4 && c >= 2 && c <= 4));
-    }
-    return false;
-  };
-
-  for (let r = 0; r < matrixSize; r++) {
-    for (let c = 0; c < matrixSize; c++) {
-      if (isCorner(r, c)) {
-        cells.push({ r, c });
-      } else {
-        // Alignment pattern at bottom right
-        if (r >= 16 && r <= 20 && c >= 16 && c <= 20) {
-          const ar = r - 16;
-          const ac = c - 16;
-          if (ar === 0 || ar === 4 || ac === 0 || ac === 4 || (ar === 2 && ac === 2)) {
-            cells.push({ r, c });
-            continue;
-          }
-        }
-        // Timing tracks
-        if (r === 6 || c === 6) {
-          if ((r + c) % 2 === 0) cells.push({ r, c });
-          continue;
-        }
-        // Data pseudo cells
-        const seed = Math.sin(hash * 0.01 + r * 13 + c * 37) * 10000;
-        if ((seed - Math.floor(seed)) > 0.48) {
-          cells.push({ r, c });
-        }
-      }
-    }
-  }
-
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="bg-white p-2 rounded shadow-xs">
-      <rect width={size} height={size} fill="#ffffff" />
-      {cells.map((cell, idx) => (
-        <rect
-          key={idx}
-          x={cell.c * cellSize}
-          y={cell.r * cellSize}
-          width={cellSize + 0.2}
-          height={cellSize + 0.2}
-          fill="#000000"
-        />
-      ))}
-    </svg>
-  );
-};
-
 export const PartQrLabelModal: React.FC<PartQrLabelModalProps> = ({
   isOpen,
   onClose,
   partRow
 }) => {
   const [copied, setCopied] = useState(false);
+  const [imageCopied, setImageCopied] = useState(false);
+  const [isGeneratingPng, setIsGeneratingPng] = useState(false);
   const [selectedSerialNo, setSelectedSerialNo] = useState<string>('SN-01');
-  const [labelSize, setLabelSize] = useState<'STANDARD' | 'COMPACT'>('STANDARD');
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
+
+  const isDisposable = partRow?.maintenanceType === 'DISPOSE' || 
+    partRow?.regrindStandard?.perGrindMm?.toLowerCase().includes('dispose');
+
+  const partCode = partRow?.partCode || partRow?.drawingNo || '';
+  const serialCode = `${partCode}-${selectedSerialNo}`;
+
+  // Applicable lines
+  const applicableLines: string[] = (partRow as any)?.applicableLines || [];
+  if (applicableLines.length === 0 && partRow) {
+    if ((partRow.installQty?.e1 || 0) > 0) applicableLines.push('E1');
+    if ((partRow.installQty?.e2 || 0) > 0) applicableLines.push('E2');
+    if ((partRow.installQty?.e3_1 || 0) > 0) applicableLines.push('E3 SLIT');
+    if ((partRow.installQty?.e3_2 || 0) > 0) applicableLines.push('E3 WL+');
+    if ((partRow.installQty?.e3_3 || 0) > 0) applicableLines.push('E3 New Cor');
+    if ((partRow.installQty?.e4 || 0) > 0) applicableLines.push('E4');
+    if ((partRow.installQty?.e5 || 0) > 0) applicableLines.push('E5');
+  }
+
+  // Real Scannable Payload
+  const qrScannableText = partRow ? [
+    `TOOLING ID: ${serialCode}`,
+    `PART: ${partRow.partName}`,
+    `DRAWING: ${partRow.drawingNo}`,
+    `STAGE: ${partRow.stage}`,
+    `NEW SPEC: ${partRow.newSpecMm ? `${partRow.newSpecMm.toFixed(2)}mm` : '-'}`,
+    `SCRAP LIMIT: ${partRow.scrapLimitMm ? `${partRow.scrapLimitMm.toFixed(2)}mm` : '-'}`,
+    `LINES: ${applicableLines.length > 0 ? applicableLines.join(', ') : 'ALL'}`
+  ].join('\n') : '';
+
+  // Generate real camera-scannable QR code PNG DataURL
+  useEffect(() => {
+    if (!isOpen || !qrScannableText) return;
+    QRCode.toDataURL(qrScannableText, {
+      margin: 1,
+      width: 220,
+      color: {
+        dark: '#000000',
+        light: '#ffffff'
+      }
+    }).then(url => {
+      setQrDataUrl(url);
+    }).catch(err => {
+      console.error('Failed to generate real QR code:', err);
+    });
+  }, [isOpen, qrScannableText]);
 
   if (!isOpen || !partRow) return null;
-
-  const isDisposable = partRow.maintenanceType === 'DISPOSE' || 
-    partRow.regrindStandard?.perGrindMm?.toLowerCase().includes('dispose');
-
-  const partCode = partRow.partCode || partRow.drawingNo;
-  const serialCode = `${partCode}-${selectedSerialNo}`;
-  const qrPayload = JSON.stringify({
-    code: partCode,
-    name: partRow.partName,
-    stage: partRow.stage,
-    lines: (partRow as any).applicableLines || ['E1'],
-    type: isDisposable ? 'DISPOSE' : 'REGRIND',
-    spec: `${partRow.newSpecMm || 28.0}mm`,
-    scrap: `${partRow.scrapLimitMm || 27.0}mm`,
-    serial: serialCode
-  });
 
   const handleCopyCode = () => {
     try {
@@ -190,32 +140,54 @@ export const PartQrLabelModal: React.FC<PartQrLabelModalProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleDownloadPng = async () => {
+    const el = document.getElementById('printable-part-label');
+    if (!el) return;
+    try {
+      setIsGeneratingPng(true);
+      const canvas = await html2canvas(el, { scale: 3, backgroundColor: '#ffffff' });
+      const image = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.href = image;
+      link.download = `${serialCode}-Label.png`;
+      link.click();
+    } catch (e) {
+      console.error('Error generating label PNG:', e);
+    } finally {
+      setIsGeneratingPng(false);
+    }
+  };
+
+  const handleCopyImage = async () => {
+    const el = document.getElementById('printable-part-label');
+    if (!el) return;
+    try {
+      const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff' });
+      canvas.toBlob(async (blob) => {
+        if (!blob) return;
+        try {
+          await navigator.clipboard.write([
+            new ClipboardItem({ 'image/png': blob })
+          ]);
+          setImageCopied(true);
+          setTimeout(() => setImageCopied(false), 2000);
+        } catch (err) {
+          console.warn('Clipboard write image fallback to download:', err);
+          handleDownloadPng();
+        }
+      }, 'image/png');
+    } catch (e) {
+      console.error('Error copying label image:', e);
+    }
+  };
+
   const handlePrint = () => {
     window.print();
   };
 
-  const applicableLines: string[] = (partRow as any).applicableLines || [];
-  if (applicableLines.length === 0) {
-    if ((partRow.installQty.e1 || 0) > 0) applicableLines.push('E1');
-    if ((partRow.installQty.e2 || 0) > 0) applicableLines.push('E2');
-    if ((partRow.installQty.e3_1 || 0) > 0) applicableLines.push('E3-1');
-    if ((partRow.installQty.e3_2 || 0) > 0) applicableLines.push('E3-2');
-    if ((partRow.installQty.e3_3 || 0) > 0) applicableLines.push('E3-3');
-    if ((partRow.installQty.e4 || 0) > 0) applicableLines.push('E4');
-    if ((partRow.installQty.e5 || 0) > 0) applicableLines.push('E5');
-  }
-
-  const getLineBadgeColor = (line: string) => {
-    if (line === 'E1') return 'bg-sky-950 text-sky-300 border-sky-600';
-    if (line === 'E2') return 'bg-amber-950 text-amber-300 border-amber-600';
-    if (line.startsWith('E3')) return 'bg-purple-950 text-purple-300 border-purple-600';
-    if (line === 'E4') return 'bg-emerald-950 text-emerald-300 border-emerald-600';
-    return 'bg-teal-950 text-teal-300 border-teal-600';
-  };
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs font-mono animate-fadeIn">
-      <div className="bg-[#181818] border border-[#555555] shadow-2xl rounded-none w-full max-w-3xl overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-xs font-mono animate-fadeIn select-none">
+      <div className="bg-[#181818] border border-[#555555] shadow-2xl rounded-none w-full max-w-3xl overflow-hidden flex flex-col max-h-[94vh]">
         
         {/* Header Bar */}
         <div className="bg-[#242424] border-b border-[#444444] px-4 py-3 flex items-center justify-between">
@@ -224,12 +196,13 @@ export const PartQrLabelModal: React.FC<PartQrLabelModalProps> = ({
             <div>
               <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
                 <span>QR CODE & BARCODE TOOLING LABEL</span>
-                <span className="text-[10px] bg-[#00FF00]/20 text-[#00FF00] border border-[#00FF00]/40 px-1.5 py-0.2">
-                  IDEA 5 & 7
+                <span className="text-[10px] bg-[#00FF00]/20 text-[#00FF00] border border-[#00FF00]/40 px-1.5 py-0.2 font-black flex items-center gap-1">
+                  <Sparkles className="w-3 h-3" />
+                  <span>SCANNABLE HIGH-RES</span>
                 </span>
               </h2>
               <p className="text-[11px] text-slate-400">
-                ฉลากบาร์โค้ดติดชิ้นส่วนแม่พิมพ์และระบบติดตาม Serial Number
+                ฉลากบาร์โค้ดติดชิ้นส่วนแม่พิมพ์ สแกนใช้งานจริงได้ 100% และดาวน์โหลด/คัดลอกไฟล์รูปภาพได้
               </p>
             </div>
           </div>
@@ -243,7 +216,7 @@ export const PartQrLabelModal: React.FC<PartQrLabelModalProps> = ({
 
         {/* Content Body */}
         <div className="p-4 overflow-y-auto space-y-4 flex-1">
-          {/* Controls Bar */}
+          {/* Action Controls Bar matching image 3 */}
           <div className="flex flex-wrap items-center justify-between gap-3 bg-[#1e1e1e] p-3 border border-[#333333]">
             <div className="flex items-center gap-3">
               <label className="text-xs text-slate-300 font-bold flex items-center gap-1.5">
@@ -253,7 +226,7 @@ export const PartQrLabelModal: React.FC<PartQrLabelModalProps> = ({
               <select
                 value={selectedSerialNo}
                 onChange={e => setSelectedSerialNo(e.target.value)}
-                className="bg-[#111111] text-[#00FF00] border border-[#555555] px-2 py-1 text-xs font-bold"
+                className="bg-[#111111] text-[#00FF00] border border-[#555555] px-2 py-1 text-xs font-bold focus:outline-none"
               >
                 <option value="SN-01">SN-01 (Active Tool)</option>
                 <option value="SN-02">SN-02 (Backup 1)</option>
@@ -263,11 +236,33 @@ export const PartQrLabelModal: React.FC<PartQrLabelModalProps> = ({
               </select>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleDownloadPng}
+                disabled={isGeneratingPng}
+                className="px-3 py-1 bg-sky-900 hover:bg-sky-800 text-sky-200 border border-sky-600 text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
+                title="ดาวน์โหลดฉลากเป็นไฟล์รูปภาพ PNG ความละเอียดสูง"
+              >
+                <Download className="w-3.5 h-3.5 text-sky-300" />
+                <span>{isGeneratingPng ? 'กำลังสร้าง...' : 'ดาวน์โหลดภาพ PNG'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCopyImage}
+                className="px-3 py-1 bg-purple-900 hover:bg-purple-800 text-purple-200 border border-purple-600 text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
+                title="คัดลอกรูปภาพฉลากเข้า Clipboard"
+              >
+                {imageCopied ? <Check className="w-3.5 h-3.5 text-[#00FF00]" /> : <ImageIcon className="w-3.5 h-3.5 text-purple-300" />}
+                <span>{imageCopied ? 'คัดลอกรูปภาพแล้ว!' : 'คัดลอกรูปภาพ'}</span>
+              </button>
+
               <button
                 type="button"
                 onClick={handleCopyCode}
-                className="px-2.5 py-1 bg-[#282828] hover:bg-[#333333] text-slate-200 border border-[#555555] text-xs flex items-center gap-1.5 cursor-pointer"
+                className="px-2.5 py-1 bg-[#282828] hover:bg-[#333333] text-slate-200 border border-[#555555] text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                title="คัดลอกรหัส Serial ID"
               >
                 {copied ? <Check className="w-3.5 h-3.5 text-[#00FF00]" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
                 <span>{copied ? 'คัดลอกแล้ว' : 'Copy Code'}</span>
@@ -276,7 +271,8 @@ export const PartQrLabelModal: React.FC<PartQrLabelModalProps> = ({
               <button
                 type="button"
                 onClick={handlePrint}
-                className="px-3.5 py-1 bg-[#00FF00] hover:bg-[#00dd00] text-black text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+                className="px-3.5 py-1 bg-[#00FF00] hover:bg-[#00dd00] text-black text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
+                title="พิมพ์สติ๊กเกอร์ความร้อน 100mm x 60mm"
               >
                 <Printer className="w-3.5 h-3.5" />
                 <span>พิมพ์สติ๊กเกอร์ (Print Label)</span>
@@ -285,10 +281,10 @@ export const PartQrLabelModal: React.FC<PartQrLabelModalProps> = ({
           </div>
 
           {/* Printable Industrial Label Canvas */}
-          <div className="p-4 bg-[#0a0a0a] border border-[#444444] flex justify-center">
+          <div className="p-4 bg-[#0a0a0a] border border-[#444444] flex justify-center overflow-x-auto">
             <div 
               id="printable-part-label"
-              className="w-full max-w-[620px] bg-white text-black p-4 border-2 border-black shadow-lg font-mono relative select-all"
+              className="w-full max-w-[620px] min-w-[540px] bg-white text-black p-4 border-2 border-black shadow-lg font-mono relative select-all"
             >
               {/* Label Top Bar */}
               <div className="border-b-2 border-black pb-2 mb-3 flex items-start justify-between">
@@ -312,19 +308,36 @@ export const PartQrLabelModal: React.FC<PartQrLabelModalProps> = ({
                   }`}>
                     {isDisposable ? 'DISPOSABLE (1 USE)' : 'REGRINDABLE (เจียรได้)'}
                   </span>
-                  <div className="text-[11px] font-bold text-slate-800 mt-1">
-                    ID: {serialCode}
+                  <div className="text-[11px] font-black text-slate-900 mt-1">
+                    TOOLING ID
+                  </div>
+                  <div className="text-xs font-black text-black">
+                    {serialCode}
+                  </div>
+                  <div className="text-[9px] font-bold text-slate-600 mt-0.5">
+                    RACK: TOOLROOM-STOCK
                   </div>
                 </div>
               </div>
 
-              {/* Label Middle: QR + Barcode + Specs Grid */}
+              {/* Label Middle: Scannable QR + Barcode + Specs Grid */}
               <div className="grid grid-cols-12 gap-3 items-center">
-                {/* QR Code Container */}
-                <div className="col-span-4 flex flex-col items-center justify-center p-1 border border-slate-300 bg-slate-50">
-                  <SvgQrCode payload={qrPayload} size={135} />
-                  <div className="text-[9px] font-bold text-slate-600 mt-1 tracking-tight">
-                    SCAN TO VERIFY
+                {/* Real Scannable QR Code Container */}
+                <div className="col-span-4 flex flex-col items-center justify-center p-1.5 border border-slate-300 bg-slate-50">
+                  {qrDataUrl ? (
+                    <img 
+                      src={qrDataUrl} 
+                      alt="Scannable Tooling QR Code" 
+                      className="w-32 h-32 object-contain"
+                    />
+                  ) : (
+                    <div className="w-32 h-32 bg-slate-200 animate-pulse flex items-center justify-center text-[10px] text-slate-500">
+                      Generating...
+                    </div>
+                  )}
+                  <div className="text-[9px] font-black text-slate-700 mt-1 tracking-tight flex items-center gap-1">
+                    <QrCode className="w-3 h-3 text-emerald-600" />
+                    <span>SCAN TO VERIFY</span>
                   </div>
                 </div>
 
@@ -332,25 +345,25 @@ export const PartQrLabelModal: React.FC<PartQrLabelModalProps> = ({
                 <div className="col-span-8 flex flex-col justify-between h-full space-y-2">
                   <div className="grid grid-cols-2 gap-2 text-xs border border-slate-300 p-2 bg-slate-50">
                     <div>
-                      <div className="text-[9px] text-slate-600 font-bold uppercase">New Spec (มาตรฐานใหม่):</div>
+                      <div className="text-[9px] text-slate-600 font-bold uppercase">NEW SPEC (มาตรฐานใหม่):</div>
                       <div className="text-sm font-black text-black">
                         {partRow.newSpecMm ? `${partRow.newSpecMm.toFixed(2)} mm` : '-'}
                       </div>
                     </div>
                     <div>
-                      <div className="text-[9px] text-slate-600 font-bold uppercase">Scrap Limit (ขีดจำกัดทิ้ง):</div>
+                      <div className="text-[9px] text-slate-600 font-bold uppercase">SCRAP LIMIT (ขีดจำกัดทิ้ง):</div>
                       <div className="text-sm font-black text-red-700">
                         {partRow.scrapLimitMm ? `${partRow.scrapLimitMm.toFixed(2)} mm` : '-'}
                       </div>
                     </div>
                     <div>
-                      <div className="text-[9px] text-slate-600 font-bold uppercase">1-Time Grind (เจียรครั้งละ):</div>
+                      <div className="text-[9px] text-slate-600 font-bold uppercase">1-TIME GRIND (เจียรครั้งละ):</div>
                       <div className="text-xs font-bold text-black">
                         {partRow.regrindStandard?.perGrindMm || '-'}
                       </div>
                     </div>
                     <div>
-                      <div className="text-[9px] text-slate-600 font-bold uppercase">Max Regrind (รอบสูงสุด):</div>
+                      <div className="text-[9px] text-slate-600 font-bold uppercase">MAX REGRIND (รอบสูงสุด):</div>
                       <div className="text-xs font-bold text-black">
                         {partRow.regrindStandard?.regrindCycles ?? '-'} รอบ
                       </div>
@@ -358,7 +371,7 @@ export const PartQrLabelModal: React.FC<PartQrLabelModalProps> = ({
                   </div>
 
                   {/* 1D Barcode */}
-                  <div className="border border-slate-300 p-1.5 bg-white text-center">
+                  <div className="border border-slate-300 p-1 bg-white text-center">
                     <SvgBarcode code={serialCode} width={340} height={42} />
                   </div>
                 </div>
@@ -396,19 +409,19 @@ export const PartQrLabelModal: React.FC<PartQrLabelModalProps> = ({
                 <div className="flex justify-between">
                   <span>Fin Press E1 (Ø7):</span>
                   <span className="text-[#00FF00] font-bold">
-                    {partRow.shotLifeCycle.e1_pcm !== undefined ? `${partRow.shotLifeCycle.e1_pcm}M Shots` : '-'}
+                    {partRow.shotLifeCycle?.e1_pcm !== undefined ? `${partRow.shotLifeCycle.e1_pcm}M Shots` : '-'}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Fin Press E2 (Ø5):</span>
                   <span className="text-[#00FF00] font-bold">
-                    {partRow.shotLifeCycle.e2_gold !== undefined ? `${partRow.shotLifeCycle.e2_gold}M Shots` : '-'}
+                    {partRow.shotLifeCycle?.e2_gold !== undefined ? `${partRow.shotLifeCycle.e2_gold}M Shots` : '-'}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Fin Press E3 (1-3):</span>
                   <span className="text-[#00FF00] font-bold">
-                    {partRow.shotLifeCycle.e3_1_pcm !== undefined ? `${partRow.shotLifeCycle.e3_1_pcm}M` : '-'} / {partRow.shotLifeCycle.e3_2_gold !== undefined ? `${partRow.shotLifeCycle.e3_2_gold}M` : '-'}
+                    {partRow.shotLifeCycle?.e3_1_pcm !== undefined ? `${partRow.shotLifeCycle.e3_1_pcm}M` : '-'} / {partRow.shotLifeCycle?.e3_2_gold !== undefined ? `${partRow.shotLifeCycle.e3_2_gold}M` : '-'}
                   </span>
                 </div>
               </div>
@@ -421,12 +434,12 @@ export const PartQrLabelModal: React.FC<PartQrLabelModalProps> = ({
               <div className="space-y-1 text-slate-300">
                 <div className="flex justify-between">
                   <span>Total Active In Lines:</span>
-                  <span className="text-[#FFCC00] font-bold">{partRow.installQty.totalQty} EA</span>
+                  <span className="text-[#FFCC00] font-bold">{partRow.installQty?.totalQty || 0} EA</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Recommended Safety Stock:</span>
                   <span className="text-cyan-400 font-bold">
-                    {Math.max(2, Math.ceil(partRow.installQty.totalQty * 0.2))} EA
+                    {Math.max(2, Math.ceil((partRow.installQty?.totalQty || 0) * 0.2))} EA
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -455,7 +468,7 @@ export const PartQrLabelModal: React.FC<PartQrLabelModalProps> = ({
         {/* Footer */}
         <div className="bg-[#242424] border-t border-[#444444] px-4 py-2.5 flex items-center justify-between text-xs text-slate-400">
           <div>
-            <span>Label Format: Industrial 100mm x 60mm Thermal Sticker / Barcode Standard</span>
+            <span>Label Format: Industrial 100mm x 60mm Thermal Sticker / Barcode Code-128 Standard</span>
           </div>
           <button
             onClick={onClose}

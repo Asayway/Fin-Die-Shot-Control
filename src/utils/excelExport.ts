@@ -383,16 +383,20 @@ export function exportPartMasterExcel(items: any[]) {
     'DRAWING CODE (เลขที่แบบ)': item.drawingNo || item.partCode || '',
     'E1 (Ø7 Slit)': item.shotLifeCycle?.e1_pcm !== undefined ? `${item.shotLifeCycle.e1_pcm}M` : '-',
     'E2 (Ø5 Slit)': item.shotLifeCycle?.e2_gold !== undefined ? `${item.shotLifeCycle.e2_gold}M` : '-',
-    'E3-1 (Slit 3P)': item.shotLifeCycle?.e3_1_pcm !== undefined ? `${item.shotLifeCycle.e3_1_pcm}M` : '-',
-    'E3-2 (WL+ 4P)': item.shotLifeCycle?.e3_2_gold !== undefined ? `${item.shotLifeCycle.e3_2_gold}M` : '-',
-    'E3-3 (New Cor 4P)': item.shotLifeCycle?.e3_3_gold !== undefined ? `${item.shotLifeCycle.e3_3_gold}M` : '-',
+    'E3 SLIT (Slit 3P)': item.shotLifeCycle?.e3_1_pcm !== undefined ? `${item.shotLifeCycle.e3_1_pcm}M` : '-',
+    'E3 WL+ (WL+ 4P)': item.shotLifeCycle?.e3_2_gold !== undefined ? `${item.shotLifeCycle.e3_2_gold}M` : '-',
+    'E3 New Cor (New Cor 4P)': item.shotLifeCycle?.e3_3_gold !== undefined ? `${item.shotLifeCycle.e3_3_gold}M` : '-',
     'E4 (Ø5 Slit)': item.shotLifeCycle?.e4_bare !== undefined ? `${item.shotLifeCycle.e4_bare}M` : '-',
     'E5 (Ø5 Slit)': item.shotLifeCycle?.e5_bare !== undefined ? `${item.shotLifeCycle.e5_bare}M` : '-',
-    'SCRAP LIMIT (mm)': item.shotLifeCycle?.lowerSpecScrapLimit || '62.50',
+    'NEW SPEC (mm)': item.newSpecMm ? `${item.newSpecMm.toFixed(2)} mm` : '-',
+    'SCRAP LIMIT (mm)': item.scrapLimitMm ? `${item.scrapLimitMm.toFixed(2)} mm` : (item.shotLifeCycle?.lowerSpecScrapLimit || '62.50'),
     'REGRIND / TIME (mm)': item.regrindStandard?.perGrindMm || '0.05 mm',
     'TOTAL REGRIND (mm)': item.regrindStandard?.totalGrindMm || '0.50',
     'MAX CYCLES (ครั้ง)': item.regrindStandard?.regrindCycles ?? 10,
-    'NOTE / REMARK': item.regrindStandard?.note || ''
+    'NOTE / REMARK': item.regrindStandard?.note || '',
+    'PRICE (THB)': item.priceThb ? `฿${item.priceThb.toLocaleString()}` : '-',
+    'PRICE (USD)': item.priceUsd ? `$${item.priceUsd.toFixed(2)}` : (item.priceThb ? `$${(item.priceThb / 35).toFixed(2)}` : '-'),
+    'SUPPLIER': item.supplier || 'KISUNG'
   }));
 
   const worksheet = XLSX.utils.json_to_sheet(data);
@@ -409,11 +413,15 @@ export function exportPartMasterExcel(items: any[]) {
     { wch: 12 }, // E3-3
     { wch: 12 }, // E4
     { wch: 12 }, // E5
+    { wch: 16 }, // NEW SPEC
     { wch: 18 }, // SCRAP LIMIT
     { wch: 20 }, // REGRIND / TIME
     { wch: 18 }, // TOTAL REGRIND
     { wch: 14 }, // MAX CYCLES
-    { wch: 24 }  // NOTE
+    { wch: 24 }, // NOTE
+    { wch: 14 }, // PRICE (THB)
+    { wch: 14 }, // PRICE (USD)
+    { wch: 16 }  // SUPPLIER
   ];
 
   const workbook = XLSX.utils.book_new();

@@ -23,8 +23,8 @@ import {
 
 import { MOLD_DIE_MASTER_ITEMS_2025 } from './moldDieMasterData';
 
-export const SEED_DATA_VERSION = '2025.02-79-PARTS-CANONICAL-V7';
-export const SEED_SOURCE_LABEL = 'List Spare Parts Mold & Die Heat Exchanger - 79 Canonical Parts 2025';
+export const SEED_DATA_VERSION = '2025.02-81-PARTS-CANONICAL-V10';
+export const SEED_SOURCE_LABEL = 'List Spare Parts Mold & Die Heat Exchanger - 81 Canonical Parts 2025';
 
 export const INITIAL_USERS: User[] = [
   {
@@ -156,13 +156,13 @@ export function buildCompositeKey(
 }
 
 // Helper to check which active lines are for this part
-export const getActiveLinesForPart = (item: any): ('E1' | 'E2' | 'E3-1' | 'E3-2' | 'E3-3' | 'E4' | 'E5')[] => {
-  const lines: ('E1' | 'E2' | 'E3-1' | 'E3-2' | 'E3-3' | 'E4' | 'E5')[] = [];
+export const getActiveLinesForPart = (item: any): ('E1' | 'E2' | 'E3 SLIT' | 'E3 WL+' | 'E3 New Cor' | 'E4' | 'E5')[] => {
+  const lines: ('E1' | 'E2' | 'E3 SLIT' | 'E3 WL+' | 'E3 New Cor' | 'E4' | 'E5')[] = [];
   if ((item.installQty.e1 || 0) > 0) lines.push('E1');
   if ((item.installQty.e2 || 0) > 0) lines.push('E2');
-  if ((item.installQty.e3_1 || 0) > 0) lines.push('E3-1');
-  if ((item.installQty.e3_2 || 0) > 0) lines.push('E3-2');
-  if ((item.installQty.e3_3 || 0) > 0) lines.push('E3-3');
+  if ((item.installQty.e3_1 || 0) > 0) lines.push('E3 SLIT');
+  if ((item.installQty.e3_2 || 0) > 0) lines.push('E3 WL+');
+  if ((item.installQty.e3_3 || 0) > 0) lines.push('E3 New Cor');
   if ((item.installQty.e4 || 0) > 0) lines.push('E4');
   if ((item.installQty.e5 || 0) > 0) lines.push('E5');
   return lines;
@@ -290,14 +290,14 @@ export const INITIAL_LINE_CONFIGS: LineActiveConfiguration[] = [
     stockQuantities: getLineStockQuantities('e2', 'E2')
   },
   {
-    id: 'CFG-E3-1-001',
-    lineId: 'E3-1',
-    lineName: 'Fin Press Line E3-1',
+    id: 'CFG-E3-SLIT-001',
+    lineId: 'E3 SLIT',
+    lineName: 'Fin Press Line E3 SLIT',
     configurationSlot: 'SLOT-01 (Primary Run)',
     machineId: 'PRESS-E3-1 (OAK 100T)',
-    mainFinDie: 'Fin Die E3-1 (Ø7 PCM Slit)',
+    mainFinDie: 'Fin Die E3 SLIT (Ø7 PCM Slit)',
     dieCode: 'FD-E31-07',
-    dieName: 'Fin Die E3-1 (Ø7 PCM Slit)',
+    dieName: 'Fin Die E3 SLIT (Ø7 PCM Slit)',
     tubeSize: 'Ø7',
     rowsCount: 42,
     columnsCount: 4,
@@ -315,18 +315,18 @@ export const INITIAL_LINE_CONFIGS: LineActiveConfiguration[] = [
     approvedBy: 'Somchai Prasert',
     approvedAt: '2025-01-01T08:00',
     notes: 'Evaporator line tooling 1',
-    installedPartQuantities: getLineInstalledQuantities('e3_1', 'E3-1'),
-    stockQuantities: getLineStockQuantities('e3_1', 'E3-1')
+    installedPartQuantities: getLineInstalledQuantities('e3_1', 'E3 SLIT'),
+    stockQuantities: getLineStockQuantities('e3_1', 'E3 SLIT')
   },
   {
-    id: 'CFG-E3-2-001',
-    lineId: 'E3-2',
-    lineName: 'Fin Press Line E3-2',
+    id: 'CFG-E3-WL-001',
+    lineId: 'E3 WL+',
+    lineName: 'Fin Press Line E3 WL+',
     configurationSlot: 'SLOT-01 (Primary Run)',
     machineId: 'PRESS-E3-2 (HIDAKA 100T)',
-    mainFinDie: 'Fin Die E3-2 (Ø7 GOLD Lover)',
+    mainFinDie: 'Fin Die E3 WL+ (Ø7 GOLD Lover)',
     dieCode: 'FD-E32-07',
-    dieName: 'Fin Die E3-2 (Ø7 GOLD Lover)',
+    dieName: 'Fin Die E3 WL+ (Ø7 GOLD Lover)',
     tubeSize: 'Ø7',
     rowsCount: 42,
     columnsCount: 4,
@@ -344,18 +344,18 @@ export const INITIAL_LINE_CONFIGS: LineActiveConfiguration[] = [
     approvedBy: 'Somchai Prasert',
     approvedAt: '2025-01-01T08:00',
     notes: 'Louvered gold fin tooling',
-    installedPartQuantities: getLineInstalledQuantities('e3_2', 'E3-2'),
-    stockQuantities: getLineStockQuantities('e3_2', 'E3-2')
+    installedPartQuantities: getLineInstalledQuantities('e3_2', 'E3 WL+'),
+    stockQuantities: getLineStockQuantities('e3_2', 'E3 WL+')
   },
   {
-    id: 'CFG-E3-3-001',
-    lineId: 'E3-3',
-    lineName: 'Fin Press Line E3-3',
+    id: 'CFG-E3-NEWCOR-001',
+    lineId: 'E3 New Cor',
+    lineName: 'Fin Press Line E3 New Cor',
     configurationSlot: 'SLOT-01 (Primary Run)',
     machineId: 'PRESS-E3-3 (OAK 100T)',
-    mainFinDie: 'Fin Die E3-3 (Ø7 GOLD Wide +)',
+    mainFinDie: 'Fin Die E3 New Cor (Ø7 GOLD Wide +)',
     dieCode: 'FD-E33-07',
-    dieName: 'Fin Die E3-3 (Ø7 GOLD Wide +)',
+    dieName: 'Fin Die E3 New Cor (Ø7 GOLD Wide +)',
     tubeSize: 'Ø7',
     rowsCount: 42,
     columnsCount: 4,
@@ -373,8 +373,8 @@ export const INITIAL_LINE_CONFIGS: LineActiveConfiguration[] = [
     approvedBy: 'Somchai Prasert',
     approvedAt: '2025-01-01T08:00',
     notes: 'Wide lower 4P pitch fin die',
-    installedPartQuantities: getLineInstalledQuantities('e3_3', 'E3-3'),
-    stockQuantities: getLineStockQuantities('e3_3', 'E3-3')
+    installedPartQuantities: getLineInstalledQuantities('e3_3', 'E3 New Cor'),
+    stockQuantities: getLineStockQuantities('e3_3', 'E3 New Cor')
   },
   {
     id: 'CFG-E4-001',
@@ -471,9 +471,9 @@ MOLD_DIE_MASTER_ITEMS_2025.forEach((item) => {
     shotLifeStandards: {
       'E1': Math.round(Number(item.shotLifeCycle.e1_pcm ?? avgLifeM) * 1_000_000),
       'E2': Math.round(Number(item.shotLifeCycle.e2_gold ?? avgLifeM) * 1_000_000),
-      'E3-1': Math.round(Number(item.shotLifeCycle.e3_1_pcm ?? avgLifeM) * 1_000_000),
-      'E3-2': Math.round(Number(item.shotLifeCycle.e3_2_gold ?? avgLifeM) * 1_000_000),
-      'E3-3': Math.round(Number(item.shotLifeCycle.e3_3_gold ?? avgLifeM) * 1_000_000),
+      'E3 SLIT': Math.round(Number(item.shotLifeCycle.e3_1_pcm ?? avgLifeM) * 1_000_000),
+      'E3 WL+': Math.round(Number(item.shotLifeCycle.e3_2_gold ?? avgLifeM) * 1_000_000),
+      'E3 New Cor': Math.round(Number(item.shotLifeCycle.e3_3_gold ?? avgLifeM) * 1_000_000),
       'E4': Math.round(Number(item.shotLifeCycle.e4_bare ?? avgLifeM) * 1_000_000),
       'E5': Math.round(Number(item.shotLifeCycle.e5_bare ?? avgLifeM) * 1_000_000),
       'E6': Math.round(Number(item.shotLifeCycle.e6_pcm ?? avgLifeM) * 1_000_000)
@@ -507,9 +507,9 @@ MOLD_DIE_MASTER_ITEMS_2025.forEach((item) => {
     const linePartCode = `${lineId}-${item.drawingNo}`;
     
     let keyForLife = lineId.replace('-', '_').toLowerCase() as keyof typeof item.shotLifeCycle;
-    if (lineId === 'E3-1') keyForLife = 'e3_1_pcm';
-    if (lineId === 'E3-2') keyForLife = 'e3_2_gold';
-    if (lineId === 'E3-3') keyForLife = 'e3_3_gold';
+    if (lineId === 'E3 SLIT') keyForLife = 'e3_1_pcm';
+    if (lineId === 'E3 WL+') keyForLife = 'e3_2_gold';
+    if (lineId === 'E3 New Cor') keyForLife = 'e3_3_gold';
     if (lineId === 'E4') keyForLife = 'e4_bare';
     if (lineId === 'E5') keyForLife = 'e5_bare';
     if (lineId === 'E1') keyForLife = 'e1_pcm';
@@ -539,9 +539,9 @@ MOLD_DIE_MASTER_ITEMS_2025.forEach((item) => {
       shotLifeStandards: {
         'E1': Math.round(Number(item.shotLifeCycle.e1_pcm ?? avgLifeM) * 1_000_000),
         'E2': Math.round(Number(item.shotLifeCycle.e2_gold ?? avgLifeM) * 1_000_000),
-        'E3-1': Math.round(Number(item.shotLifeCycle.e3_1_pcm ?? avgLifeM) * 1_000_000),
-        'E3-2': Math.round(Number(item.shotLifeCycle.e3_2_gold ?? avgLifeM) * 1_000_000),
-        'E3-3': Math.round(Number(item.shotLifeCycle.e3_3_gold ?? avgLifeM) * 1_000_000),
+        'E3 SLIT': Math.round(Number(item.shotLifeCycle.e3_1_pcm ?? avgLifeM) * 1_000_000),
+        'E3 WL+': Math.round(Number(item.shotLifeCycle.e3_2_gold ?? avgLifeM) * 1_000_000),
+        'E3 New Cor': Math.round(Number(item.shotLifeCycle.e3_3_gold ?? avgLifeM) * 1_000_000),
         'E4': Math.round(Number(item.shotLifeCycle.e4_bare ?? avgLifeM) * 1_000_000),
         'E5': Math.round(Number(item.shotLifeCycle.e5_bare ?? avgLifeM) * 1_000_000),
         'E6': Math.round(Number(item.shotLifeCycle.e6_pcm ?? avgLifeM) * 1_000_000)
@@ -848,9 +848,9 @@ export const DEFAULT_PLC_CONFIG: PLCConfig = {
   lineRegisters: {
     'E1': { lineId: 'E1', lineName: 'LINE E1 (Ø7 Slit)', address: '%MW100', active: true, currentVal: 0, lastPulse: '-' },
     'E2': { lineId: 'E2', lineName: 'LINE E2 (Ø5 Slit)', address: '%MW100', active: true, currentVal: 0, lastPulse: '-' },
-    'E3-1': { lineId: 'E3-1', lineName: 'LINE E3-1 (Slit 3P)', address: 'DB100.DBD0', active: true, currentVal: 0, lastPulse: '-' },
-    'E3-2': { lineId: 'E3-2', lineName: 'LINE E3-2 (WL+ 4P)', address: 'DB100.DBD4', active: true, currentVal: 0, lastPulse: '-' },
-    'E3-3': { lineId: 'E3-3', lineName: 'LINE E3-3 (Corr 4P)', address: 'DB100.DBD8', active: true, currentVal: 0, lastPulse: '-' },
+    'E3 SLIT': { lineId: 'E3 SLIT', lineName: 'LINE E3 SLIT (Slit 3P)', address: 'DB100.DBD0', active: true, currentVal: 0, lastPulse: '-' },
+    'E3 WL+': { lineId: 'E3 WL+', lineName: 'LINE E3 WL+ (WL+ 4P)', address: 'DB100.DBD4', active: true, currentVal: 0, lastPulse: '-' },
+    'E3 New Cor': { lineId: 'E3 New Cor', lineName: 'LINE E3 New Cor (Corr 4P)', address: 'DB100.DBD8', active: true, currentVal: 0, lastPulse: '-' },
     'E4': { lineId: 'E4', lineName: 'LINE E4 (Ø5 Slit)', address: 'D1000', active: true, currentVal: 0, lastPulse: '-' },
     'E5': { lineId: 'E5', lineName: 'LINE E5 (Ø5 Slit)', address: 'DM100', active: true, currentVal: 0, lastPulse: '-' }
   }
@@ -859,9 +859,9 @@ export const DEFAULT_PLC_CONFIG: PLCConfig = {
 export const DEFAULT_FACTORY_PLC_METERS: Record<ProductionLineId, number> = {
   'E1': 153474176,
   'E2': 142890520,
-  'E3-1': 98450120,
-  'E3-2': 112450890,
-  'E3-3': 87620340,
+  'E3 SLIT': 98450120,
+  'E3 WL+': 112450890,
+  'E3 New Cor': 87620340,
   'E4': 168920150,
   'E5': 135400980
 };
@@ -905,9 +905,9 @@ export const INITIAL_PLC_REGISTER_MAPPINGS: Record<ProductionLineId, PLCRegister
     readOnly: true,
     enabled: true
   },
-  'E3-1': {
-    lineId: 'E3-1',
-    lineName: 'Fin Press Line E3-1',
+  'E3 SLIT': {
+    lineId: 'E3 SLIT',
+    lineName: 'Fin Press Line E3 SLIT',
     machineModel: 'HIDAKA HP-80 (80T)',
     protocol: 'SIEMENS_S7',
     ipAddress: '192.168.10.53',
@@ -924,9 +924,9 @@ export const INITIAL_PLC_REGISTER_MAPPINGS: Record<ProductionLineId, PLCRegister
     readOnly: true,
     enabled: true
   },
-  'E3-2': {
-    lineId: 'E3-2',
-    lineName: 'Fin Press Line E3-2',
+  'E3 WL+': {
+    lineId: 'E3 WL+',
+    lineName: 'Fin Press Line E3 WL+',
     machineModel: 'HIDAKA HP-80 (80T)',
     protocol: 'SIEMENS_S7',
     ipAddress: '192.168.10.53',
@@ -943,9 +943,9 @@ export const INITIAL_PLC_REGISTER_MAPPINGS: Record<ProductionLineId, PLCRegister
     readOnly: true,
     enabled: true
   },
-  'E3-3': {
-    lineId: 'E3-3',
-    lineName: 'Fin Press Line E3-3',
+  'E3 New Cor': {
+    lineId: 'E3 New Cor',
+    lineName: 'Fin Press Line E3 New Cor',
     machineModel: 'HIDAKA HP-80 (80T)',
     protocol: 'SIEMENS_S7',
     ipAddress: '192.168.10.53',

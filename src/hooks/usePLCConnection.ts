@@ -143,7 +143,7 @@ export function usePLCConnection() {
       setStatus('TEST_SIMULATION_ACTIVE');
       appendLog(`[PLC DRIVER] SIMULATION Mode Active. Polling interval: ${intervalMs}ms`);
       pollingTimer = setInterval(() => {
-        // Pick an active line (E1, E2, E3-1, E3-2, E3-3, E4, E5) to simulate PLC shot increment
+        // Pick an active line (E1, E2, E3 SLIT, E3 WL+, E3 New Cor, E4, E5) to simulate PLC shot increment
         const activeLines = (Object.values(config.lineRegisters) as PLCLineRegisterMap[]).filter((r: PLCLineRegisterMap) => r.active);
         if (activeLines.length === 0) return;
 

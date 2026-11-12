@@ -51,9 +51,9 @@ interface LineOption {
 const ALL_LINE_OPTIONS: LineOption[] = [
   { id: 'E1', label: 'E1', tag: 'Ø7 Slit', defaultTube: 'Ø7', defaultFin: 'Slit Old', defaultPitch: '4P (Pitch)', defaultMaterial: 'PCM (0.1mm)', defaultDieCode: 'FD-E1-07', defaultSpm: 100 },
   { id: 'E2', label: 'E2', tag: 'Ø5 Slit', defaultTube: 'Ø5', defaultFin: 'Slit Old', defaultPitch: '4P (Pitch)', defaultMaterial: 'GOLD (0.1mm)', defaultDieCode: 'FD-E2-05', defaultSpm: 100 },
-  { id: 'E3-1', label: 'E3-1', tag: 'Slit 3P', defaultTube: 'Ø7', defaultFin: 'New Slit', defaultPitch: '3P (Pitch)', defaultMaterial: 'PCM (0.1mm)', defaultDieCode: 'FD-E31-07', defaultSpm: 100 },
-  { id: 'E3-2', label: 'E3-2', tag: 'WL+ 4P', defaultTube: 'Ø7', defaultFin: 'Wide Louver', defaultPitch: '4P (Pitch)', defaultMaterial: 'GOLD (0.1mm)', defaultDieCode: 'FD-E32-07', defaultSpm: 100 },
-  { id: 'E3-3', label: 'E3-3', tag: 'Corr 4P', defaultTube: 'Ø7', defaultFin: 'Corrugate', defaultPitch: '4P (Pitch)', defaultMaterial: 'GOLD (0.1mm)', defaultDieCode: 'FD-E33-07', defaultSpm: 100 },
+  { id: 'E3 SLIT', label: 'E3 SLIT', tag: 'Slit 3P', defaultTube: 'Ø7', defaultFin: 'New Slit', defaultPitch: '3P (Pitch)', defaultMaterial: 'PCM (0.1mm)', defaultDieCode: 'FD-E31-07', defaultSpm: 100 },
+  { id: 'E3 WL+', label: 'E3 WL+', tag: 'WL+ 4P', defaultTube: 'Ø7', defaultFin: 'Wide Louver', defaultPitch: '4P (Pitch)', defaultMaterial: 'GOLD (0.1mm)', defaultDieCode: 'FD-E32-07', defaultSpm: 100 },
+  { id: 'E3 New Cor', label: 'E3 New Cor', tag: 'Corr 4P', defaultTube: 'Ø7', defaultFin: 'Corrugate', defaultPitch: '4P (Pitch)', defaultMaterial: 'GOLD (0.1mm)', defaultDieCode: 'FD-E33-07', defaultSpm: 100 },
   { id: 'E4', label: 'E4', tag: 'Ø5 Slit', defaultTube: 'Ø5', defaultFin: 'Slit Old', defaultPitch: '3P (Pitch)', defaultMaterial: 'BARE (0.1mm)', defaultDieCode: 'FD-E4-05', defaultSpm: 100 },
   { id: 'E5', label: 'E5', tag: 'Ø5 Slit', defaultTube: 'Ø5', defaultFin: 'New Slit', defaultPitch: '3P (Pitch)', defaultMaterial: 'BARE (0.1mm)', defaultDieCode: 'FD-E5-05', defaultSpm: 100 },
 ];
@@ -65,7 +65,7 @@ export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> =
   const [selectedLineFilter, setSelectedLineFilter] = useState<string>('E1');
   const [lineConfigs, setLineConfigs] = useState<Record<string, LineActiveConfiguration>>({});
   const [lineStatuses, setLineStatuses] = useState<Record<string, MachineStatus>>({});
-  const [activeE3Die, setActiveE3Die] = useState<'E3-1' | 'E3-2' | 'E3-3'>(() => storageService.getActiveE3FinDie());
+  const [activeE3Die, setActiveE3Die] = useState<'E3 SLIT' | 'E3 WL+' | 'E3 New Cor'>(() => storageService.getActiveE3FinDie());
   const [stageGroups, setStageGroups] = useState<string[]>(() => storageService.getStageGroups());
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -155,8 +155,8 @@ export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> =
 
   const handleStatusChange = (lineId: ProductionLineId, status: MachineStatus) => {
     // If setting an E3 line to RUNNING, automatically make it the active die
-    if (lineId.startsWith('E3-') && status === 'RUNNING') {
-      storageService.setActiveE3FinDie(lineId as "E3-1" | "E3-2" | "E3-3");
+    if ((lineId === 'E3 SLIT' || lineId === 'E3 WL+' || lineId === 'E3 New Cor') && status === 'RUNNING') {
+      storageService.setActiveE3FinDie(lineId as "E3 SLIT" | "E3 WL+" | "E3 New Cor");
     }
 
     setLineStatuses(prev => ({
@@ -377,23 +377,23 @@ export const LineDieSpecificationView: React.FC<LineDieSpecificationViewProps> =
                 ไลน์ E3: การสลับใช้งาน Fin Die (Active Fin Die Selector for Machine E3)
               </h4>
               <p className="text-xs text-slate-400 mt-0.5">
-                เครื่องปั๊ม E3 แชร์การผลิต 3 Fin Die (E3-1, E3-2, E3-3) ยอดช็อตเครื่องปั๊มจะถูกคำนวณสะสมเฉพาะ Fin Die ที่เลือกเปิดใช้งานอยู่เท่านั้น Fin Die อื่นจะถูกคงยอดช็อตเดิมไว้
+                เครื่องปั๊ม E3 แชร์การผลิต 3 Fin Die (E3 SLIT, E3 WL+, E3 New Cor) ยอดช็อตเครื่องปั๊มจะถูกคำนวณสะสมเฉพาะ Fin Die ที่เลือกเปิดใช้งานอยู่เท่านั้น Fin Die อื่นจะถูกคงยอดช็อตเดิมไว้
               </p>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-bold text-slate-400">Fin Die ที่เปิดใช้งานขณะนี้:</span>
               <span className="px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-400 font-extrabold text-xs border border-emerald-500/40 flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                {activeE3Die === 'E3-1' ? 'E3-1 (Slit 3P)' : activeE3Die === 'E3-2' ? 'E3-2 (WL+ 4P)' : 'E3-3 (Corr 4P)'}
+                {activeE3Die === 'E3 SLIT' ? 'E3 SLIT (Slit 3P)' : activeE3Die === 'E3 WL+' ? 'E3 WL+ (WL+ 4P)' : 'E3 New Cor (Corr 4P)'}
               </span>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
             {[
-              { id: 'E3-1', label: 'E3-1 (Slit 3P)', tag: 'E3 Slit 3P', desc: 'Ø7 Slit, PCM (0.1mm)' },
-              { id: 'E3-2', label: 'E3-2 (WL+ 4P)', tag: 'E3 WL+ 4P', desc: 'Ø7 Wide Louver, GOLD (0.1mm)' },
-              { id: 'E3-3', label: 'E3-3 (Corr 4P)', tag: 'E3 New Cor 4P', desc: 'Ø7 New Corrugate, GOLD (0.1mm)' }
+              { id: 'E3 SLIT', label: 'E3 SLIT (Slit 3P)', tag: 'E3 Slit 3P', desc: 'Ø7 Slit, PCM (0.1mm)' },
+              { id: 'E3 WL+', label: 'E3 WL+ (WL+ 4P)', tag: 'E3 WL+ 4P', desc: 'Ø7 Wide Louver, GOLD (0.1mm)' },
+              { id: 'E3 New Cor', label: 'E3 New Cor (Corr 4P)', tag: 'E3 New Cor 4P', desc: 'Ø7 New Corrugate, GOLD (0.1mm)' }
             ].map(item => {
               const isActive = activeE3Die === item.id;
               return (

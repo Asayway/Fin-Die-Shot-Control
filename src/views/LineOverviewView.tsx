@@ -29,7 +29,7 @@ export const LineOverviewView: React.FC<LineOverviewViewProps> = ({ onNavigate }
     return () => unsub();
   }, []);
 
-  const lineIds: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
+  const lineIds: ProductionLineId[] = ['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5'];
 
   return (
     <div className="space-y-3">
@@ -89,7 +89,7 @@ export const LineOverviewView: React.FC<LineOverviewViewProps> = ({ onNavigate }
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
                     <span className="font-mono font-black text-sm sm:text-base text-cyan-300">
-                      Line {lineId.startsWith('E3-') ? 'E3' : lineId}
+                      Line {lineId}
                     </span>
                     <span className="text-[11px] text-slate-400 font-mono truncate">({LINE_INFO_MAP[lineId]?.shortTag || lineData.lineName})</span>
                   </div>

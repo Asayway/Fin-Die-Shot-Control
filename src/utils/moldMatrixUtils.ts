@@ -12,9 +12,9 @@ export function getMoldTypeForLine(lineId: string): MoldType {
   switch (lineId) {
     case 'E1':
       return 'TYPE_A'; // 7Ø Slit 3Pitch 60Row
-    case 'E3-1':
-    case 'E3-2':
-    case 'E3-3':
+    case 'E3 SLIT':
+    case 'E3 WL+':
+    case 'E3 New Cor':
       return 'TYPE_C'; // 7Ø Wide Louver 4Pitch 42Row
     case 'E2':
       return 'TYPE_D'; // Ø5 Slit / Louver 3Pitch 68Row

@@ -164,7 +164,7 @@ class ToolingAlertService {
     try {
       const allMonitoring = storageService.getLinesMonitoring();
       if (allMonitoring && typeof allMonitoring === 'object') {
-        const lineKeys: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
+        const lineKeys: ProductionLineId[] = ['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5'];
         lineKeys.forEach(lId => {
           if (lId === currentLineId && currentLineItems && currentLineItems.length > 0) {
             // Already checked with live recalculated items
@@ -189,9 +189,9 @@ class ToolingAlertService {
   public formatLineLabel(lineId: ProductionLineId): string {
     if (lineId === 'E1') return 'LINE E1 (HE1 Ø7)';
     if (lineId === 'E2') return 'LINE E2 (HE2 Ø5)';
-    if (lineId === 'E3-1') return 'LINE E3 SLit (3P)';
-    if (lineId === 'E3-2') return 'LINE E3 WL (4P)';
-    if (lineId === 'E3-3') return 'LINE E3 New corr (4P)';
+    if (lineId === 'E3 SLIT') return 'LINE E3 SLIT (3P)';
+    if (lineId === 'E3 WL+') return 'LINE E3 WL+ (4P)';
+    if (lineId === 'E3 New Cor') return 'LINE E3 New Cor (4P)';
     if (lineId === 'E4') return 'LINE E4 (HE4 Ø5)';
     if (lineId === 'E5') return 'LINE E5 (HE5 Ø5)';
     return `LINE ${lineId}`;

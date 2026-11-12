@@ -39,9 +39,9 @@ export const TvDisplayConfigView: React.FC = () => {
   const lineDisplayNames: Record<ProductionLineId, string> = {
     'E1': 'LINE E1 (Ø7 Slit)',
     'E2': 'LINE E2 (Ø5 Slit)',
-    'E3-1': 'LINE E3 SLit 3P',
-    'E3-2': 'LINE E3 WL+ 4P',
-    'E3-3': 'LINE E3 New Cor 4P',
+    'E3 SLIT': 'LINE E3 SLIT 3P',
+    'E3 WL+': 'LINE E3 WL+ 4P',
+    'E3 New Cor': 'LINE E3 New Cor 4P',
     'E4': 'LINE E4 (Ø5 Slit)',
     'E5': 'LINE E5 (Ø5 Slit)'
   };
@@ -289,7 +289,7 @@ export const TvDisplayConfigView: React.FC = () => {
 
       {/* Line Select Bar */}
       <div className="flex flex-wrap gap-2 p-2 bg-black/40 rounded-2xl border border-white/10">
-        {(['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'] as ProductionLineId[]).map((lineId) => {
+        {(['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5'] as ProductionLineId[]).map((lineId) => {
           const isActive = selectedLineId === lineId;
           const display = lineDisplayNames[lineId];
           const hasCustomConfig = (storageService.getTvDisplayConfigs()[lineId] || []).length > 0;
@@ -555,9 +555,9 @@ export const TvDisplayConfigView: React.FC = () => {
         getLineLabel={(id) => {
           if (id === 'E1') return 'E1';
           if (id === 'E2') return 'E2';
-          if (id === 'E3-1') return 'E3 SLit';
-          if (id === 'E3-2') return 'E3 WL';
-          if (id === 'E3-3') return 'E3 New corr';
+          if (id === 'E3 SLIT') return 'E3 SLIT';
+          if (id === 'E3 WL+') return 'E3 WL+';
+          if (id === 'E3 New Cor') return 'E3 New Cor';
           if (id === 'E4') return 'E4';
           if (id === 'E5') return 'E5';
           return id;
@@ -565,9 +565,9 @@ export const TvDisplayConfigView: React.FC = () => {
         getLineSubTag={(id) => {
           if (id === 'E1') return 'Ø7 Slit';
           if (id === 'E2') return 'Ø5 Slit';
-          if (id === 'E3-1') return '3P';
-          if (id === 'E3-2') return '4P';
-          if (id === 'E3-3') return '4P';
+          if (id === 'E3 SLIT') return '3P';
+          if (id === 'E3 WL+') return '4P';
+          if (id === 'E3 New Cor') return '4P';
           if (id === 'E4') return 'Ø5 Slit';
           if (id === 'E5') return 'Ø5 Slit';
           return '';

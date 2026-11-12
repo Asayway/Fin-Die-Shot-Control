@@ -21,13 +21,13 @@ export interface TvAutoCycleConfig {
 }
 
 export const DEFAULT_TV_CYCLE_CONFIG: TvAutoCycleConfig = {
-  order: ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'],
+  order: ['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5'],
   enabledLines: {
     'E1': true,
     'E2': true,
-    'E3-1': true,
-    'E3-2': true,
-    'E3-3': true,
+    'E3 SLIT': true,
+    'E3 WL+': true,
+    'E3 New Cor': true,
     'E4': true,
     'E5': true
   },
@@ -40,7 +40,7 @@ export const getSavedAutoCycleConfig = (): TvAutoCycleConfig => {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && Array.isArray(parsed.order) && parsed.order.length > 0) {
-        const allLines: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
+        const allLines: ProductionLineId[] = ['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5'];
         const sanitizedOrder: ProductionLineId[] = parsed.order.filter((id: string): id is ProductionLineId => allLines.includes(id as any));
         allLines.forEach(id => {
           if (!sanitizedOrder.includes(id)) {
@@ -51,9 +51,9 @@ export const getSavedAutoCycleConfig = (): TvAutoCycleConfig => {
         const sanitizedEnabled: Record<ProductionLineId, boolean> = {
           'E1': parsed.enabledLines?.['E1'] ?? true,
           'E2': parsed.enabledLines?.['E2'] ?? true,
-          'E3-1': parsed.enabledLines?.['E3-1'] ?? true,
-          'E3-2': parsed.enabledLines?.['E3-2'] ?? true,
-          'E3-3': parsed.enabledLines?.['E3-3'] ?? true,
+          'E3 SLIT': parsed.enabledLines?.['E3 SLIT'] ?? parsed.enabledLines?.['E3-1'] ?? true,
+          'E3 WL+': parsed.enabledLines?.['E3 WL+'] ?? parsed.enabledLines?.['E3-2'] ?? true,
+          'E3 New Cor': parsed.enabledLines?.['E3 New Cor'] ?? parsed.enabledLines?.['E3-3'] ?? true,
           'E4': parsed.enabledLines?.['E4'] ?? true,
           'E5': parsed.enabledLines?.['E5'] ?? true
         };
@@ -150,15 +150,15 @@ export const TvAutoCycleOrderModal: React.FC<TvAutoCycleOrderModalProps> = ({
     setLocalMode('CUSTOM_SELECTED');
   };
 
-  // Preset: Reset to standard sequential order E1 -> E2 -> E3-1 -> E3-2 -> E3-3 -> E4 -> E5
+  // Preset: Reset to standard sequential order E1 -> E2 -> E3 SLIT -> E3 WL+ -> E3 New Cor -> E4 -> E5
   const handleResetDefault = () => {
-    setLocalOrder(['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5']);
+    setLocalOrder(['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5']);
     setLocalEnabled({
       'E1': true,
       'E2': true,
-      'E3-1': true,
-      'E3-2': true,
-      'E3-3': true,
+      'E3 SLIT': true,
+      'E3 WL+': true,
+      'E3 New Cor': true,
       'E4': true,
       'E5': true
     });
@@ -170,9 +170,9 @@ export const TvAutoCycleOrderModal: React.FC<TvAutoCycleOrderModalProps> = ({
     const newEnabled: Record<ProductionLineId, boolean> = {
       'E1': false,
       'E2': false,
-      'E3-1': false,
-      'E3-2': false,
-      'E3-3': false,
+      'E3 SLIT': false,
+      'E3 WL+': false,
+      'E3 New Cor': false,
       'E4': false,
       'E5': false
     };
@@ -191,9 +191,9 @@ export const TvAutoCycleOrderModal: React.FC<TvAutoCycleOrderModalProps> = ({
     setLocalEnabled({
       'E1': true,
       'E2': true,
-      'E3-1': true,
-      'E3-2': true,
-      'E3-3': true,
+      'E3 SLIT': true,
+      'E3 WL+': true,
+      'E3 New Cor': true,
       'E4': true,
       'E5': true
     });
@@ -205,9 +205,9 @@ export const TvAutoCycleOrderModal: React.FC<TvAutoCycleOrderModalProps> = ({
     setLocalEnabled({
       'E1': false,
       'E2': false,
-      'E3-1': false,
-      'E3-2': false,
-      'E3-3': false,
+      'E3 SLIT': false,
+      'E3 WL+': false,
+      'E3 New Cor': false,
       'E4': false,
       'E5': false
     });

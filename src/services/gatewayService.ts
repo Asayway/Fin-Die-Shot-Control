@@ -21,13 +21,13 @@ class GatewayService {
   private heartbeatTimer: any = null;
   private isRunning: boolean = false;
   private lastProcessedSequence: Record<ProductionLineId, number> = {
-    'E1': 0, 'E2': 0, 'E3-1': 0, 'E3-2': 0, 'E3-3': 0, 'E4': 0, 'E5': 0
+    'E1': 0, 'E2': 0, 'E3 SLIT': 0, 'E3 WL+': 0, 'E3 New Cor': 0, 'E4': 0, 'E5': 0
   };
   private lastKnownPLCShots: Record<ProductionLineId, number> = {
-    'E1': 0, 'E2': 0, 'E3-1': 0, 'E3-2': 0, 'E3-3': 0, 'E4': 0, 'E5': 0
+    'E1': 0, 'E2': 0, 'E3 SLIT': 0, 'E3 WL+': 0, 'E3 New Cor': 0, 'E4': 0, 'E5': 0
   };
   private lastTelemetryTimestamps: Record<ProductionLineId, number> = {
-    'E1': Date.now(), 'E2': Date.now(), 'E3-1': Date.now(), 'E3-2': Date.now(), 'E3-3': Date.now(), 'E4': Date.now(), 'E5': Date.now()
+    'E1': Date.now(), 'E2': Date.now(), 'E3 SLIT': Date.now(), 'E3 WL+': Date.now(), 'E3 New Cor': Date.now(), 'E4': Date.now(), 'E5': Date.now()
   };
 
   constructor() {
@@ -107,7 +107,7 @@ class GatewayService {
     const config = storageService.getPLCConfig();
     const currentStatus = storageService.getGatewayStatus();
     const now = Date.now();
-    const lines: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
+    const lines: ProductionLineId[] = ['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5'];
     
     let activeLinesCount = 0;
     lines.forEach(lId => {
@@ -171,7 +171,7 @@ class GatewayService {
 
   private processSimulationTick() {
     const settings = storageService.getSettings();
-    const lines: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
+    const lines: ProductionLineId[] = ['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5'];
     const mappings = storageService.getPLCRegisterMappings();
     const timestamp = new Date().toISOString();
     const items: ShotTelemetryPayload[] = [];
@@ -236,7 +236,7 @@ class GatewayService {
   }
 
   private generateGatewayBatch(mode: GatewayConnectionMode, gatewayId: string) {
-    const lines: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
+    const lines: ProductionLineId[] = ['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5'];
     const mappings = storageService.getPLCRegisterMappings();
     const timestamp = new Date().toISOString();
     const items: ShotTelemetryPayload[] = [];

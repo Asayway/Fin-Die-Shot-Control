@@ -643,7 +643,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
 
     // 3. If viewing ALL lines or another line, scan compact overrides
     const linesToScan: ProductionLineId[] = historyLineFilter === 'ALL'
-      ? ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5']
+      ? ['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5']
       : [historyLineFilter as ProductionLineId];
 
     linesToScan.forEach(lineId => {
@@ -1068,7 +1068,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
 
     // 3. Clear compact overrides
     const linesToClear: ProductionLineId[] = scope === 'ALL_LINES'
-      ? ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5']
+      ? ['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5']
       : [selectedLineId];
 
     linesToClear.forEach(lineId => {
@@ -1143,7 +1143,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
 
     // 3. Attach to other lines' compact overrides
     const targetLines: ProductionLineId[] = scope === 'ALL'
-      ? ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5']
+      ? ['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5']
       : [scope];
 
     targetLines.forEach(lineId => {
@@ -1232,7 +1232,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
     persistPins(updatedPins);
 
     // Remove from other lines' overrides
-    const linesList: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
+    const linesList: ProductionLineId[] = ['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5'];
     linesList.forEach(lineId => {
       const overrides = loadPinOverrides(lineId);
       let modified = false;
@@ -2475,9 +2475,9 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
                 <option value="ALL" className="bg-[#090d16] text-white font-bold py-1">ทุกสายการผลิต (All Lines)</option>
                 <option value="E1" className="bg-[#090d16] text-cyan-300 py-1">LINE E1 (Ø7 Slit)</option>
                 <option value="E2" className="bg-[#090d16] text-cyan-300 py-1">LINE E2 (Ø5 Slit)</option>
-                <option value="E3-1" className="bg-[#090d16] text-cyan-300 py-1">LINE E3-1 (3P)</option>
-                <option value="E3-2" className="bg-[#090d16] text-cyan-300 py-1">LINE E3-2 (4P)</option>
-                <option value="E3-3" className="bg-[#090d16] text-cyan-300 py-1">LINE E3-3 (4P)</option>
+                <option value="E3 SLIT" className="bg-[#090d16] text-cyan-300 py-1">LINE E3 SLIT (3P)</option>
+                <option value="E3 WL+" className="bg-[#090d16] text-cyan-300 py-1">LINE E3 WL+ (4P)</option>
+                <option value="E3 New Cor" className="bg-[#090d16] text-cyan-300 py-1">LINE E3 New Cor (4P)</option>
                 <option value="E4" className="bg-[#090d16] text-cyan-300 py-1">LINE E4 (Ø5 Slit)</option>
                 <option value="E5" className="bg-[#090d16] text-cyan-300 py-1">LINE E5 (Ø5 Slit)</option>
               </select>

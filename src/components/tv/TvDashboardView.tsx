@@ -7,7 +7,6 @@ import {
   Pause,
   RotateCw,
   Sliders,
-  BellRing,
   AlertTriangle
 } from 'lucide-react';
 import { 
@@ -31,10 +30,8 @@ import {
   getSavedAutoCycleConfig, 
   saveAutoCycleConfig 
 } from './TvAutoCycleOrderModal';
-import { TvToolingAlertToast } from './TvToolingAlertToast';
-import { toolingAlertService, ToolingLifeAlert } from '../../services/toolingAlertService';
 
-const LINES_LIST: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
+const LINES_LIST: ProductionLineId[] = ['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5'];
 
 interface TvDashboardViewProps {
   initialLineId?: ProductionLineId;
@@ -52,7 +49,7 @@ export const computeNextCycleLine = (
 ): ProductionLineId => {
   const order = config?.order && config.order.length > 0
     ? config.order
-    : (['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'] as ProductionLineId[]);
+    : (['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5'] as ProductionLineId[]);
 
   let activePool: ProductionLineId[] = [];
 
@@ -149,9 +146,6 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
   const [currentTime, setCurrentTime] = useState<string>('');
   const [selectedModalItem, setSelectedModalItem] = useState<PartLiveTrackingItem | null>(null);
 
-  // Automated Alert Notification System: 90% Tooling Life Limit Alerts
-  const [toolingAlerts, setToolingAlerts] = useState<ToolingLifeAlert[]>([]);
-
   // Exact 8-column layout matching the LG Monitor dashboard aesthetic (sum = 100%)
   const DEFAULT_TV_COL_WIDTHS: Record<string, number> = {
     stage: 19.0,
@@ -217,9 +211,9 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
   const getLineLabel = useCallback((id: ProductionLineId) => {
     if (id === 'E1') return 'E1';
     if (id === 'E2') return 'E2';
-    if (id === 'E3-1') return 'E3 SLit';
-    if (id === 'E3-2') return 'E3 WL';
-    if (id === 'E3-3') return 'E3 New corr';
+    if (id === 'E3 SLIT') return 'E3 SLIT';
+    if (id === 'E3 WL+') return 'E3 WL+';
+    if (id === 'E3 New Cor') return 'E3 New Cor';
     if (id === 'E4') return 'E4';
     if (id === 'E5') return 'E5';
     return id;
@@ -228,9 +222,9 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
   const getLineSubTag = useCallback((id: ProductionLineId) => {
     if (id === 'E1') return 'Ø7 Slit';
     if (id === 'E2') return 'Ø5 Slit';
-    if (id === 'E3-1') return '3P';
-    if (id === 'E3-2') return '4P';
-    if (id === 'E3-3') return '4P';
+    if (id === 'E3 SLIT') return '3P';
+    if (id === 'E3 WL+') return '4P';
+    if (id === 'E3 New Cor') return '4P';
     if (id === 'E4') return 'Ø5 Slit';
     if (id === 'E5') return 'Ø5 Slit';
     return '';
@@ -634,52 +628,6 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
     return () => unsub();
   }, [selectedLineId, tvSortMode]);
 
-  // Automated Tooling Life Check: continuously checks against 90% designated life threshold
-  const runToolingLifeCheck = useCallback(() => {
-    const currentItems = lineData?.items || [];
-    const detected = toolingAlertService.checkToolingAlerts(selectedLineId, currentItems);
-    setToolingAlerts(detected);
-  }, [lineData?.items, selectedLineId]);
-
-  useEffect(() => {
-    runToolingLifeCheck();
-    const unsub = toolingAlertService.subscribe((alerts) => {
-      setToolingAlerts(alerts);
-    });
-    // Automated periodic check every 3 seconds to catch live PLC and simulation wear
-    const interval = setInterval(runToolingLifeCheck, 3000);
-    return () => {
-      unsub();
-      clearInterval(interval);
-    };
-  }, [runToolingLifeCheck]);
-
-  // Quick simulation helper to test / demonstrate 90% tooling life limit warning
-  const handleSimulate90PercentWear = useCallback(() => {
-    try {
-      const allMonitoring = storageService.getLinesMonitoring();
-      const line = allMonitoring[selectedLineId];
-      if (line && line.items && line.items.length > 0) {
-        const targetTool = line.items[0];
-        const limit = targetTool.lifeLimit > 0 ? targetTool.lifeLimit : 15000000;
-        const currentShots = targetTool.usedShot !== undefined ? targetTool.usedShot : (targetTool.currentShot || 0);
-        const isHigh = (currentShots / limit) >= 0.90;
-
-        const newShots = isHigh ? 0 : Math.round(limit * 0.925); // 92.5% wear threshold
-        targetTool.usedShot = newShots;
-        targetTool.currentShot = newShots;
-        targetTool.usagePercent = isHigh ? 0 : 92.5;
-        targetTool.remainingShot = limit - newShots;
-
-        storageService.saveLinesMonitoring(allMonitoring);
-        toolingAlertService.clearDismissed();
-        reloadData();
-      }
-    } catch (err) {
-      console.warn('Error simulating 90% wear:', err);
-    }
-  }, [selectedLineId]);
-
   // Exact timestamp format matching the LG Monitor: YYYY.MM.DD HH:mm:ss
   useEffect(() => {
     const updateTime = () => {
@@ -763,9 +711,9 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
   const lineLabel = getLineLabel(selectedLineId);
   const lineDisplayName = selectedLineId === 'E1' ? 'LINE E1 (HE1 Ø7)' :
                           selectedLineId === 'E2' ? 'LINE E2 (HE2 Ø5)' :
-                          selectedLineId === 'E3-1' ? 'LINE E3 SLit (3P)' :
-                          selectedLineId === 'E3-2' ? 'LINE E3 WL (4P)' :
-                          selectedLineId === 'E3-3' ? 'LINE E3 New corr (4P)' :
+                          selectedLineId === 'E3 SLIT' ? 'LINE E3 SLIT (3P)' :
+                          selectedLineId === 'E3 WL+' ? 'LINE E3 WL+ (4P)' :
+                          selectedLineId === 'E3 New Cor' ? 'LINE E3 New Cor (4P)' :
                           selectedLineId === 'E4' ? 'LINE E4 (HE4 Ø5)' :
                           selectedLineId === 'E5' ? 'LINE E5 (HE5 Ø5)' :
                           `LINE ${selectedLineId}`;
@@ -944,21 +892,6 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
               title="Reset Columns"
             >
               {t.tv.autoWidth || 'Auto Width'}
-            </button>
-
-            {/* 90% Tooling Life Limit Alert Quick Test / Indicator */}
-            <button
-              type="button"
-              onClick={handleSimulate90PercentWear}
-              className={`liquid-pill px-2.5 sm:px-3 py-1 text-[10.5px] sm:text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 active:scale-95 whitespace-nowrap ${
-                toolingAlerts.length > 0
-                  ? 'bg-amber-950/90 border-amber-400 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.5)] animate-pulse'
-                  : 'bg-white/[0.06] hover:bg-white/[0.12] border-white/15 text-slate-300 hover:text-white'
-              }`}
-              title="Test / Toggle automated 90% tooling life limit warning toast on this line"
-            >
-              <BellRing className={`w-3.5 h-3.5 ${toolingAlerts.length > 0 ? 'text-amber-300 animate-bounce' : 'text-slate-400'}`} />
-              <span>{toolingAlerts.length > 0 ? `90%+ Alerts (${toolingAlerts.length})` : 'Simulate 90% Alert'}</span>
             </button>
           </div>
         </div>
@@ -1411,26 +1344,6 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
         getLineLabel={getLineLabel}
         getLineSubTag={getLineSubTag}
       />
-
-      {/* Automated Tooling Life Limit Warning Toast (warns operators when a tool reaches >= 90% designated life) */}
-      <TvToolingAlertToast
-        alerts={toolingAlerts}
-        currentLineId={selectedLineId}
-        onSelectLine={(targetLine) => {
-          setSelectedLineId(targetLine);
-          selectedLineIdRef.current = targetLine;
-          setCountdown(autoCycleInterval);
-        }}
-        onDismissAlert={(alertId) => {
-          toolingAlertService.dismissAlert(alertId);
-          setToolingAlerts(prev => prev.filter(a => a.id !== alertId));
-        }}
-        onSnoozeAlert={(alertId, mins) => {
-          toolingAlertService.snoozeAlert(alertId, mins);
-          setToolingAlerts(prev => prev.filter(a => a.id !== alertId));
-        }}
-      />
-
     </div>
   );
 };

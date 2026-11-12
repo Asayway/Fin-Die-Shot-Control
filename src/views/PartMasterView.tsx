@@ -33,6 +33,8 @@ import {
   ChevronsDown,
   Repeat,
   Box,
+  Camera,
+  Image as ImageIcon,
   QrCode,
   Barcode
 } from 'lucide-react';
@@ -84,6 +86,9 @@ export interface UnifiedPartMasterRow {
     regrindCycles?: number | string;
     note?: string;
   };
+  priceThb?: number;
+  priceUsd?: number;
+  supplier?: string;
 }
 
 export const normalizeToMillion = (val: any): number | undefined => {
@@ -204,6 +209,7 @@ export const PartMasterView: React.FC = () => {
   const [selectedPartFor3D, setSelectedPartFor3D] = useState<UnifiedPartMasterRow | null>(null);
   const [selectedPartForQrModal, setSelectedPartForQrModal] = useState<UnifiedPartMasterRow | null>(null);
   const [showRegrindOnly, setShowRegrindOnly] = useState(false);
+  const [partPhotosMap, setPartPhotosMap] = useState<Record<string, any>>(() => storageService.getPartPhotos());
 
   // Inline Add New Part Row State (Top of table, no popup)
   const [isAddingInline, setIsAddingInline] = useState(false);
@@ -223,7 +229,9 @@ export const PartMasterView: React.FC = () => {
     perGrindMm: '0.10 mm',
     totalGrindMm: '1.40',
     regrindCycles: 14 as number | string,
-    note: 'Standard regular sharpen'
+    note: 'Standard regular sharpen',
+    priceThb: 0,
+    supplier: 'KISUNG'
   });
 
   // Inline Row Editing State (Direct cell editing on row)
@@ -247,6 +255,7 @@ export const PartMasterView: React.FC = () => {
     setPartMasters(storageService.getPartMasters());
     setLifeStandards(storageService.getLifeStandards());
     setLineConfigs(storageService.getLineConfigs());
+    setPartPhotosMap(storageService.getPartPhotos());
   };
 
   useEffect(() => {
@@ -264,9 +273,9 @@ export const PartMasterView: React.FC = () => {
   const unifiedItems = useMemo<UnifiedPartMasterRow[]>(() => {
     const e1Config = lineConfigs.find(l => l.lineId === 'E1');
     const e2Config = lineConfigs.find(l => l.lineId === 'E2');
-    const e3_1Config = lineConfigs.find(l => l.lineId === 'E3-1');
-    const e3_2Config = lineConfigs.find(l => l.lineId === 'E3-2');
-    const e3_3Config = lineConfigs.find(l => l.lineId === 'E3-3');
+    const e3_1Config = lineConfigs.find(l => l.lineId === 'E3 SLIT');
+    const e3_2Config = lineConfigs.find(l => l.lineId === 'E3 WL+');
+    const e3_3Config = lineConfigs.find(l => l.lineId === 'E3 New Cor');
     const e4Config = lineConfigs.find(l => l.lineId === 'E4');
     const e5Config = lineConfigs.find(l => l.lineId === 'E5');
 
@@ -274,14 +283,14 @@ export const PartMasterView: React.FC = () => {
       const ls = lifeStandards.find(s => (s as any).partCode === pm.partCode || s.configKey?.partCode === pm.partCode || s.id === pm.partCode);
       
       const pmInstall = (pm as any).installQty || {};
-      const qE1 = pmInstall.e1 ?? e1Config?.installedPartQuantities?.[pm.partCode] ?? 0;
-      const qE2 = pmInstall.e2 ?? e2Config?.installedPartQuantities?.[pm.partCode] ?? 0;
-      const qE3_1 = pmInstall.e3_1 ?? e3_1Config?.installedPartQuantities?.[pm.partCode] ?? 0;
-      const qE3_2 = pmInstall.e3_2 ?? e3_2Config?.installedPartQuantities?.[pm.partCode] ?? 0;
-      const qE3_3 = pmInstall.e3_3 ?? e3_3Config?.installedPartQuantities?.[pm.partCode] ?? 0;
-      const qE4 = pmInstall.e4 ?? e4Config?.installedPartQuantities?.[pm.partCode] ?? 0;
-      const qE5 = pmInstall.e5 ?? e5Config?.installedPartQuantities?.[pm.partCode] ?? 0;
-      const totalQty = pmInstall.totalQty ?? (qE1 + qE2 + qE3_1 + qE3_2 + qE3_3 + qE4 + qE5);
+      const qE1 = e1Config?.installedPartQuantities?.[pm.partCode] ?? pmInstall.e1 ?? 0;
+      const qE2 = e2Config?.installedPartQuantities?.[pm.partCode] ?? pmInstall.e2 ?? 0;
+      const qE3_1 = e3_1Config?.installedPartQuantities?.[pm.partCode] ?? pmInstall.e3_1 ?? 0;
+      const qE3_2 = e3_2Config?.installedPartQuantities?.[pm.partCode] ?? pmInstall.e3_2 ?? 0;
+      const qE3_3 = e3_3Config?.installedPartQuantities?.[pm.partCode] ?? pmInstall.e3_3 ?? 0;
+      const qE4 = e4Config?.installedPartQuantities?.[pm.partCode] ?? pmInstall.e4 ?? 0;
+      const qE5 = e5Config?.installedPartQuantities?.[pm.partCode] ?? pmInstall.e5 ?? 0;
+      const totalQty = qE1 + qE2 + qE3_1 + qE3_2 + qE3_3 + qE4 + qE5;
 
       const defaultSpecs = getPartDefaultSpecs(pm.partName);
 
@@ -311,22 +320,20 @@ export const PartMasterView: React.FC = () => {
       const pmShot = (pm as any).shotLifeCycle;
       const e1_shot = pmShot?.e1_pcm !== undefined ? normalizeToMillion(pmShot.e1_pcm) : (qE1 > 0 ? normalizeToMillion((ls as any)?.shotLifeStandards?.['E1'] ?? 5.0) : undefined);
       const e2_shot = pmShot?.e2_gold !== undefined ? normalizeToMillion(pmShot.e2_gold) : (qE2 > 0 ? normalizeToMillion((ls as any)?.shotLifeStandards?.['E2'] ?? 5.0) : undefined);
-      const e3_1_shot = pmShot?.e3_1_pcm !== undefined ? normalizeToMillion(pmShot.e3_1_pcm) : (qE3_1 > 0 ? normalizeToMillion((ls as any)?.shotLifeStandards?.['E3-1'] ?? 5.0) : undefined);
-      const e3_2_shot = pmShot?.e3_2_gold !== undefined ? normalizeToMillion(pmShot.e3_2_gold) : (qE3_2 > 0 ? normalizeToMillion((ls as any)?.shotLifeStandards?.['E3-2'] ?? 5.0) : undefined);
-      const e3_3_shot = pmShot?.e3_3_gold !== undefined ? normalizeToMillion(pmShot.e3_3_gold) : (qE3_3 > 0 ? normalizeToMillion((ls as any)?.shotLifeStandards?.['E3-3'] ?? 5.0) : undefined);
+      const e3_1_shot = pmShot?.e3_1_pcm !== undefined ? normalizeToMillion(pmShot.e3_1_pcm) : (qE3_1 > 0 ? normalizeToMillion((ls as any)?.shotLifeStandards?.['E3 SLIT'] ?? 5.0) : undefined);
+      const e3_2_shot = pmShot?.e3_2_gold !== undefined ? normalizeToMillion(pmShot.e3_2_gold) : (qE3_2 > 0 ? normalizeToMillion((ls as any)?.shotLifeStandards?.['E3 WL+'] ?? 5.0) : undefined);
+      const e3_3_shot = pmShot?.e3_3_gold !== undefined ? normalizeToMillion(pmShot.e3_3_gold) : (qE3_3 > 0 ? normalizeToMillion((ls as any)?.shotLifeStandards?.['E3 New Cor'] ?? 5.0) : undefined);
       const e4_shot = pmShot?.e4_bare !== undefined ? normalizeToMillion(pmShot.e4_bare) : (qE4 > 0 ? normalizeToMillion((ls as any)?.shotLifeStandards?.['E4'] ?? 4.0) : undefined);
       const e5_shot = pmShot?.e5_bare !== undefined ? normalizeToMillion(pmShot.e5_bare) : (qE5 > 0 ? normalizeToMillion((ls as any)?.shotLifeStandards?.['E5'] ?? 4.0) : undefined);
 
-      const applicableLines: string[] = (pm as any).applicableLines || [];
-      if (applicableLines.length === 0) {
-        if (qE1 > 0) applicableLines.push('E1');
-        if (qE2 > 0) applicableLines.push('E2');
-        if (qE3_1 > 0) applicableLines.push('E3-1');
-        if (qE3_2 > 0) applicableLines.push('E3-2');
-        if (qE3_3 > 0) applicableLines.push('E3-3');
-        if (qE4 > 0) applicableLines.push('E4');
-        if (qE5 > 0) applicableLines.push('E5');
-      }
+      const applicableLines: string[] = [];
+      if (qE1 > 0) applicableLines.push('E1');
+      if (qE2 > 0) applicableLines.push('E2');
+      if (qE3_1 > 0) applicableLines.push('E3 SLIT');
+      if (qE3_2 > 0) applicableLines.push('E3 WL+');
+      if (qE3_3 > 0) applicableLines.push('E3 New Cor');
+      if (qE4 > 0) applicableLines.push('E4');
+      if (qE5 > 0) applicableLines.push('E5');
 
       return {
         no: idx + 1,
@@ -365,7 +372,10 @@ export const PartMasterView: React.FC = () => {
           totalGrindMm: totalGrind,
           regrindCycles: maxCycles,
           note
-        }
+        },
+        priceThb: pm.priceThb ?? (pm as any).unitCostThb,
+        priceUsd: pm.priceUsd ?? (pm.priceThb ? Number((pm.priceThb / 35).toFixed(2)) : ((pm as any).unitCostThb ? Number(((pm as any).unitCostThb / 35).toFixed(2)) : undefined)),
+        supplier: pm.supplier || 'KISUNG'
       };
     });
   }, [partMasters, lifeStandards, lineConfigs]);
@@ -415,9 +425,9 @@ export const PartMasterView: React.FC = () => {
         const qtyMap: Record<string, number | undefined> = {
           'E1': item.installQty.e1,
           'E2': item.installQty.e2,
-          'E3-1': item.installQty.e3_1,
-          'E3-2': item.installQty.e3_2,
-          'E3-3': item.installQty.e3_3,
+          'E3 SLIT': item.installQty.e3_1,
+          'E3 WL+': item.installQty.e3_2,
+          'E3 New Cor': item.installQty.e3_3,
           'E4': item.installQty.e4,
           'E5': item.installQty.e5,
         };
@@ -460,6 +470,10 @@ export const PartMasterView: React.FC = () => {
       return;
     }
 
+    const priceThbNum = parseFloat(newRowData.priceThb as any) || 0;
+    const priceUsdNum = priceThbNum > 0 ? Number((priceThbNum / 35).toFixed(2)) : 0;
+    const supplierStr = (newRowData.supplier || 'KISUNG').trim();
+
     const newMaster: PartMaster = {
       partCode: code,
       partName: newRowData.partName.trim(),
@@ -468,7 +482,10 @@ export const PartMasterView: React.FC = () => {
       category: 'PUNCH',
       drawingNumber: code,
       unit: 'PCS',
-      unitCostThb: 0,
+      unitCostThb: priceThbNum,
+      priceThb: priceThbNum,
+      priceUsd: priceUsdNum,
+      supplier: supplierStr,
       tubeSizeCompat: 'BOTH'
     };
 
@@ -509,9 +526,9 @@ export const PartMasterView: React.FC = () => {
     (newLifeStd as any).shotLifeStandards = {
       'E1': millionToShots(newRowData.e1_pcm),
       'E2': millionToShots(newRowData.e2_gold),
-      'E3-1': millionToShots(newRowData.e3_1_pcm),
-      'E3-2': millionToShots(newRowData.e3_2_gold),
-      'E3-3': millionToShots(newRowData.e3_3_gold),
+      'E3 SLIT': millionToShots(newRowData.e3_1_pcm),
+      'E3 WL+': millionToShots(newRowData.e3_2_gold),
+      'E3 New Cor': millionToShots(newRowData.e3_3_gold),
       'E4': millionToShots(newRowData.e4_bare),
       'E5': millionToShots(newRowData.e5_bare),
     };
@@ -564,19 +581,30 @@ export const PartMasterView: React.FC = () => {
       perGrindMm: item.regrindStandard?.perGrindMm ?? '0.10 mm',
       totalGrindMm: item.regrindStandard?.totalGrindMm ?? '1.40',
       regrindCycles: item.regrindStandard?.regrindCycles ?? 14,
-      note: item.regrindStandard?.note ?? ''
+      note: item.regrindStandard?.note ?? '',
+      priceThb: item.priceThb ?? 0,
+      priceUsd: item.priceUsd ?? (item.priceThb ? Number((item.priceThb / 35).toFixed(2)) : 0),
+      supplier: item.supplier ?? 'KISUNG'
     });
   };
 
   // Save inline edit for a row
   const handleSaveInlineEdit = () => {
     if (!inlineEditRowData) return;
+    const priceThbNum = parseFloat(inlineEditRowData.priceThb) || 0;
+    const priceUsdNum = priceThbNum > 0 ? Number((priceThbNum / 35).toFixed(2)) : 0;
+    const supplierStr = (inlineEditRowData.supplier || 'KISUNG').trim();
+
     const pm = partMasters.find(p => p.partCode === inlineEditRowData.partCode);
     if (pm) {
       const updatedPm: PartMaster = {
         ...pm,
         partName: inlineEditRowData.partName,
-        stageName: inlineEditRowData.stage
+        stageName: inlineEditRowData.stage,
+        priceThb: priceThbNum,
+        priceUsd: priceUsdNum,
+        supplier: supplierStr,
+        unitCostThb: priceThbNum
       };
       (updatedPm as any).newSpecMm = inlineEditRowData.newSpecMm;
       (updatedPm as any).scrapLimitMm = inlineEditRowData.scrapLimitMm;
@@ -604,9 +632,9 @@ export const PartMasterView: React.FC = () => {
       (updatedLs as any).shotLifeStandards = {
         'E1': millionToShots(inlineEditRowData.e1_pcm),
         'E2': millionToShots(inlineEditRowData.e2_gold),
-        'E3-1': millionToShots(inlineEditRowData.e3_1_pcm),
-        'E3-2': millionToShots(inlineEditRowData.e3_2_gold),
-        'E3-3': millionToShots(inlineEditRowData.e3_3_gold),
+        'E3 SLIT': millionToShots(inlineEditRowData.e3_1_pcm),
+        'E3 WL+': millionToShots(inlineEditRowData.e3_2_gold),
+        'E3 New Cor': millionToShots(inlineEditRowData.e3_3_gold),
         'E4': millionToShots(inlineEditRowData.e4_bare),
         'E5': millionToShots(inlineEditRowData.e5_bare),
       };
@@ -653,9 +681,9 @@ export const PartMasterView: React.FC = () => {
       (newLs as any).shotLifeStandards = {
         'E1': millionToShots(inlineEditRowData.e1_pcm),
         'E2': millionToShots(inlineEditRowData.e2_gold),
-        'E3-1': millionToShots(inlineEditRowData.e3_1_pcm),
-        'E3-2': millionToShots(inlineEditRowData.e3_2_gold),
-        'E3-3': millionToShots(inlineEditRowData.e3_3_gold),
+        'E3 SLIT': millionToShots(inlineEditRowData.e3_1_pcm),
+        'E3 WL+': millionToShots(inlineEditRowData.e3_2_gold),
+        'E3 New Cor': millionToShots(inlineEditRowData.e3_3_gold),
         'E4': millionToShots(inlineEditRowData.e4_bare),
         'E5': millionToShots(inlineEditRowData.e5_bare),
       };
@@ -690,7 +718,10 @@ export const PartMasterView: React.FC = () => {
         perGrindMm: item.regrindStandard?.perGrindMm ?? '0.10 mm',
         totalGrindMm: item.regrindStandard?.totalGrindMm ?? '1.40',
         regrindCycles: item.regrindStandard?.regrindCycles ?? 14,
-        note: item.regrindStandard?.note ?? ''
+        note: item.regrindStandard?.note ?? '',
+        priceThb: item.priceThb ?? 0,
+        priceUsd: item.priceUsd ?? (item.priceThb ? Number((item.priceThb / 35).toFixed(2)) : 0),
+        supplier: item.supplier ?? 'KISUNG'
       };
     });
     setEditValues(values);
@@ -728,10 +759,18 @@ export const PartMasterView: React.FC = () => {
       updatedParts.forEach((pm, idx) => {
         const rowEdit = editValues[pm.partCode];
         if (rowEdit) {
+          const priceThbNum = parseFloat(rowEdit.priceThb) || 0;
+          const priceUsdNum = priceThbNum > 0 ? Number((priceThbNum / 35).toFixed(2)) : 0;
+          const supplierStr = (rowEdit.supplier || 'KISUNG').trim();
+
           const updatedPm: PartMaster = {
             ...pm,
             partName: rowEdit.partName,
-            stageName: rowEdit.stage
+            stageName: rowEdit.stage,
+            priceThb: priceThbNum,
+            priceUsd: priceUsdNum,
+            supplier: supplierStr,
+            unitCostThb: priceThbNum
           };
           (updatedPm as any).newSpecMm = rowEdit.newSpecMm;
           (updatedPm as any).scrapLimitMm = rowEdit.scrapLimitMm;
@@ -760,9 +799,9 @@ export const PartMasterView: React.FC = () => {
             (updatedLs as any).shotLifeStandards = {
               'E1': millionToShots(rowEdit.e1_pcm),
               'E2': millionToShots(rowEdit.e2_gold),
-              'E3-1': millionToShots(rowEdit.e3_1_pcm),
-              'E3-2': millionToShots(rowEdit.e3_2_gold),
-              'E3-3': millionToShots(rowEdit.e3_3_gold),
+              'E3 SLIT': millionToShots(rowEdit.e3_1_pcm),
+              'E3 WL+': millionToShots(rowEdit.e3_2_gold),
+              'E3 New Cor': millionToShots(rowEdit.e3_3_gold),
               'E4': millionToShots(rowEdit.e4_bare),
               'E5': millionToShots(rowEdit.e5_bare),
             };
@@ -940,9 +979,9 @@ export const PartMasterView: React.FC = () => {
                 <option value="ALL" className="bg-[#111111] text-white">ทุกไลน์ (All 7 Lines)</option>
                 <option value="E1" className="bg-[#111111] text-white">Line E1 (Ø7 Slit)</option>
                 <option value="E2" className="bg-[#111111] text-white">Line E2 (Ø5 Slit)</option>
-                <option value="E3-1" className="bg-[#111111] text-white">Line E3-1 (Slit 3P)</option>
-                <option value="E3-2" className="bg-[#111111] text-white">Line E3-2 (WL+ 4P)</option>
-                <option value="E3-3" className="bg-[#111111] text-white">Line E3-3 (New Cor 4P)</option>
+                <option value="E3 SLIT" className="bg-[#111111] text-white">Line E3 SLIT (Slit 3P)</option>
+                <option value="E3 WL+" className="bg-[#111111] text-white">Line E3 WL+ (WL+ 4P)</option>
+                <option value="E3 New Cor" className="bg-[#111111] text-white">Line E3 New Cor (New Cor 4P)</option>
                 <option value="E4" className="bg-[#111111] text-white">Line E4 (Ø5 Slit)</option>
                 <option value="E5" className="bg-[#111111] text-white">Line E5 (Ø5 Slit)</option>
               </select>
@@ -1055,7 +1094,7 @@ export const PartMasterView: React.FC = () => {
               {/* Header Tier 1 (Sticky Top 0) */}
               <tr className="text-white text-[11px] select-none">
                 <th 
-                  colSpan={4} 
+                  colSpan={5} 
                   className="sticky top-0 z-20 py-1.5 px-2 border-b border-r border-[#666666] text-white font-bold text-left bg-[#444455] shadow-xs"
                 >
                   1. PART IDENTIFICATION & SPEC
@@ -1073,10 +1112,16 @@ export const PartMasterView: React.FC = () => {
                   3. STANDARD RE-GRINDING MATRIX (SPEC & AUTO-CALCULATED)
                 </th>
                 <th 
-                  colSpan={1} 
-                  className="sticky top-0 z-20 py-1.5 px-2 border-b border-[#666666] text-[#FFCC00] font-bold text-center bg-[#3a3a4a] shadow-xs w-20"
+                  colSpan={3} 
+                  className="sticky top-0 z-20 py-1.5 px-2 border-b border-r border-[#666666] text-[#00E5FF] font-bold text-center bg-[#3a3a4a] shadow-xs"
                 >
-                  4. ACTIONS
+                  4. PRICING & SUPPLIER
+                </th>
+                <th 
+                  colSpan={1} 
+                  className="sticky top-0 z-20 py-1.5 px-2 border-b border-[#666666] text-[#FFCC00] font-bold text-center bg-[#444455] shadow-xs w-20"
+                >
+                  5. ACTIONS
                 </th>
               </tr>
 
@@ -1085,6 +1130,10 @@ export const PartMasterView: React.FC = () => {
                 {/* 1. Identification */}
                 <th className="sticky top-[27px] z-20 py-1 px-1.5 text-center w-8 border-b border-r border-[#666666] bg-[#555566]">No</th>
                 <th className="sticky top-[27px] z-20 py-1 px-1.5 border-b border-r border-[#666666] bg-[#555566] min-w-[145px] w-36">Stage</th>
+                <th className="sticky top-[27px] z-20 py-1 px-1 text-center border-b border-r border-[#666666] bg-[#4a4a5a] w-20 min-w-[80px]">
+                  <div className="font-bold text-cyan-300 text-[11px]">รูปชิ้นงาน</div>
+                  <div className="text-[9px] text-slate-300 font-normal">Photo / Spec</div>
+                </th>
                 <th className="sticky top-[27px] z-20 py-1 px-1.5 border-b border-r border-[#666666] bg-[#555566] min-w-[150px]">Part Name & Drawing No.</th>
                 <th className="sticky top-[27px] z-20 py-1 px-1.5 text-center border-b border-r border-[#666666] bg-[#4a4a5a] min-w-[125px]">
                   <div className="font-bold text-cyan-300 text-[11px]">Installed Lines</div>
@@ -1101,15 +1150,15 @@ export const PartMasterView: React.FC = () => {
                   <div className="text-[9px] text-slate-300 font-normal">Ø5 Slit</div>
                 </th>
                 <th className="sticky top-[27px] z-20 py-0.5 px-1 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00] min-w-[56px]">
-                  <div className="font-bold text-white text-[11px]">E3-1</div>
+                  <div className="font-bold text-white text-[11px]">E3 SLIT</div>
                   <div className="text-[9px] text-slate-300 font-normal">Slit 3P</div>
                 </th>
                 <th className="sticky top-[27px] z-20 py-0.5 px-1 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00] min-w-[56px]">
-                  <div className="font-bold text-white text-[11px]">E3-2</div>
+                  <div className="font-bold text-white text-[11px]">E3 WL+</div>
                   <div className="text-[9px] text-slate-300 font-normal">WL+ 4P</div>
                 </th>
                 <th className="sticky top-[27px] z-20 py-0.5 px-1 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00] min-w-[62px]">
-                  <div className="font-bold text-white text-[11px]">E3-3</div>
+                  <div className="font-bold text-white text-[11px]">E3 New Cor</div>
                   <div className="text-[9px] text-slate-300 font-normal">New Cor 4P</div>
                 </th>
                 <th className="sticky top-[27px] z-20 py-0.5 px-1 text-center border-b border-r border-[#666666] bg-[#4a4a5a] text-[#00FF00] min-w-[56px]">
@@ -1129,7 +1178,12 @@ export const PartMasterView: React.FC = () => {
                 <th className="sticky top-[27px] z-20 py-1 px-1 text-center text-purple-300 border-b border-r border-[#666666] bg-[#555566] min-w-[60px]">Max Cycles</th>
                 <th className="sticky top-[27px] z-20 py-1 px-1.5 text-purple-200 border-b border-r border-[#666666] bg-[#555566] min-w-[120px]">Note / Standard</th>
 
-                {/* 4. Actions */}
+                {/* 4. Pricing & Supplier */}
+                <th className="sticky top-[27px] z-20 py-1 px-1.5 text-center text-[#00E5FF] border-b border-r border-[#666666] bg-[#4a4a5a] min-w-[85px]">Price (THB)</th>
+                <th className="sticky top-[27px] z-20 py-1 px-1.5 text-center text-[#00E5FF] border-b border-r border-[#666666] bg-[#4a4a5a] min-w-[85px]">Price (USD)</th>
+                <th className="sticky top-[27px] z-20 py-1 px-1.5 text-center text-slate-200 border-b border-r border-[#666666] bg-[#4a4a5a] min-w-[90px]">Supplier</th>
+
+                {/* 5. Actions */}
                 <th className="sticky top-[27px] z-20 py-1 px-1.5 text-center text-[#FFCC00] border-b border-[#666666] bg-[#4a4a5a] w-24">
                   Actions
                 </th>
@@ -1162,6 +1216,11 @@ export const PartMasterView: React.FC = () => {
                         <option value="Stage 1: Piercing & Burring">Stage 1: Piercing & Burring</option>
                       )}
                     </select>
+                  </td>
+                  <td className="py-1 px-1 border-r border-[#444444] text-center w-20 min-w-[80px]">
+                    <div className="w-10 h-10 mx-auto rounded border border-dashed border-[#555555] bg-[#141414] flex items-center justify-center text-slate-500 text-[10px]" title="ลงรูปหลังจากบันทึกรายการ">
+                      -
+                    </div>
                   </td>
                   <td className="py-1 px-1 border-r border-[#444444]">
                     <div className="space-y-1">
@@ -1334,6 +1393,33 @@ export const PartMasterView: React.FC = () => {
                       className="w-full bg-[#111111] text-slate-300 border border-[#666666] px-1 py-0.5 text-[11px] font-mono"
                     />
                   </td>
+                  {/* Section 4. Pricing & Supplier Inputs */}
+                  <td className="py-1 px-1 border-r border-[#444444]">
+                    <input
+                      type="number"
+                      placeholder="0"
+                      value={newRowData.priceThb || ''}
+                      onChange={e => {
+                        const pThb = parseFloat(e.target.value) || 0;
+                        setNewRowData({ ...newRowData, priceThb: pThb });
+                      }}
+                      className="w-full bg-[#111111] text-center text-cyan-300 border border-[#666666] py-0.5 text-xs font-mono"
+                    />
+                  </td>
+                  <td className="py-1 px-1 border-r border-[#444444]">
+                    <div className="text-center text-cyan-300 font-mono py-0.5 text-xs">
+                      {newRowData.priceThb ? `$${(newRowData.priceThb / 35).toFixed(2)}` : '-'}
+                    </div>
+                  </td>
+                  <td className="py-1 px-1 border-r border-[#444444]">
+                    <input
+                      type="text"
+                      placeholder="KISUNG"
+                      value={newRowData.supplier || ''}
+                      onChange={e => setNewRowData({ ...newRowData, supplier: e.target.value })}
+                      className="w-full bg-[#111111] text-slate-200 border border-[#666666] px-1 py-0.5 text-xs font-mono"
+                    />
+                  </td>
                   <td className="py-1 px-1 text-center bg-[#182818]">
                     <div className="flex items-center justify-center gap-1">
                       <button
@@ -1360,7 +1446,7 @@ export const PartMasterView: React.FC = () => {
 
               {filteredItems.length === 0 && !isAddingInline ? (
                 <tr>
-                  <td colSpan={17} className="py-8 text-center text-slate-500 bg-[#161616] border-b border-[#666666]">
+                  <td colSpan={21} className="py-8 text-center text-slate-500 bg-[#161616] border-b border-[#666666]">
                     ไม่พบข้อมูลชิ้นส่วนที่ตรงกับคำค้นหาหรือตัวกรอง
                   </td>
                 </tr>
@@ -1389,6 +1475,17 @@ export const PartMasterView: React.FC = () => {
                               </option>
                             ))}
                           </select>
+                        </td>
+                        <td className="py-1 px-1 border-r border-[#444444] text-center w-20 min-w-[80px]">
+                          {partPhotosMap[item.partCode] ? (
+                            <div className="w-10 h-10 mx-auto rounded overflow-hidden border border-[#555555]">
+                              <img src={partPhotosMap[item.partCode].photoUrl} alt="" className="w-full h-full object-cover" />
+                            </div>
+                          ) : (
+                            <div className="w-10 h-10 mx-auto rounded border border-dashed border-[#555555] flex items-center justify-center text-slate-600 text-[10px]">
+                              -
+                            </div>
+                          )}
                         </td>
                         <td className="py-1 px-1 border-r border-[#444444]">
                           <input
@@ -1553,6 +1650,32 @@ export const PartMasterView: React.FC = () => {
                             className="w-full bg-[#111111] text-slate-300 border border-[#666666] px-1 py-0.5 text-[11px] font-mono"
                           />
                         </td>
+                        {/* Section 4. Pricing & Supplier Inputs */}
+                        <td className="py-1 px-1 border-r border-[#444444]">
+                          <input
+                            type="number"
+                            value={rowEdit.priceThb || ''}
+                            onChange={e => {
+                              const val = parseFloat(e.target.value) || 0;
+                              handleCellEditChange(item.partCode, 'priceThb', val);
+                              handleCellEditChange(item.partCode, 'priceUsd', val ? Number((val / 35).toFixed(2)) : 0);
+                            }}
+                            className="w-full bg-[#111111] text-center text-cyan-300 border border-[#666666] py-0.5 text-xs font-mono"
+                          />
+                        </td>
+                        <td className="py-1 px-1 border-r border-[#444444]">
+                          <div className="text-center text-cyan-300 font-mono py-0.5 text-xs">
+                            {rowEdit.priceThb ? `$${(rowEdit.priceThb / 35).toFixed(2)}` : '-'}
+                          </div>
+                        </td>
+                        <td className="py-1 px-1 border-r border-[#444444]">
+                          <input
+                            type="text"
+                            value={rowEdit.supplier || ''}
+                            onChange={e => handleCellEditChange(item.partCode, 'supplier', e.target.value)}
+                            className="w-full bg-[#111111] text-slate-200 border border-[#666666] px-1 py-0.5 text-xs font-mono"
+                          />
+                        </td>
                         <td className="py-1 px-1 text-center bg-[#182818]">
                           <div className="flex items-center justify-center gap-1 text-[11px] text-[#00FF00] font-mono font-bold">
                             EDITING
@@ -1580,6 +1703,27 @@ export const PartMasterView: React.FC = () => {
                               </option>
                             ))}
                           </select>
+                        </td>
+                        <td className="py-1 px-1 border-r border-[#444444] text-center w-20 min-w-[80px]">
+                          {partPhotosMap[item.partCode] ? (
+                            <div 
+                              onClick={() => setSelectedPartFor3D(item)}
+                              className="w-11 h-11 mx-auto rounded overflow-hidden border border-emerald-500/60 cursor-pointer hover:border-cyan-400"
+                              title="ดู/แก้ไขรูปชิ้นงาน"
+                            >
+                              <img src={partPhotosMap[item.partCode].photoUrl} alt="" className="w-full h-full object-cover" />
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedPartFor3D(item)}
+                              className="w-11 h-11 mx-auto rounded border border-dashed border-[#555555] hover:border-cyan-400 flex flex-col items-center justify-center text-[9px] text-cyan-400 bg-[#16161a] cursor-pointer"
+                              title="คลิกลงรูปชิ้นงาน"
+                            >
+                              <Camera className="w-3.5 h-3.5" />
+                              <span>ลงรูป</span>
+                            </button>
+                          )}
                         </td>
                         <td className="py-1 px-1 border-r border-[#444444]">
                           <div className="space-y-1">
@@ -1754,6 +1898,35 @@ export const PartMasterView: React.FC = () => {
                             className="w-full bg-[#111111] text-slate-300 border border-[#666666] px-1 py-0.5 text-[11px] font-mono"
                           />
                         </td>
+                        {/* Section 4. Pricing & Supplier Inputs */}
+                        <td className="py-1 px-1 border-r border-[#444444]">
+                          <input
+                            type="number"
+                            value={inlineEditRowData.priceThb || ''}
+                            onChange={e => {
+                              const val = parseFloat(e.target.value) || 0;
+                              setInlineEditRowData({
+                                ...inlineEditRowData,
+                                priceThb: val,
+                                priceUsd: val ? Number((val / 35).toFixed(2)) : 0
+                              });
+                            }}
+                            className="w-full bg-[#111111] text-center text-cyan-300 border border-[#666666] py-0.5 text-xs font-mono"
+                          />
+                        </td>
+                        <td className="py-1 px-1 border-r border-[#444444]">
+                          <div className="text-center text-cyan-300 font-mono py-0.5 text-xs">
+                            {inlineEditRowData.priceThb ? `$${(inlineEditRowData.priceThb / 35).toFixed(2)}` : '-'}
+                          </div>
+                        </td>
+                        <td className="py-1 px-1 border-r border-[#444444]">
+                          <input
+                            type="text"
+                            value={inlineEditRowData.supplier || ''}
+                            onChange={e => setInlineEditRowData({ ...inlineEditRowData, supplier: e.target.value })}
+                            className="w-full bg-[#111111] text-slate-200 border border-[#666666] px-1 py-0.5 text-xs font-mono"
+                          />
+                        </td>
                         <td className="py-1 px-1 text-center bg-[#282414]">
                           <div className="flex items-center justify-center gap-1">
                             <button
@@ -1800,17 +1973,67 @@ export const PartMasterView: React.FC = () => {
                           {item.stage}
                         </span>
                       </td>
+
+                      {/* Workpiece Photo (รูปชิ้นงานจริง / ภาพจำลองโครงร่าง) */}
+                      <td className="py-1 px-1.5 border-r border-[#444444] text-center w-20 min-w-[80px]">
+                        {partPhotosMap[item.partCode] ? (
+                          <div 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedPartFor3D(item);
+                            }}
+                            className="group/photo relative w-12 h-12 mx-auto rounded-md overflow-hidden border border-emerald-500/60 bg-black cursor-pointer hover:border-cyan-400 shadow-sm transition-all hover:scale-105"
+                            title={`คลิกเพื่อดูรูปชิ้นงานจริงขยายใหญ่ (${item.partName})`}
+                          >
+                            <img 
+                              src={partPhotosMap[item.partCode].photoUrl} 
+                              alt={item.partName} 
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                              referrerPolicy="no-referrer"
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/photo:opacity-100 flex items-center justify-center transition-opacity">
+                              <Eye className="w-4 h-4 text-cyan-300 drop-shadow" />
+                            </div>
+                            <div className="absolute bottom-0 inset-x-0 bg-emerald-950/90 text-emerald-300 text-[8px] font-bold py-0.2 leading-none text-center">
+                              รูปจริง
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedPartFor3D(item);
+                            }}
+                            className="w-12 h-12 mx-auto rounded-md border border-dashed border-[#555566] hover:border-cyan-400 bg-[#16161a] hover:bg-cyan-950/30 flex flex-col items-center justify-center gap-0.5 transition-all group/empty cursor-pointer text-slate-400 hover:text-cyan-300"
+                            title={`คลิกเพื่อลงรูปชิ้นงานจริง (${item.partName})`}
+                          >
+                            {/* Blueprint wireframe schematic illustration */}
+                            <svg className="w-5 h-5 text-cyan-500/70 group-hover/empty:text-cyan-400 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                              <rect x="3" y="3" width="18" height="18" rx="2" strokeDasharray="2 2" />
+                              <path d="M7 17L12 7L17 17" />
+                              <circle cx="12" cy="12" r="2" strokeDasharray="1 1" />
+                              <line x1="3" y1="12" x2="21" y2="12" strokeDasharray="1 2" opacity="0.6" />
+                            </svg>
+                            <span className="text-[9px] font-sans font-medium text-cyan-300/80 group-hover/empty:text-cyan-200 leading-none">
+                              + ลงรูป
+                            </span>
+                          </button>
+                        )}
+                      </td>
+
                       <td className="py-1 px-2 font-bold text-white border-r border-[#444444]">
                         <div className="flex items-center justify-between gap-1 group">
                           <div>
                             <span 
                               onClick={() => setSelectedPartFor3D(item)} 
-                              className="block cursor-pointer hover:text-[#00FF00] transition-colors leading-tight"
-                              title="คลิกเพื่อดู 3D Blueprint และตารางสเปกคำนวณรอบเจียร"
+                              className="block cursor-pointer hover:text-cyan-300 transition-colors leading-tight"
+                              title="คลิกเพื่อดูรูปชิ้นงานและตารางสเปกคำนวณรอบเจียร"
                             >
                               {item.partName}
                             </span>
-                            <div className="flex items-center gap-1.5 mt-0.5">
+                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                               <span className="text-[10px] font-mono text-slate-400 font-normal">
                                 DWG: {item.drawingNo}
                               </span>
@@ -1824,20 +2047,15 @@ export const PartMasterView: React.FC = () => {
                                   Ø5
                                 </span>
                               )}
+                              {partPhotosMap[item.partCode] && (
+                                <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 font-bold flex items-center gap-0.5" title="มีรูปถ่ายชิ้นงานจริงแล้ว">
+                                  <Camera className="w-2.5 h-2.5" />
+                                  <span>มีรูปจริง</span>
+                                </span>
+                              )}
                             </div>
                           </div>
                           <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedPartFor3D(item);
-                              }}
-                              className="p-1 rounded bg-[#111111] hover:bg-[#00FF00]/20 text-slate-400 hover:text-[#00FF00] border border-[#444444] transition-all cursor-pointer opacity-80 group-hover:opacity-100"
-                              title="เปิดแบบ 3D Blueprint / คำนวณรอบเจียรอัตโนมัติ"
-                            >
-                              <Box className="w-3.5 h-3.5" />
-                            </button>
                             <button
                               type="button"
                               onClick={(e) => {
@@ -1867,9 +2085,9 @@ export const PartMasterView: React.FC = () => {
                               const lineQtyMap: Record<string, number | undefined> = {
                                 'E1': item.installQty.e1,
                                 'E2': item.installQty.e2,
-                                'E3-1': item.installQty.e3_1,
-                                'E3-2': item.installQty.e3_2,
-                                'E3-3': item.installQty.e3_3,
+                                'E3 SLIT': item.installQty.e3_1,
+                                'E3 WL+': item.installQty.e3_2,
+                                'E3 New Cor': item.installQty.e3_3,
                                 'E4': item.installQty.e4,
                                 'E5': item.installQty.e5,
                               };
@@ -1943,7 +2161,18 @@ export const PartMasterView: React.FC = () => {
                         {item.regrindStandard?.note && item.regrindStandard?.note !== '-' ? item.regrindStandard.note : '-'}
                       </td>
 
-                      {/* 4. Row Action Buttons: Move, Edit and Delete */}
+                      {/* 4. PRICING & SUPPLIER */}
+                      <td className="py-1 px-2 text-center font-bold text-white border-r border-[#444444]">
+                        {item.priceThb ? `฿${item.priceThb.toLocaleString()}` : '-'}
+                      </td>
+                      <td className="py-1 px-2 text-center text-cyan-300 font-bold border-r border-[#444444]">
+                        {item.priceUsd ? `$${item.priceUsd.toFixed(2)}` : (item.priceThb ? `$${(item.priceThb / 35).toFixed(2)}` : '-')}
+                      </td>
+                      <td className="py-1 px-2 text-center text-slate-300 border-r border-[#444444]">
+                        {item.supplier || 'KISUNG'}
+                      </td>
+
+                      {/* 5. Row Action Buttons: Move, Edit and Delete */}
                       <td className="py-1 px-2 text-center">
                         <div className="flex items-center justify-center gap-1">
                           {/* Reorder Buttons (Compact Grid) */}
@@ -2016,18 +2245,6 @@ export const PartMasterView: React.FC = () => {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setSelectedPartForQrModal(item);
-                            }}
-                            className="p-1 bg-[#111111] hover:bg-cyan-950 text-cyan-400 hover:text-cyan-300 border border-[#555555] hover:border-cyan-400 transition-colors cursor-pointer"
-                            title="พิมพ์ฉลาก QR Code & Barcode (Idea 5 & 7)"
-                          >
-                            <QrCode className="w-3.5 h-3.5" />
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
                               handleStartInlineEdit(item);
                             }}
                             className="p-1 bg-[#111111] hover:bg-[#333333] text-[#00FF00] border border-[#555555] hover:border-[#00FF00] transition-colors cursor-pointer"
@@ -2082,11 +2299,17 @@ export const PartMasterView: React.FC = () => {
       />
 
       {/* ======================================================== */}
-      {/* 8. 3D BLUEPRINT & REGRIND CALCULATION MODAL */}
+      {/* 8. REAL WORKPIECE PHOTO & REGRIND CALCULATION MODAL */}
       {/* ======================================================== */}
       <Part3DBlueprintModal
         isOpen={!!selectedPartFor3D}
-        onClose={() => setSelectedPartFor3D(null)}
+        onClose={() => {
+          setSelectedPartFor3D(null);
+          setPartPhotosMap(storageService.getPartPhotos());
+        }}
+        onPhotoSaved={() => {
+          setPartPhotosMap(storageService.getPartPhotos());
+        }}
         partRow={selectedPartFor3D}
       />
 

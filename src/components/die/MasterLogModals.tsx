@@ -46,7 +46,7 @@ export const saveStoredMasterLogs = (logs: PinHistoryEntry[]) => {
 // Generate realistic factory baseline maintenance logs
 export const generateStandardMasterHistory = (targetScope: ProductionLineId | 'ALL' = 'ALL'): PinHistoryEntry[] => {
   const lines: ProductionLineId[] = targetScope === 'ALL' 
-    ? ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5']
+    ? ['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5']
     : [targetScope];
 
   const technicians = ['ช่างสมชาย (Toolroom Lead)', 'ช่างวิชัย (Die Specialist)', 'ช่างประเสริฐ (Maintenance Tech)', 'ช่างกิตติศักดิ์ (Senior Tech)', 'ช่างสุรชัย (Press Specialist)'];
@@ -570,7 +570,7 @@ export const MasterLogSetModal: React.FC<SetModalProps> = ({
                     }}
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-xs font-mono text-cyan-300"
                   >
-                    {(['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'] as ProductionLineId[]).map(l => (
+                    {(['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5'] as ProductionLineId[]).map(l => (
                       <option key={l} value={l}>LINE {l}</option>
                     ))}
                   </select>

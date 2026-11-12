@@ -240,7 +240,7 @@ export const ShotEntryView: React.FC<ShotEntryViewProps> = ({ initialLineId = 'E
   const [historyStartDate, setHistoryStartDate] = useState<string>('');
   const [historyEndDate, setHistoryEndDate] = useState<string>('');
 
-  const linesList: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
+  const linesList: ProductionLineId[] = ['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5'];
 
   const showNotification = (type: 'success' | 'error' | 'warning' | 'info', message: string) => {
     setNotification({ type, message });

@@ -38,7 +38,7 @@ interface DowntimeSummaryWidgetProps {
   isHmiTheme?: boolean;
 }
 
-const LINE_IDS: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
+const LINE_IDS: ProductionLineId[] = ['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5'];
 
 export const DowntimeSummaryWidget: React.FC<DowntimeSummaryWidgetProps> = ({
   compact = false,

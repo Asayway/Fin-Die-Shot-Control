@@ -660,7 +660,7 @@ export const INITIAL_REGRIND_WORK_TICKETS: RegrindWorkTicket[] = [
     qrCode: 'QR-E3-SIDECUT-07-001',
     partName: 'Side Cut Punch Ø 7',
     partCode: 'FD-P7-SIDECUT-P',
-    lineId: 'E3-1',
+    lineId: 'E3 SLIT',
     stageName: 'Stage 4: Side Cut',
     positionId: 'SC-P-01',
     picCategory: 'side_cut_punch_7',

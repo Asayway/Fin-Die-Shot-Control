@@ -348,22 +348,22 @@ export const createStandardStages = (
   activeStages.push(piercePunch);
 
   // Ironing
-  if (lineId === 'E1' || lineId === 'E2' || lineId === 'E3-1' || lineId === 'E4' || lineId === 'E5') {
+  if (lineId === 'E1' || lineId === 'E2' || lineId === 'E3 SLIT' || lineId === 'E4' || lineId === 'E5') {
     activeStages.push(ironingPunch);
   }
 
-  // Wide Lower (E3-2, E3-3)
-  if (lineId === 'E3-2' || lineId === 'E3-3') {
+  // Wide Lower (E3 WL+, E3 New Cor)
+  if (lineId === 'E3 WL+' || lineId === 'E3 New Cor') {
     activeStages.push(wideLower);
   }
 
   // Reflare
-  if (lineId === 'E1' || lineId === 'E2' || lineId === 'E3-1' || lineId === 'E4' || lineId === 'E5') {
+  if (lineId === 'E1' || lineId === 'E2' || lineId === 'E3 SLIT' || lineId === 'E4' || lineId === 'E5') {
     activeStages.push(reflarePunch);
   }
 
   // Slit / Louver
-  if (lineId === 'E1' || lineId === 'E2' || lineId === 'E3-1' || lineId === 'E3-2' || lineId === 'E4' || lineId === 'E5') {
+  if (lineId === 'E1' || lineId === 'E2' || lineId === 'E3 SLIT' || lineId === 'E3 WL+' || lineId === 'E4' || lineId === 'E5') {
     activeStages.push(slitLouverPunch);
     activeStages.push(slitLouverDie);
   }
@@ -431,34 +431,34 @@ export const LINE_DIE_MATRIX_CONFIG: Record<ProductionLineId, LineDieMatrixSpec>
     stages: createStandardStages('E2', 68, 'Ø5', false, 68, 12)
   },
 
-  // LINE E3-1: Ø7 Slit, 180 EA (60 Cols x 3 Rows)
-  'E3-1': {
-    lineId: 'E3-1',
-    lineName: 'Line E3-1 (Ø7 Slit 3P)',
+  // LINE E3 SLIT: Ø7 Slit, 180 EA (60 Cols x 3 Rows)
+  'E3 SLIT': {
+    lineId: 'E3 SLIT',
+    lineName: 'Line E3 SLIT (Ø7 Slit 3P)',
     tubeSize: 'Ø7',
     finType: 'Slit (half)',
     totalPinsPerSet: 180,
-    stages: createStandardStages('E3-1', 60, 'Ø7', false, 118, 15)
+    stages: createStandardStages('E3 SLIT', 60, 'Ø7', false, 118, 15)
   },
 
-  // LINE E3-2: Ø7 Louver, 180 EA (60 Cols x 3 Rows)
-  'E3-2': {
-    lineId: 'E3-2',
-    lineName: 'Line E3-2 (Ø7 Louver)',
+  // LINE E3 WL+: Ø7 Louver, 180 EA (60 Cols x 3 Rows)
+  'E3 WL+': {
+    lineId: 'E3 WL+',
+    lineName: 'Line E3 WL+ (Ø7 Louver)',
     tubeSize: 'Ø7',
     finType: 'Louver',
     totalPinsPerSet: 180,
-    stages: createStandardStages('E3-2', 60, 'Ø7', true, 118, 15)
+    stages: createStandardStages('E3 WL+', 60, 'Ø7', true, 118, 15)
   },
 
-  // LINE E3-3: Ø7 Wide Lower 4P, 168 EA (56 Cols x 3 Rows)
-  'E3-3': {
-    lineId: 'E3-3',
-    lineName: 'Line E3-3 (Ø7 Wide Lower 4P)',
+  // LINE E3 New Cor: Ø7 Wide Lower 4P, 168 EA (56 Cols x 3 Rows)
+  'E3 New Cor': {
+    lineId: 'E3 New Cor',
+    lineName: 'Line E3 New Cor (Ø7 Wide Lower 4P)',
     tubeSize: 'Ø7',
     finType: 'Wide Lower 4P',
     totalPinsPerSet: 168,
-    stages: createStandardStages('E3-3', 56, 'Ø7', true, 82, 12)
+    stages: createStandardStages('E3 New Cor', 56, 'Ø7', true, 82, 12)
   },
 
   // LINE E4: Ø5 Slit, 198 EA (66 Cols x 3 Rows)

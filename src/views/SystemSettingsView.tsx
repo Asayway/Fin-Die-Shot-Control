@@ -61,7 +61,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({ onNaviga
 
     if (metersOption === 'ZERO') {
       targetMeters = {
-        'E1': 0, 'E2': 0, 'E3-1': 0, 'E3-2': 0, 'E3-3': 0, 'E4': 0, 'E5': 0
+        'E1': 0, 'E2': 0, 'E3 SLIT': 0, 'E3 WL+': 0, 'E3 New Cor': 0, 'E4': 0, 'E5': 0
       };
     } else if (metersOption === 'CUSTOM') {
       targetMeters = { ...lineMeterInputs };
@@ -440,7 +440,7 @@ export const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({ onNaviga
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {(['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'] as ProductionLineId[]).map(lineId => (
+                {(['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5'] as ProductionLineId[]).map(lineId => (
                   <div key={lineId} className="bg-black/50 p-3 rounded-2xl border border-white/10 space-y-1">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-cyan-300">{lineId} PLC Meter</span>

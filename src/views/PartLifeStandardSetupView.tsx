@@ -40,9 +40,9 @@ const LINE_QUICK_FILTERS: LineQuickFilter[] = [
   { id: 'ALL', label: 'ALL LINES', subLabel: 'ทุกสายการผลิต (7 Lines: E1-E5)', tube: 'ALL', material: 'ALL', finType: 'ALL', paths: '-' },
   { id: 'E1', label: 'E1', subLabel: 'Ø7 Slit, PCM', tube: 'Ø7', material: 'PCM', finType: 'Slit Old', paths: '4P (Pitch)' },
   { id: 'E2', label: 'E2', subLabel: 'Ø5 Slit, GOLD', tube: 'Ø5', material: 'GOLD', finType: 'Slit Old', paths: '4P (Pitch)' },
-  { id: 'E3-1', label: 'E3-1', subLabel: 'Slit 3P, PCM', tube: 'Ø7', material: 'PCM', finType: 'New Slit', paths: '3P (Pitch)' },
-  { id: 'E3-2', label: 'E3-2', subLabel: 'WL+ 4P, GOLD', tube: 'Ø7', material: 'GOLD', finType: 'Wide Louver', paths: '4P (Pitch)' },
-  { id: 'E3-3', label: 'E3-3', subLabel: 'Corr 4P, GOLD', tube: 'Ø7', material: 'GOLD', finType: 'Corrugate', paths: '4P (Pitch)' },
+  { id: 'E3 SLIT', label: 'E3 SLIT', subLabel: 'Slit 3P, PCM', tube: 'Ø7', material: 'PCM', finType: 'New Slit', paths: '3P (Pitch)' },
+  { id: 'E3 WL+', label: 'E3 WL+', subLabel: 'WL+ 4P, GOLD', tube: 'Ø7', material: 'GOLD', finType: 'Wide Louver', paths: '4P (Pitch)' },
+  { id: 'E3 New Cor', label: 'E3 New Cor', subLabel: 'Corr 4P, GOLD', tube: 'Ø7', material: 'GOLD', finType: 'Corrugate', paths: '4P (Pitch)' },
   { id: 'E4', label: 'E4', subLabel: 'Ø5 Slit, BARE', tube: 'Ø5', material: 'BARE', finType: 'Slit Old', paths: '3P (Pitch)' },
   { id: 'E5', label: 'E5', subLabel: 'Ø5 Slit, BARE', tube: 'Ø5', material: 'BARE', finType: 'New Slit', paths: '3P (Pitch)' },
 ];
@@ -881,9 +881,9 @@ export const PartLifeStandardSetupView: React.FC = () => {
                     <option value="ALL">ALL (ทุกไลน์: E1-E5)</option>
                     <option value="E1">E1 (Ø7 Slit, PCM)</option>
                     <option value="E2">E2 (Ø5 Slit, GOLD)</option>
-                    <option value="E3-1">E3-1 (Slit 3P, PCM)</option>
-                    <option value="E3-2">E3-2 (WL+ 4P, GOLD)</option>
-                    <option value="E3-3">E3-3 (Corr 4P, GOLD)</option>
+                    <option value="E3 SLIT">E3 SLIT (Slit 3P, PCM)</option>
+                    <option value="E3 WL+">E3 WL+ (WL+ 4P, GOLD)</option>
+                    <option value="E3 New Cor">E3 New Cor (Corr 4P, GOLD)</option>
                     <option value="E4">E4 (Ø5 Slit, BARE)</option>
                     <option value="E5">E5 (Ø5 Slit, BARE)</option>
                   </select>
@@ -1039,7 +1039,7 @@ export const InstallQuantitySetupView: React.FC = () => {
     return () => unsub();
   }, []);
 
-  const lineIds = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
+  const lineIds = ['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5'];
 
   interface UnifiedMatrixRow {
     no: number;
@@ -1381,9 +1381,9 @@ export const InstallQuantitySetupView: React.FC = () => {
         `"${r.code}"`,
         r['E1'] || 0,
         r['E2'] || 0,
-        r['E3-1'] || 0,
-        r['E3-2'] || 0,
-        r['E3-3'] || 0,
+        r['E3 SLIT'] || 0,
+        r['E3 WL+'] || 0,
+        r['E3 New Cor'] || 0,
         r['E4'] || 0,
         r['E5'] || 0,
         r.total,

@@ -45,9 +45,9 @@ interface LineColDefinition {
 const LINE_COLUMNS: LineColDefinition[] = [
   { id: 'E1', label: 'E1', headerName: 'E1', subName: 'Ø7 Slit' },
   { id: 'E2', label: 'E2', headerName: 'E2', subName: 'Ø5 Slit' },
-  { id: 'E3-1', label: 'E3-1', headerName: 'E3-1', subName: 'Slit 3P' },
-  { id: 'E3-2', label: 'E3-2', headerName: 'E3-2', subName: 'WL+ 4P' },
-  { id: 'E3-3', label: 'E3-3', headerName: 'E3-3', subName: 'New Cor 4P' },
+  { id: 'E3 SLIT', label: 'E3 SLIT', headerName: 'E3 SLIT', subName: 'Slit 3P' },
+  { id: 'E3 WL+', label: 'E3 WL+', headerName: 'E3 WL+', subName: 'WL+ 4P' },
+  { id: 'E3 New Cor', label: 'E3 New Cor', headerName: 'E3 New Cor', subName: 'New Cor 4P' },
   { id: 'E4', label: 'E4', headerName: 'E4', subName: 'Ø5 Slit' },
   { id: 'E5', label: 'E5', headerName: 'E5', subName: 'Ø5 Slit' },
 ];
@@ -91,9 +91,9 @@ export const StockQuantityMatrixView: React.FC<StockQuantityMatrixViewProps> = (
     quantities: {
       'E1': 0,
       'E2': 0,
-      'E3-1': 0,
-      'E3-2': 0,
-      'E3-3': 0,
+      'E3 SLIT': 0,
+      'E3 WL+': 0,
+      'E3 New Cor': 0,
       'E4': 0,
       'E5': 0,
     }
@@ -184,9 +184,9 @@ export const StockQuantityMatrixView: React.FC<StockQuantityMatrixViewProps> = (
         quantities: {
           'E1': 0,
           'E2': 0,
-          'E3-1': 0,
-          'E3-2': 0,
-          'E3-3': 0,
+          'E3 SLIT': 0,
+          'E3 WL+': 0,
+          'E3 New Cor': 0,
           'E4': 0,
           'E5': 0,
         }
@@ -892,21 +892,21 @@ export const StockQuantityMatrixView: React.FC<StockQuantityMatrixViewProps> = (
                   <div className="text-[8px] text-slate-300 font-normal leading-tight">Ø5 Slit</div>
                 </th>
 
-                {/* Col: E3-1 */}
+                {/* Col: E3 SLIT */}
                 <th className="sticky top-[27px] z-20 py-0.5 px-0.5 text-center border-b border-r border-[#666666] bg-[#3a4a3a] text-[#00FF7F]">
-                  <div className="font-bold text-white text-[11px]">E3-1</div>
+                  <div className="font-bold text-white text-[11px]">E3 SLIT</div>
                   <div className="text-[8px] text-slate-300 font-normal leading-tight">Slit 3P</div>
                 </th>
 
-                {/* Col: E3-2 */}
+                {/* Col: E3 WL+ */}
                 <th className="sticky top-[27px] z-20 py-0.5 px-0.5 text-center border-b border-r border-[#666666] bg-[#3a4a3a] text-[#00FF7F]">
-                  <div className="font-bold text-white text-[11px]">E3-2</div>
+                  <div className="font-bold text-white text-[11px]">E3 WL+</div>
                   <div className="text-[8px] text-slate-300 font-normal leading-tight">WL+ 4P</div>
                 </th>
 
-                {/* Col: E3-3 */}
+                {/* Col: E3 New Cor */}
                 <th className="sticky top-[27px] z-20 py-0.5 px-0.5 text-center border-b border-r border-[#666666] bg-[#3a4a3a] text-[#00FF7F]">
-                  <div className="font-bold text-white text-[11px]">E3-3</div>
+                  <div className="font-bold text-white text-[11px]">E3 New Cor</div>
                   <div className="text-[8px] text-slate-300 font-normal leading-tight">New Cor 4P</div>
                 </th>
 

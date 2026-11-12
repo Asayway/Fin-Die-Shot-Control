@@ -2,7 +2,7 @@
  * Type definitions for Fin Press & Fin Die Spare Parts Shot Control System
  */
 
-export type ProductionLineId = 'E1' | 'E2' | 'E3-1' | 'E3-2' | 'E3-3' | 'E4' | 'E5';
+export type ProductionLineId = 'E1' | 'E2' | 'E3 SLIT' | 'E3 WL+' | 'E3 New Cor' | 'E4' | 'E5';
 
 export interface LineInfoDetails {
   id: ProductionLineId;
@@ -33,28 +33,28 @@ export const LINE_INFO_MAP: Record<ProductionLineId, LineInfoDetails> = {
     finType: 'Slit (half)',
     description: 'Micro-groove Ø5 Gold Slit'
   },
-  'E3-1': {
-    id: 'E3-1',
-    name: 'LINE E3-1',
-    nameTh: 'ไลน์ E3-1 (Slit 3P)',
+  'E3 SLIT': {
+    id: 'E3 SLIT',
+    name: 'LINE E3 SLIT',
+    nameTh: 'ไลน์ E3 SLIT (Slit 3P)',
     shortTag: 'Slit 3P',
     tubeSize: 'Ø7',
     finType: 'Slit 3-Pass',
     description: 'Evaporator Ø7 PCM Slit 3P'
   },
-  'E3-2': {
-    id: 'E3-2',
-    name: 'LINE E3-2',
-    nameTh: 'ไลน์ E3-2 (WL+ 4P)',
+  'E3 WL+': {
+    id: 'E3 WL+',
+    name: 'LINE E3 WL+',
+    nameTh: 'ไลน์ E3 WL+ (WL+ 4P)',
     shortTag: 'WL+ 4P',
     tubeSize: 'Ø7',
     finType: 'Wavy Louver 4P',
     description: 'Evaporator Ø7 Wavy Louver 4P'
   },
-  'E3-3': {
-    id: 'E3-3',
-    name: 'LINE E3-3',
-    nameTh: 'ไลน์ E3-3 (New Cor 4P)',
+  'E3 New Cor': {
+    id: 'E3 New Cor',
+    name: 'LINE E3 New Cor',
+    nameTh: 'ไลน์ E3 New Cor (New Cor 4P)',
     shortTag: 'New Cor 4P',
     tubeSize: 'Ø7',
     finType: 'New Corrugate 4P',
@@ -341,6 +341,10 @@ export interface MoldDieMasterItem {
     regrindCycles: string; // e.g. "12-13 time", "7-9 time", "3-4 time", "15 time", "14-15 time", "8-10 time", "4-5 time"
     note: string; // e.g. "Change every 10-15 Day (เปลี่ยนทุกๆ 10-15 วัน)", "Dispose of after 1 use"
   };
+  // 5. Pricing & Supplier
+  priceThb?: number;
+  priceUsd?: number;
+  supplier?: string;
 }
 
 export interface PartMaster {
@@ -353,6 +357,9 @@ export interface PartMaster {
   drawingNumber: string;
   unit: string;
   unitCostThb: number;
+  priceThb?: number;
+  priceUsd?: number;
+  supplier?: string;
   description?: string;
   stockNote?: string;
   isImportedSeed?: boolean;

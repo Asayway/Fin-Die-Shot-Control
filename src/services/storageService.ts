@@ -90,8 +90,20 @@ const STORAGE_KEYS = {
   ACTIVE_E3_FIN_DIE: 'fin_press_active_e3_fin_die',
   STAGE_GROUPS: 'fin_press_custom_stage_groups',
   TV_DISPLAY_CONFIGS: 'fin_press_tv_display_configs',
+  PART_PHOTOS: 'fin_press_part_workpiece_photos_v1',
   SEED_INITIALIZED: 'fin_press_seed_init_v12_stages_2025'
 };
+
+export interface PartWorkpiecePhotoMeta {
+  partCode: string;
+  imageUrl: string;
+  sourceType: 'LOCAL_UPLOAD' | 'EXTERNAL_URL';
+  fileName?: string;
+  fileSizeBytes?: number;
+  uploadedAt: string;
+  uploadedBy?: string;
+  notes?: string;
+}
 
 type Listener = () => void;
 
@@ -230,13 +242,13 @@ class StorageService {
     localStorage.setItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(INITIAL_LINE_CONFIGS));
     localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(INITIAL_PART_LIFE_STANDARDS));
     
-    // Generate initial live monitoring dataset for 7 production lines (E1, E2, E3-1, E3-2, E3-3, E4, E5) with 0 initial shots
+    // Generate initial live monitoring dataset for 7 production lines (E1, E2, E3 SLIT, E3 WL+, E3 New Cor, E4, E5) with 0 initial shots
     const linesMonitoring: Record<ProductionLineId, LineLiveMonitoringData> = {
       'E1': INITIAL_LIVE_DATA_E1,
       'E2': this.generateLineMonitoring('E2', INITIAL_LINE_CONFIGS[1], 0),
-      'E3-1': this.generateLineMonitoring('E3-1', INITIAL_LINE_CONFIGS[2], 0),
-      'E3-2': this.generateLineMonitoring('E3-2', INITIAL_LINE_CONFIGS[3], 0),
-      'E3-3': this.generateLineMonitoring('E3-3', INITIAL_LINE_CONFIGS[4], 0),
+      'E3 SLIT': this.generateLineMonitoring('E3 SLIT', INITIAL_LINE_CONFIGS[2], 0),
+      'E3 WL+': this.generateLineMonitoring('E3 WL+', INITIAL_LINE_CONFIGS[3], 0),
+      'E3 New Cor': this.generateLineMonitoring('E3 New Cor', INITIAL_LINE_CONFIGS[4], 0),
       'E4': this.generateLineMonitoring('E4', INITIAL_LINE_CONFIGS[5], 0),
       'E5': this.generateLineMonitoring('E5', INITIAL_LINE_CONFIGS[6], 0)
     };
@@ -308,9 +320,9 @@ class StorageService {
     const linesMonitoring: Record<ProductionLineId, LineLiveMonitoringData> = {
       'E1': this.generateLineMonitoring('E1', lineConfigs.find(c => c.lineId === 'E1') || INITIAL_LINE_CONFIGS[0], getBaseline('E1')),
       'E2': this.generateLineMonitoring('E2', lineConfigs.find(c => c.lineId === 'E2') || INITIAL_LINE_CONFIGS[1], getBaseline('E2')),
-      'E3-1': this.generateLineMonitoring('E3-1', lineConfigs.find(c => c.lineId === 'E3-1') || INITIAL_LINE_CONFIGS[2], getBaseline('E3-1')),
-      'E3-2': this.generateLineMonitoring('E3-2', lineConfigs.find(c => c.lineId === 'E3-2') || INITIAL_LINE_CONFIGS[3], getBaseline('E3-2')),
-      'E3-3': this.generateLineMonitoring('E3-3', lineConfigs.find(c => c.lineId === 'E3-3') || INITIAL_LINE_CONFIGS[4], getBaseline('E3-3')),
+      'E3 SLIT': this.generateLineMonitoring('E3 SLIT', lineConfigs.find(c => c.lineId === 'E3 SLIT') || INITIAL_LINE_CONFIGS[2], getBaseline('E3 SLIT')),
+      'E3 WL+': this.generateLineMonitoring('E3 WL+', lineConfigs.find(c => c.lineId === 'E3 WL+') || INITIAL_LINE_CONFIGS[3], getBaseline('E3 WL+')),
+      'E3 New Cor': this.generateLineMonitoring('E3 New Cor', lineConfigs.find(c => c.lineId === 'E3 New Cor') || INITIAL_LINE_CONFIGS[4], getBaseline('E3 New Cor')),
       'E4': this.generateLineMonitoring('E4', lineConfigs.find(c => c.lineId === 'E4') || INITIAL_LINE_CONFIGS[5], getBaseline('E4')),
       'E5': this.generateLineMonitoring('E5', lineConfigs.find(c => c.lineId === 'E5') || INITIAL_LINE_CONFIGS[6], getBaseline('E5'))
     };
@@ -506,6 +518,92 @@ class StorageService {
     }
     localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(list));
     this.addAuditLog('SYSTEM', `Updated Part Master: ${part.partCode} (${part.partName})`, `อัปเดตข้อมูลชิ้นส่วนหลัก ${part.partName}`);
+    this.notify();
+  }
+
+  public getPartPhotos(): Record<string, PartWorkpiecePhotoMeta> {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.PART_PHOTOS);
+      if (!raw) {
+        const defaultSample: Record<string, PartWorkpiecePhotoMeta> = {
+          'DWG-PB-001': {
+            partCode: 'DWG-PB-001',
+            imageUrl: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600"><rect width="800" height="600" fill="%230f1015"/><defs><linearGradient id="body" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="%23334155"/><stop offset="25%" stop-color="%2394a3b8"/><stop offset="50%" stop-color="%23f1f5f9"/><stop offset="75%" stop-color="%2364748b"/><stop offset="100%" stop-color="%231e293b"/></linearGradient><linearGradient id="tip" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="%23475569"/><stop offset="35%" stop-color="%23cbd5e1"/><stop offset="65%" stop-color="%23f8fafc"/><stop offset="100%" stop-color="%23334155"/></linearGradient><filter id="shadow" x="-10%" y="-10%" width="120%" height="120%"><feDropShadow dx="0" dy="15" stdDeviation="15" flood-color="%23000000" flood-opacity="0.6"/></filter></defs><pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="%231e293b" stroke-width="1"/></pattern><rect width="800" height="600" fill="url(%23grid)" opacity="0.5"/><g filter="url(%23shadow)" transform="translate(400, 300) rotate(25)"><path d="M -45 -190 L 45 -190 L 50 -180 L -50 -180 Z" fill="%23cbd5e1"/><rect x="-50" y="-180" width="100" height="150" fill="url(%23body)" rx="2"/><line x1="-50" y1="-120" x2="50" y2="-120" stroke="%23475569" stroke-width="0.5" opacity="0.6"/><line x1="-50" y1="-60" x2="50" y2="-60" stroke="%23475569" stroke-width="0.5" opacity="0.6"/><path d="M -50 -30 L 50 -30 L 25 50 L -25 50 Z" fill="url(%23body)"/><rect x="-25" y="50" width="50" height="130" fill="url(%23tip)" rx="1"/><path d="M -25 180 L 25 180 L 20 188 L -20 188 Z" fill="%2394a3b8"/><ellipse cx="0" cy="188" rx="20" ry="4" fill="%23475569"/><text x="65" y="-100" fill="%2338bdf8" font-family="monospace" font-size="12" font-weight="bold">Shank: %C3%9810.00 mm</text><text x="40" y="110" fill="%234ade80" font-family="monospace" font-size="12" font-weight="bold">Tip: %C3%985.00 mm</text><text x="-160" y="0" fill="%23facc15" font-family="monospace" font-size="13" font-weight="bold">Length: 46.20 mm</text></g><g transform="translate(40, 500)"><rect width="260" height="65" rx="6" fill="%23181a20" stroke="%23334155"/><text x="15" y="24" fill="%2394a3b8" font-family="monospace" font-size="10">SAMPLE WORKPIECE PHOTO</text><text x="15" y="42" fill="%23f8fafc" font-family="monospace" font-size="13" font-weight="bold">PIERCE PUNCH (%C3%985)</text><text x="15" y="56" fill="%2338bdf8" font-family="monospace" font-size="10">MATERIAL: CARBIDE V40</text></g></svg>`,
+            sourceType: 'LOCAL_UPLOAD',
+            fileName: 'pierce_punch_actual_dwg_pb_001.svg',
+            uploadedAt: '2026-11-01T08:00:00.000Z',
+            uploadedBy: 'System Standard'
+          }
+        };
+        localStorage.setItem(STORAGE_KEYS.PART_PHOTOS, JSON.stringify(defaultSample));
+        return defaultSample;
+      }
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  public getPartPhoto(partCode: string): PartWorkpiecePhotoMeta | null {
+    if (!partCode) return null;
+    const all = this.getPartPhotos();
+    return all[partCode] || all[partCode.trim().toUpperCase()] || null;
+  }
+
+  public savePartPhoto(partCode: string, photo: Omit<PartWorkpiecePhotoMeta, 'uploadedAt'> & { uploadedAt?: string }): void {
+    if (!partCode) return;
+    const all = this.getPartPhotos();
+    const cleanCode = partCode.trim();
+    const currentUser = this.getCurrentUser();
+    const nowIso = new Date().toISOString();
+
+    all[cleanCode] = {
+      ...photo,
+      partCode: cleanCode,
+      uploadedAt: photo.uploadedAt || nowIso,
+      uploadedBy: photo.uploadedBy || currentUser?.name || 'Operator'
+    };
+
+    try {
+      localStorage.setItem(STORAGE_KEYS.PART_PHOTOS, JSON.stringify(all));
+    } catch (e) {
+      console.warn('Storage quota warning when saving part photo:', e);
+    }
+
+    // Also sync imageUrl to PartMaster if available
+    try {
+      const parts = this.getPartMasters();
+      const pIdx = parts.findIndex(p => p.partCode === cleanCode);
+      if (pIdx >= 0) {
+        (parts[pIdx] as any).imageUrl = photo.imageUrl;
+        localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(parts));
+      }
+    } catch {
+      // ignore
+    }
+
+    this.notify();
+  }
+
+  public removePartPhoto(partCode: string): void {
+    if (!partCode) return;
+    const all = this.getPartPhotos();
+    const cleanCode = partCode.trim();
+    if (all[cleanCode]) {
+      delete all[cleanCode];
+      localStorage.setItem(STORAGE_KEYS.PART_PHOTOS, JSON.stringify(all));
+    }
+    try {
+      const parts = this.getPartMasters();
+      const pIdx = parts.findIndex(p => p.partCode === cleanCode);
+      if (pIdx >= 0 && (parts[pIdx] as any).imageUrl) {
+        delete (parts[pIdx] as any).imageUrl;
+        localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(parts));
+      }
+    } catch {
+      // ignore
+    }
     this.notify();
   }
 
@@ -905,9 +1003,9 @@ class StorageService {
     const defaultLinesMonitoring: Record<ProductionLineId, LineLiveMonitoringData> = {
       'E1': INITIAL_LIVE_DATA_E1,
       'E2': this.generateLineMonitoring('E2', INITIAL_LINE_CONFIGS[1] || INITIAL_LINE_CONFIGS[0], 0),
-      'E3-1': this.generateLineMonitoring('E3-1', INITIAL_LINE_CONFIGS[2] || INITIAL_LINE_CONFIGS[0], 0),
-      'E3-2': this.generateLineMonitoring('E3-2', INITIAL_LINE_CONFIGS[3] || INITIAL_LINE_CONFIGS[0], 0),
-      'E3-3': this.generateLineMonitoring('E3-3', INITIAL_LINE_CONFIGS[4] || INITIAL_LINE_CONFIGS[0], 0),
+      'E3 SLIT': this.generateLineMonitoring('E3 SLIT', INITIAL_LINE_CONFIGS[2] || INITIAL_LINE_CONFIGS[0], 0),
+      'E3 WL+': this.generateLineMonitoring('E3 WL+', INITIAL_LINE_CONFIGS[3] || INITIAL_LINE_CONFIGS[0], 0),
+      'E3 New Cor': this.generateLineMonitoring('E3 New Cor', INITIAL_LINE_CONFIGS[4] || INITIAL_LINE_CONFIGS[0], 0),
       'E4': this.generateLineMonitoring('E4', INITIAL_LINE_CONFIGS[5] || INITIAL_LINE_CONFIGS[0], 0),
       'E5': this.generateLineMonitoring('E5', INITIAL_LINE_CONFIGS[6] || INITIAL_LINE_CONFIGS[0], 0)
     };
@@ -920,7 +1018,7 @@ class StorageService {
     try {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === 'object') {
-        const lineKeys: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
+        const lineKeys: ProductionLineId[] = ['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5'];
         let updated = false;
         lineKeys.forEach((lId, idx) => {
           if (!parsed[lId]) {
@@ -953,15 +1051,15 @@ class StorageService {
     return all[lineId];
   }
 
-  public getActiveE3FinDie(): 'E3-1' | 'E3-2' | 'E3-3' {
+  public getActiveE3FinDie(): 'E3 SLIT' | 'E3 WL+' | 'E3 New Cor' {
     const stored = localStorage.getItem(STORAGE_KEYS.ACTIVE_E3_FIN_DIE);
-    if (stored === 'E3-1' || stored === 'E3-2' || stored === 'E3-3') {
-      return stored;
+    if (stored === 'E3 SLIT' || stored === 'E3 WL+' || stored === 'E3 New Cor') {
+      return stored as any;
     }
-    return 'E3-2'; // Default active Fin Die for Machine E3 is E3-2 (WL+ 4P)
+    return 'E3 WL+'; // Default active Fin Die for Machine E3 is E3 WL+
   }
 
-  public setActiveE3FinDie(dieId: 'E3-1' | 'E3-2' | 'E3-3', operatorName?: string): void {
+  public setActiveE3FinDie(dieId: 'E3 SLIT' | 'E3 WL+' | 'E3 New Cor', operatorName?: string): void {
     const prev = this.getActiveE3FinDie();
     if (prev === dieId) return;
 
@@ -969,7 +1067,7 @@ class StorageService {
 
     // Also update line operational statuses in monitoring
     const all = this.getLinesMonitoring();
-    const e3Lines: ProductionLineId[] = ['E3-1', 'E3-2', 'E3-3'];
+    const e3Lines: ProductionLineId[] = ['E3 SLIT', 'E3 WL+', 'E3 New Cor'];
     e3Lines.forEach(eId => {
       if (all[eId]) {
         if (eId === dieId) {
@@ -1672,10 +1770,10 @@ class StorageService {
     const standards = this.getLifeStandards();
     const stocks = this.getSpareStocks();
     const activeE3Die = this.getActiveE3FinDie();
-    const isE3Line = lineId === 'E3-1' || lineId === 'E3-2' || lineId === 'E3-3';
+    const isE3Line = lineId === 'E3 SLIT' || lineId === 'E3 WL+' || lineId === 'E3 New Cor';
 
     if (isE3Line) {
-      const e3Lines: ProductionLineId[] = ['E3-1', 'E3-2', 'E3-3'];
+      const e3Lines: ProductionLineId[] = ['E3 SLIT', 'E3 WL+', 'E3 New Cor'];
       e3Lines.forEach(eId => {
         const eLine = all[eId];
         if (!eLine) return;
@@ -3570,7 +3668,7 @@ class StorageService {
 
 
   private initializeDefaultPositionLocks(): PositionLockRecord[] {
-    const lines: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
+    const lines: ProductionLineId[] = ['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5'];
     const result: PositionLockRecord[] = [];
 
     lines.forEach(lineId => {
@@ -3843,7 +3941,7 @@ class StorageService {
 
   public getLineDowntimeSummary30Days(): Downtime30DayReport {
     const logs = this.getDowntimeLogs();
-    const lineIds: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
+    const lineIds: ProductionLineId[] = ['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5'];
     const now = Date.now();
     const thirtyDaysAgoMs = now - (30 * 24 * 3600 * 1000);
     const plannedHoursPerLine = 30 * 24; // 720 hours in 30 days
@@ -4210,7 +4308,7 @@ class StorageService {
       }
     }
 
-    const lines: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
+    const lines: ProductionLineId[] = ['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5'];
     let needsSave = false;
 
     lines.forEach(lineId => {
@@ -4297,7 +4395,7 @@ export const DEFAULT_TV_DISPLAY_CONFIGS: Record<ProductionLineId, string[]> = {
     'DWG-SL-004', // SLIT DIE B (Ø5) 3Row
     'DWG-SL-005'  // SLIT DIE B (Ø5) 4Row
   ],
-  'E3-1': [
+  'E3 SLIT': [
     'DWG-PB-002', // PIERCE PUNCH (Ø7)
     'DWG-PB-004', // BURRING PUNCH (Ø7)
     'DWG-IR-003', // IRONING PUNCH (Ø7)
@@ -4313,7 +4411,7 @@ export const DEFAULT_TV_DISPLAY_CONFIGS: Record<ProductionLineId, string[]> = {
     'DWG-SC-004', // SIDE CUT DIE (3P) (Ø7)
     'DWG-SL-006'  // SLIT PUNCH A (Ø7) (Old)
   ],
-  'E3-2': [
+  'E3 WL+': [
     'DWG-PB-005', // BURRING (WIDE LOWER)
     'DWG-LV-001', // LOUVER PUNCH (U)
     'DWG-LV-002', // LOUVER PUNCH (L)
@@ -4326,7 +4424,7 @@ export const DEFAULT_TV_DISPLAY_CONFIGS: Record<ProductionLineId, string[]> = {
     'DWG-SC-006', // SIDE CUT DIE (WIDE LOWER) 4P
     'DWG-HF-002'  // HITCH FEED PIN (Ø7)
   ],
-  'E3-3': [
+  'E3 New Cor': [
     'DWG-PB-005', // BURRING (WIDE LOWER)
     'DWG-WL-001', // LOUVER PUNCH (WIDE LOWER) UP
     'DWG-WL-002', // LOUVER PUNCH (WIDE LOWER) DOWN

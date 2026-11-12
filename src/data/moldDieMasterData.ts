@@ -14,7 +14,10 @@ export const MOLD_DIE_MASTER_ITEMS_2025: MoldDieMasterItem[] = [
     "drawingNo": "DWG-PB-001",
     "installQty": { "e2": 204, "e4": 198, "e5": 198, "totalQty": 600 },
     "shotLifeCycle": { "e1_pcm": 1.5, "e2_gold": 15, "e3_1_pcm": 1.5, "e3_2_gold": 15, "e3_3_gold": 15, "e4_bare": 15, "e5_bare": 15, "e6_pcm": 1.5 },
-    "regrindStandard": { "perGrindMm": "0.10", "totalGrindMm": "1.40", "regrindCycles": "12-13 time", "note": "Change every 10 -15 Day (เปลี่ยนทุกๆ 10-15 วัน)" }
+    "regrindStandard": { "perGrindMm": "0.10", "totalGrindMm": "1.40", "regrindCycles": "12-13 time", "note": "Change every 10 -15 Day (เปลี่ยนทุกๆ 10-15 วัน)" },
+    "priceThb": 500,
+    "priceUsd": 14.29,
+    "supplier": "KISUNG"
   },
   {
     "no": 2,
@@ -23,7 +26,10 @@ export const MOLD_DIE_MASTER_ITEMS_2025: MoldDieMasterItem[] = [
     "drawingNo": "DWG-PB-002",
     "installQty": { "e1": 180, "e3_1": 180, "totalQty": 498 },
     "shotLifeCycle": { "e1_pcm": 1.5, "e2_gold": 15, "e3_1_pcm": 1.5, "e3_2_gold": 15, "e3_3_gold": 15, "e4_bare": 15, "e5_bare": 15, "e6_pcm": 1.5 },
-    "regrindStandard": { "perGrindMm": "0.10", "totalGrindMm": "1.40", "regrindCycles": "12-13 time", "note": "Change every 10 -15 Day (เปลี่ยนทุกๆ 10-15 วัน)" }
+    "regrindStandard": { "perGrindMm": "0.10", "totalGrindMm": "1.40", "regrindCycles": "12-13 time", "note": "Change every 10 -15 Day (เปลี่ยนทุกๆ 10-15 วัน)" },
+    "priceThb": 1000,
+    "priceUsd": 28.57,
+    "supplier": "KISUNG"
   },
   {
     "no": 3,
@@ -32,7 +38,10 @@ export const MOLD_DIE_MASTER_ITEMS_2025: MoldDieMasterItem[] = [
     "drawingNo": "DWG-PB-003",
     "installQty": { "e2": 204, "e4": 198, "e5": 198, "totalQty": 600 },
     "shotLifeCycle": { "e1_pcm": 1.5, "e2_gold": 15, "e3_1_pcm": 1.5, "e3_2_gold": 15, "e3_3_gold": 15, "e4_bare": 15, "e5_bare": 15, "e6_pcm": 1.5 },
-    "regrindStandard": { "perGrindMm": "0.10 -0.15", "totalGrindMm": "1.50", "regrindCycles": "7-9 time", "note": "Change every 10 -15 Day (เปลี่ยนทุกๆ 10-15 วัน)" }
+    "regrindStandard": { "perGrindMm": "0.10 -0.15", "totalGrindMm": "1.50", "regrindCycles": "7-9 time", "note": "Change every 10 -15 Day (เปลี่ยนทุกๆ 10-15 วัน)" },
+    "priceThb": 1200,
+    "priceUsd": 34.29,
+    "supplier": "KISUNG"
   },
   {
     "no": 4,
@@ -41,7 +50,8 @@ export const MOLD_DIE_MASTER_ITEMS_2025: MoldDieMasterItem[] = [
     "drawingNo": "DWG-PB-004",
     "installQty": { "e1": 180, "e3_1": 180, "totalQty": 498 },
     "shotLifeCycle": { "e1_pcm": 1.5, "e2_gold": 15, "e3_1_pcm": 1.5, "e3_2_gold": 15, "e3_3_gold": 15, "e4_bare": 15, "e5_bare": 15, "e6_pcm": 1.5 },
-    "regrindStandard": { "perGrindMm": "0.10 -0.15", "totalGrindMm": "1.50", "regrindCycles": "7-9 time", "note": "Change every 10 -15 Day (เปลี่ยนทุกๆ 10-15 วัน)" }
+    "regrindStandard": { "perGrindMm": "0.10 -0.15", "totalGrindMm": "1.50", "regrindCycles": "7-9 time", "note": "Change every 10 -15 Day (เปลี่ยนทุกๆ 10-15 วัน)" },
+    "supplier": "KISUNG"
   },
   {
     "no": 5,
@@ -50,7 +60,8 @@ export const MOLD_DIE_MASTER_ITEMS_2025: MoldDieMasterItem[] = [
     "drawingNo": "DWG-PB-005",
     "installQty": { "e3_2": 168, "e3_3": 168, "totalQty": 336 },
     "shotLifeCycle": { "e1_pcm": 1.5, "e2_gold": 15, "e3_1_pcm": 1.5, "e3_2_gold": 15, "e3_3_gold": 15, "e4_bare": 15, "e5_bare": 15, "e6_pcm": 1.5 },
-    "regrindStandard": { "perGrindMm": "0.10 -0.15", "totalGrindMm": "1.50", "regrindCycles": "7-9 time", "note": "Change every 10 -15 Day (เปลี่ยนทุกๆ 10-15 วัน)" }
+    "regrindStandard": { "perGrindMm": "0.10 -0.15", "totalGrindMm": "1.50", "regrindCycles": "7-9 time", "note": "Change every 10 -15 Day (เปลี่ยนทุกๆ 10-15 วัน)" },
+    "supplier": "KISUNG"
   },
 
   // 2. IRONING (6-9)
@@ -664,6 +675,8 @@ export const MOLD_DIE_MASTER_ITEMS_2025: MoldDieMasterItem[] = [
     "stage": "S5 CENTER NOTCH",
     "partName": "CORNER CUT S1/S0 PUNCH A (Ø7)",
     "drawingNo": "DWG-S5-001",
+    "newSpecMm": 28,
+    "scrapLimitMm": 27,
     "installQty": { "e1": 1, "totalQty": 1 },
     "shotLifeCycle": { "e1_pcm": 27, "e2_gold": 70, "e3_1_pcm": 27, "e3_2_gold": 70, "e3_3_gold": 70, "e4_bare": 70, "e5_bare": 70, "e6_pcm": 27 },
     "regrindStandard": { "perGrindMm": "0.10", "totalGrindMm": "1.50", "regrindCycles": "4-5 time", "note": "-" }
@@ -673,6 +686,8 @@ export const MOLD_DIE_MASTER_ITEMS_2025: MoldDieMasterItem[] = [
     "stage": "S5 CENTER NOTCH",
     "partName": "CORNER CUT S1/S0 PUNCH B (Ø7)",
     "drawingNo": "DWG-S5-002",
+    "newSpecMm": 28,
+    "scrapLimitMm": 27,
     "installQty": { "e1": 30, "totalQty": 30 },
     "shotLifeCycle": { "e1_pcm": 27, "e2_gold": 70, "e3_1_pcm": 27, "e3_2_gold": 70, "e3_3_gold": 70, "e4_bare": 70, "e5_bare": 70, "e6_pcm": 27 },
     "regrindStandard": { "perGrindMm": "0.10", "totalGrindMm": "1.50", "regrindCycles": "4-5 time", "note": "-" }
@@ -682,6 +697,8 @@ export const MOLD_DIE_MASTER_ITEMS_2025: MoldDieMasterItem[] = [
     "stage": "S5 CENTER NOTCH",
     "partName": "CORNER CUT S1/S0 PUNCH C (Ø7)",
     "drawingNo": "DWG-S5-003",
+    "newSpecMm": 28,
+    "scrapLimitMm": 27,
     "installQty": { "e1": 29, "totalQty": 29 },
     "shotLifeCycle": { "e1_pcm": 27, "e2_gold": 70, "e3_1_pcm": 27, "e3_2_gold": 70, "e3_3_gold": 70, "e4_bare": 70, "e5_bare": 70, "e6_pcm": 27 },
     "regrindStandard": { "perGrindMm": "0.10", "totalGrindMm": "1.50", "regrindCycles": "4-5 time", "note": "-" }
@@ -691,6 +708,8 @@ export const MOLD_DIE_MASTER_ITEMS_2025: MoldDieMasterItem[] = [
     "stage": "S5 CENTER NOTCH",
     "partName": "CORNER CUT S1/S0 PUNCH D (Ø7)",
     "drawingNo": "DWG-S5-004",
+    "newSpecMm": 28,
+    "scrapLimitMm": 27,
     "installQty": { "e1": 1, "totalQty": 1 },
     "shotLifeCycle": { "e1_pcm": 27, "e2_gold": 70, "e3_1_pcm": 27, "e3_2_gold": 70, "e3_3_gold": 70, "e4_bare": 70, "e5_bare": 70, "e6_pcm": 27 },
     "regrindStandard": { "perGrindMm": "0.10", "totalGrindMm": "1.50", "regrindCycles": "4-5 time", "note": "-" }
@@ -700,6 +719,8 @@ export const MOLD_DIE_MASTER_ITEMS_2025: MoldDieMasterItem[] = [
     "stage": "S5 CENTER NOTCH",
     "partName": "CORNER CUT S1/S0 DIE A (Ø7)",
     "drawingNo": "DWG-S5-005",
+    "newSpecMm": 28,
+    "scrapLimitMm": 27,
     "installQty": { "e1": 1, "totalQty": 1 },
     "shotLifeCycle": { "e1_pcm": 27, "e2_gold": 70, "e3_1_pcm": 27, "e3_2_gold": 70, "e3_3_gold": 70, "e4_bare": 70, "e5_bare": 70, "e6_pcm": 27 },
     "regrindStandard": { "perGrindMm": "0.10", "totalGrindMm": "1.50", "regrindCycles": "4-5 time", "note": "-" }
@@ -709,6 +730,8 @@ export const MOLD_DIE_MASTER_ITEMS_2025: MoldDieMasterItem[] = [
     "stage": "S5 CENTER NOTCH",
     "partName": "CORNER CUT S1/S0 DIE B (Ø7)",
     "drawingNo": "DWG-S5-006",
+    "newSpecMm": 28,
+    "scrapLimitMm": 27,
     "installQty": { "e1": 29, "totalQty": 29 },
     "shotLifeCycle": { "e1_pcm": 27, "e2_gold": 70, "e3_1_pcm": 27, "e3_2_gold": 70, "e3_3_gold": 70, "e4_bare": 70, "e5_bare": 70, "e6_pcm": 27 },
     "regrindStandard": { "perGrindMm": "0.10", "totalGrindMm": "1.50", "regrindCycles": "4-5 time", "note": "-" }
@@ -718,6 +741,8 @@ export const MOLD_DIE_MASTER_ITEMS_2025: MoldDieMasterItem[] = [
     "stage": "S5 CENTER NOTCH",
     "partName": "CORNER CUT S1/S0 DIE C (Ø7)",
     "drawingNo": "DWG-S5-007",
+    "newSpecMm": 28,
+    "scrapLimitMm": 27,
     "installQty": { "e1": 1, "totalQty": 1 },
     "shotLifeCycle": { "e1_pcm": 27, "e2_gold": 70, "e3_1_pcm": 27, "e3_2_gold": 70, "e3_3_gold": 70, "e4_bare": 70, "e5_bare": 70, "e6_pcm": 27 },
     "regrindStandard": { "perGrindMm": "0.10", "totalGrindMm": "1.50", "regrindCycles": "4-5 time", "note": "-" }
@@ -729,8 +754,10 @@ export const MOLD_DIE_MASTER_ITEMS_2025: MoldDieMasterItem[] = [
     "stage": "HITCH FEED",
     "partName": "HITCH FEED PIN (Ø5)",
     "drawingNo": "DWG-HF-001",
+    "newSpecMm": 28,
+    "scrapLimitMm": 27,
     "installQty": { "e2": 204, "e4": 204, "e5": 204, "totalQty": 612 },
-    "shotLifeCycle": {},
+    "shotLifeCycle": { "e1_pcm": 5, "e2_gold": 5, "e3_1_pcm": 5, "e3_2_gold": 5, "e3_3_gold": 5, "e4_bare": 5, "e5_bare": 5 },
     "regrindStandard": { "perGrindMm": "-", "totalGrindMm": "-", "regrindCycles": "-", "note": "-" }
   },
   {
@@ -738,8 +765,34 @@ export const MOLD_DIE_MASTER_ITEMS_2025: MoldDieMasterItem[] = [
     "stage": "HITCH FEED",
     "partName": "HITCH FEED PIN (Ø7)",
     "drawingNo": "DWG-HF-002",
+    "newSpecMm": 28,
+    "scrapLimitMm": 27,
     "installQty": { "e1": 180, "e3_1": 180, "e3_2": 168, "e3_3": 168, "totalQty": 1002 },
-    "shotLifeCycle": {},
+    "shotLifeCycle": { "e1_pcm": 5, "e2_gold": 5, "e3_1_pcm": 5, "e3_2_gold": 5, "e3_3_gold": 5, "e4_bare": 4, "e5_bare": 4 },
     "regrindStandard": { "perGrindMm": "-", "totalGrindMm": "-", "regrindCycles": "-", "note": "-" }
+  },
+
+  // 14. CUT OFF (80-81)
+  {
+    "no": 80,
+    "stage": "CUT OFF",
+    "partName": "Ø7 CUT OFF DIE (NEW COR)",
+    "drawingNo": "DWG-CO-007",
+    "newSpecMm": 75,
+    "scrapLimitMm": 72,
+    "installQty": { "e3_3": 4, "totalQty": 4 },
+    "shotLifeCycle": { "e1_pcm": 5, "e2_gold": 5, "e3_1_pcm": 5, "e3_2_gold": 5, "e3_3_gold": 5, "e4_bare": 4, "e5_bare": 4 },
+    "regrindStandard": { "perGrindMm": "0.25 mm", "totalGrindMm": "3.00", "regrindCycles": "12 time", "note": "Blade sharpening standard" }
+  },
+  {
+    "no": 81,
+    "stage": "CUT OFF",
+    "partName": "Ø7 CUT OFF PUNCH (NEW COR)",
+    "drawingNo": "DWG-CO-008",
+    "newSpecMm": 75,
+    "scrapLimitMm": 72,
+    "installQty": { "e3_3": 4, "totalQty": 4 },
+    "shotLifeCycle": { "e1_pcm": 5, "e2_gold": 5, "e3_1_pcm": 5, "e3_2_gold": 5, "e3_3_gold": 5, "e4_bare": 4, "e5_bare": 4 },
+    "regrindStandard": { "perGrindMm": "0.25 mm", "totalGrindMm": "3.00", "regrindCycles": "12 time", "note": "Blade sharpening standard" }
   }
 ];

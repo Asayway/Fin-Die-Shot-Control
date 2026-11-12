@@ -38,7 +38,7 @@ interface LockPositionViewProps {
   initialLineId?: ProductionLineId;
 }
 
-const ALL_LINES: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
+const ALL_LINES: ProductionLineId[] = ['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5'];
 
 const LOCK_TYPE_INFO: Record<PositionLockStatus, { label: string; labelTh: string; color: string; bg: string; border: string }> = {
   UNLOCKED: {

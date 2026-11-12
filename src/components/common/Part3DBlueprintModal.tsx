@@ -1,48 +1,97 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   RotateCw, 
   Eye, 
-  Box, 
+  Camera, 
+  Image as ImageIcon, 
+  Upload, 
+  Link as LinkIcon, 
+  Trash2, 
+  ZoomIn, 
+  ZoomOut, 
   ShieldCheck, 
   AlertTriangle, 
   Calculator, 
-  CheckCircle2,
-  ZoomIn,
-  ZoomOut,
-  Play,
-  Pause,
-  Compass,
-  Maximize2
+  CheckCircle2, 
+  ExternalLink,
+  Download,
+  Maximize2,
+  RefreshCw,
+  Sparkles,
+  Info
 } from 'lucide-react';
 import { UnifiedPartMasterRow } from '../../views/PartMasterView';
+import { storageService, PartWorkpiecePhotoMeta } from '../../services/storageService';
 
 interface Part3DBlueprintModalProps {
   isOpen: boolean;
   onClose: () => void;
   partRow: UnifiedPartMasterRow | null;
+  onPhotoSaved?: () => void;
 }
 
 export const Part3DBlueprintModal: React.FC<Part3DBlueprintModalProps> = ({
   isOpen,
   onClose,
-  partRow
+  partRow,
+  onPhotoSaved
 }) => {
-  const [rotationX, setRotationX] = useState<number>(20);
-  const [rotationY, setRotationY] = useState<number>(-30);
+  const [activeTab, setActiveTab] = useState<'PHOTO_VIEWPORT' | 'CALCULATION_LADDER'>('PHOTO_VIEWPORT');
+  const [currentPhoto, setCurrentPhoto] = useState<PartWorkpiecePhotoMeta | null>(null);
+  
+  // Viewport Zoom & Pan state
   const [zoomScale, setZoomScale] = useState<number>(1.0);
-  const [renderMode, setRenderMode] = useState<'WIREFRAME' | 'SHADED' | 'X_RAY'>('WIREFRAME');
-  const [isAutoSpin, setIsAutoSpin] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'3D_BLUEPRINT' | 'CALCULATION_LADDER'>('3D_BLUEPRINT');
+  const [panPosition, setPanPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  
+  // Uploader Mode State
+  const [isUploaderOpen, setIsUploaderOpen] = useState<boolean>(false);
+  const [uploadSourceType, setUploadSourceType] = useState<'FILE' | 'URL'>('FILE');
+  const [urlInputValue, setUrlInputValue] = useState<string>('');
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [selectedFileName, setSelectedFileName] = useState<string>('');
+  const [isCompressing, setIsCompressing] = useState<boolean>(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [saveSuccessToast, setSaveSuccessToast] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 360-degree Auto Rotation Effect
+  // Load existing photo for the part whenever partRow changes or modal opens
   useEffect(() => {
-    if (!isAutoSpin) return;
-    const interval = setInterval(() => {
-      setRotationY(prev => (prev + 1.2) % 360);
-    }, 25);
-    return () => clearInterval(interval);
-  }, [isAutoSpin]);
+    if (!partRow || !isOpen) return;
+
+    const existingPhoto = storageService.getPartPhoto(partRow.partCode);
+    if (existingPhoto) {
+      setCurrentPhoto(existingPhoto);
+      setIsUploaderOpen(false);
+    } else {
+      // Check if partRow has legacy imageUrl
+      const legacyUrl = (partRow as any).imageUrl;
+      if (legacyUrl) {
+        setCurrentPhoto({
+          partCode: partRow.partCode,
+          imageUrl: legacyUrl,
+          sourceType: 'EXTERNAL_URL',
+          uploadedAt: new Date().toISOString(),
+          uploadedBy: 'System'
+        });
+        setIsUploaderOpen(false);
+      } else {
+        setCurrentPhoto(null);
+        setIsUploaderOpen(true); // Open uploader directly if no photo exists
+      }
+    }
+
+    // Reset zoom and pan
+    setZoomScale(1.0);
+    setPanPosition({ x: 0, y: 0 });
+    setPreviewImageUrl(null);
+    setUrlInputValue('');
+    setUploadError(null);
+    setSaveSuccessToast(null);
+    setActiveTab('PHOTO_VIEWPORT');
+  }, [partRow, isOpen]);
 
   if (!isOpen || !partRow) return null;
 
@@ -66,97 +115,239 @@ export const Part3DBlueprintModal: React.FC<Part3DBlueprintModalProps> = ({
       ? partRow.regrindStandard.regrindCycles
       : Math.floor(totalAllowableGrind / perGrindNum);
 
-  // Classify Part Geometry Type
-  const nameUpper = partRow.partName.toUpperCase();
-  const isDie = nameUpper.includes('DIE');
-  const isLouver = nameUpper.includes('LOUVER');
-  const isSlit = nameUpper.includes('SLIT') || nameUpper.includes('CUTTER') || nameUpper.includes('FLARE') || nameUpper.includes('BLADE');
-  const isPin = nameUpper.includes('PIN') || nameUpper.includes('PILOT') || nameUpper.includes('GUIDE');
-  const isIroning = nameUpper.includes('IRONING') || nameUpper.includes('FORM') || nameUpper.includes('BUCKING');
-  const isPunch = !isDie && !isLouver && !isSlit && !isPin && !isIroning;
-
-  // Handle Mouse Drag for 360° Rotation
-  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const startRotX = rotationX;
-    const startRotY = rotationY;
-
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      const deltaX = moveEvent.clientX - startX;
-      const deltaY = moveEvent.clientY - startY;
-      setRotationY((startRotY + deltaX * 0.8) % 360);
-      setRotationX(Math.max(-85, Math.min(85, startRotX - deltaY * 0.6)));
-    };
-
-    const handleMouseUp = () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
+  // Zoom handlers
+  const handleZoomIn = () => setZoomScale(prev => Math.min(prev + 0.25, 3.5));
+  const handleZoomOut = () => setZoomScale(prev => Math.max(prev - 0.25, 0.5));
+  const handleResetZoom = () => {
+    setZoomScale(1.0);
+    setPanPosition({ x: 0, y: 0 });
   };
 
-  const handleZoomIn = () => setZoomScale(prev => Math.min(prev + 0.2, 2.2));
-  const handleZoomOut = () => setZoomScale(prev => Math.max(prev - 0.2, 0.6));
-  const handleResetCamera = () => {
-    setRotationX(20);
-    setRotationY(-30);
-    setZoomScale(1.0);
-    setIsAutoSpin(false);
+  // Pan / Drag handlers for large images
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (zoomScale <= 1.0) return;
+    setIsDragging(true);
+    dragStartRef.current = {
+      x: e.clientX - panPosition.x,
+      y: e.clientY - panPosition.y
+    };
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || zoomScale <= 1.0) return;
+    setPanPosition({
+      x: e.clientX - dragStartRef.current.x,
+      y: e.clientY - dragStartRef.current.y
+    });
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  // Image compression and resize helper (ensures fast storage and loading)
+  const processImageFile = (file: File) => {
+    setUploadError(null);
+    if (!file.type.startsWith('image/')) {
+      setUploadError('กรุณาเลือกไฟล์รูปภาพที่ถูกต้อง (PNG, JPG, WEBP, GIF)');
+      return;
+    }
+
+    setIsCompressing(true);
+    setSelectedFileName(file.name);
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const maxDim = 1600;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
+            setPreviewImageUrl(compressedDataUrl);
+          } else {
+            setPreviewImageUrl(e.target?.result as string);
+          }
+        } catch {
+          setPreviewImageUrl(e.target?.result as string);
+        } finally {
+          setIsCompressing(false);
+        }
+      };
+      img.onerror = () => {
+        setUploadError('ไม่สามารถอ่านไฟล์รูปภาพได้ กรุณาลองใหม่อีกครั้ง');
+        setIsCompressing(false);
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => {
+      setUploadError('เกิดข้อผิดพลาดในการโหลดไฟล์รูปภาพ');
+      setIsCompressing(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processImageFile(file);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      processImageFile(file);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  // External URL preview loader
+  const handleLoadUrlPreview = () => {
+    setUploadError(null);
+    const trimmed = urlInputValue.trim();
+    if (!trimmed) {
+      setUploadError('กรุณาระบุ URL รูปภาพ');
+      return;
+    }
+    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://') && !trimmed.startsWith('data:image/')) {
+      setUploadError('URL ต้องขึ้นต้นด้วย https:// หรือ http://');
+      return;
+    }
+
+    // Test image loading
+    const testImg = new Image();
+    testImg.onload = () => {
+      setPreviewImageUrl(trimmed);
+      setSelectedFileName('external-image-url');
+      setUploadError(null);
+    };
+    testImg.onerror = () => {
+      setUploadError('ไม่สามารถโหลดรูปภาพจาก URL ที่ระบุได้ กรุณาตรวจสอบลิงก์หรือสิทธิ์การเข้าถึงรูป');
+    };
+    testImg.src = trimmed;
+  };
+
+  // Save photo to storage
+  const handleSavePhoto = () => {
+    if (!previewImageUrl) {
+      setUploadError('กรุณาเลือกหรือระบุรูปภาพก่อนกดบันทึก');
+      return;
+    }
+
+    const newPhotoMeta: Omit<PartWorkpiecePhotoMeta, 'uploadedAt'> = {
+      partCode: partRow.partCode,
+      imageUrl: previewImageUrl,
+      sourceType: uploadSourceType === 'FILE' ? 'LOCAL_UPLOAD' : 'EXTERNAL_URL',
+      fileName: selectedFileName || `${partRow.partCode}-photo.jpg`,
+      uploadedBy: 'Operator'
+    };
+
+    storageService.savePartPhoto(partRow.partCode, newPhotoMeta);
+    setCurrentPhoto({
+      ...newPhotoMeta,
+      uploadedAt: new Date().toISOString()
+    });
+    onPhotoSaved?.();
+
+    setIsUploaderOpen(false);
+    setPreviewImageUrl(null);
+    setUrlInputValue('');
+    setSaveSuccessToast('บันทึกรูปถ่ายชิ้นงานจริงเรียบร้อยแล้ว!');
+    setTimeout(() => setSaveSuccessToast(null), 3000);
+  };
+
+  // Delete photo from storage
+  const handleDeletePhoto = () => {
+    if (!window.confirm(`ยืนยันการลบรูปถ่ายชิ้นงานจริงของ ${partRow.partName} (${partRow.partCode}) ใช่หรือไม่?`)) {
+      return;
+    }
+    storageService.removePartPhoto(partRow.partCode);
+    setCurrentPhoto(null);
+    onPhotoSaved?.();
+    setIsUploaderOpen(true);
+    setPreviewImageUrl(null);
+    setSaveSuccessToast('ลบรูปถ่ายชิ้นงานจริงเรียบร้อยแล้ว');
+    setTimeout(() => setSaveSuccessToast(null), 3000);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-fadeIn">
-      <div className="bg-[#121316] border border-[#00FF00]/40 rounded-xl w-full max-w-6xl max-h-[94vh] flex flex-col shadow-2xl overflow-hidden text-slate-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 animate-fadeIn select-none">
+      <div className="bg-[#121316] border border-cyan-500/40 rounded-2xl w-full max-w-6xl max-h-[94vh] flex flex-col shadow-2xl overflow-hidden text-slate-100 font-sans">
         
-        {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-3.5 bg-[#1a1b1e] border-b border-[#2d2e38]">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-lg bg-[#00FF00]/10 border border-[#00FF00]/30 text-[#00FF00]">
-              <Box className="w-6 h-6 animate-pulse" />
+        {/* ======================================================== */}
+        {/* 1. MODAL HEADER */}
+        {/* ======================================================== */}
+        <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 bg-[#18191e] border-b border-[#2d2e38] flex-shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 flex-shrink-0">
+              <Camera className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-mono font-bold text-[#00FF00] bg-[#00FF00]/10 px-2 py-0.5 rounded border border-[#00FF00]/30">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-mono font-bold text-cyan-400 bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-500/30">
                   {partRow.stage}
                 </span>
                 <span className="text-xs font-mono text-slate-400">
                   DWG: {partRow.drawingNo || 'DWG-STD-2025'}
                 </span>
-                <span className="text-[10px] font-mono text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">
-                  3D Precision Model
+                <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30 flex items-center gap-1 font-bold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  Real Workpiece Photo & Specifications
                 </span>
               </div>
-              <h2 className="text-xl font-bold text-white tracking-wide mt-0.5 flex items-center gap-2">
-                {partRow.partName}
-                <span className="text-xs font-normal text-slate-400 font-mono">
+              <h2 className="text-lg sm:text-xl font-black text-white tracking-wide mt-0.5 flex items-center gap-2 truncate">
+                <span className="truncate">{partRow.partName}</span>
+                <span className="text-xs font-normal text-slate-400 font-mono hidden md:inline flex-shrink-0">
                   (Ø5 & Ø7 Factory Standard)
                 </span>
               </h2>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
             {/* View Mode Tabs */}
-            <div className="flex items-center bg-[#0a0b0d] p-1 rounded-lg border border-[#2d2e38]">
+            <div className="flex items-center bg-[#0a0b0d] p-1 rounded-xl border border-[#2d2e38]">
               <button
-                onClick={() => setActiveTab('3D_BLUEPRINT')}
-                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  activeTab === '3D_BLUEPRINT'
-                    ? 'bg-[#00FF00] text-black shadow-md'
+                type="button"
+                onClick={() => setActiveTab('PHOTO_VIEWPORT')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                  activeTab === 'PHOTO_VIEWPORT'
+                    ? 'bg-gradient-to-r from-cyan-500 to-emerald-400 text-slate-950 font-black shadow-md'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
-                <Eye className="w-3.5 h-3.5" />
-                <span>3D Blueprint Simulation</span>
+                <Camera className="w-3.5 h-3.5" />
+                <span>รูปตัวอย่างชิ้นงานจริง</span>
               </button>
               <button
+                type="button"
                 onClick={() => setActiveTab('CALCULATION_LADDER')}
-                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                   activeTab === 'CALCULATION_LADDER'
-                    ? 'bg-[#00FF00] text-black shadow-md'
+                    ? 'bg-gradient-to-r from-cyan-500 to-emerald-400 text-slate-950 font-black shadow-md'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
@@ -166,8 +357,9 @@ export const Part3DBlueprintModal: React.FC<Part3DBlueprintModalProps> = ({
             </div>
 
             <button
+              type="button"
               onClick={onClose}
-              className="p-2 rounded-lg bg-[#22222a] hover:bg-[#333340] text-slate-400 hover:text-white transition-colors cursor-pointer border border-white/10"
+              className="p-2 rounded-xl bg-[#22222a] hover:bg-[#333340] text-slate-400 hover:text-white transition-colors cursor-pointer border border-white/10 active:scale-95"
               title="ปิดหน้าต่าง (Close)"
             >
               <X className="w-5 h-5" />
@@ -175,30 +367,49 @@ export const Part3DBlueprintModal: React.FC<Part3DBlueprintModalProps> = ({
           </div>
         </div>
 
-        {/* Modal Main Viewport Content */}
-        <div className="flex-1 overflow-hidden p-4 bg-[#0d0e11] flex flex-col justify-between">
-          {activeTab === '3D_BLUEPRINT' ? (
-            <div className="w-full h-full flex flex-col justify-between space-y-3">
+        {/* Success Toast Notification */}
+        {saveSuccessToast && (
+          <div className="bg-emerald-950/90 border-b border-emerald-500/50 px-6 py-2 text-xs font-bold font-mono text-emerald-300 flex items-center justify-between animate-fadeIn">
+            <span className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              {saveSuccessToast}
+            </span>
+            <button type="button" onClick={() => setSaveSuccessToast(null)} className="text-emerald-400 hover:text-white">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* 2. MAIN VIEWPORT BODY */}
+        {/* ======================================================== */}
+        <div className="flex-1 overflow-hidden p-3.5 sm:p-5 bg-[#0c0d10] flex flex-col justify-between min-h-0">
+          
+          {activeTab === 'PHOTO_VIEWPORT' ? (
+            <div className="w-full h-full flex flex-col justify-between space-y-3 min-h-0">
               
-              {/* Full-Width Spacious 3D Canvas Box */}
-              <div className="w-full flex-1 bg-[#14151a] border border-[#2a2b34] rounded-xl p-4 flex flex-col justify-between relative min-h-[500px] shadow-2xl select-none overflow-hidden">
+              {/* Main Viewport Box */}
+              <div className="w-full flex-1 bg-[#131419] border border-[#262732] rounded-2xl p-3 sm:p-4 flex flex-col justify-between relative shadow-2xl overflow-hidden min-h-[460px]">
                 
-                {/* Canvas Floating Top HUD Controls Bar */}
-                <div className="flex items-center justify-between z-20 gap-3 flex-wrap">
+                {/* Viewport Top HUD Controls Bar */}
+                <div className="flex items-center justify-between z-20 gap-2 sm:gap-3 flex-wrap pb-2 border-b border-white/5">
                   
-                  {/* Left Badges */}
+                  {/* Left Status Badge */}
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-2 text-xs font-mono font-bold text-[#00FF00] bg-[#00FF00]/10 px-3 py-1.5 rounded-lg border border-[#00FF00]/30 shadow-xs">
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#00FF00] animate-ping" />
-                      3D Interactive Viewport
+                    <span className="inline-flex items-center gap-1.5 text-xs font-mono font-bold text-cyan-300 bg-cyan-950/80 px-3 py-1 rounded-lg border border-cyan-500/40">
+                      <ImageIcon className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>{currentPhoto && !isUploaderOpen ? 'ชิ้นงานจริง (Workpiece Photo)' : 'ลงรูปถ่ายชิ้นงาน (Photo Uploader)'}</span>
                     </span>
-                    <span className="text-[11px] font-mono text-slate-400 bg-black/50 px-2.5 py-1 rounded-md border border-white/10">
-                      Rot X: {Math.round(rotationX)}° | Rot Y: {Math.round((rotationY % 360 + 360) % 360)}°
-                    </span>
+                    
+                    {currentPhoto && !isUploaderOpen && (
+                      <span className="text-[11px] font-mono text-slate-400 bg-black/50 px-2.5 py-1 rounded-md border border-white/10">
+                        Zoom: {Math.round(zoomScale * 100)}%
+                      </span>
+                    )}
                   </div>
 
-                  {/* Top Center Spec Quick Badges (High Visibility) */}
-                  <div className="hidden md:flex items-center gap-3 bg-black/60 backdrop-blur-md px-3 py-1 rounded-lg border border-white/10 text-xs font-mono">
+                  {/* Center Spec Quick Badges */}
+                  <div className="hidden lg:flex items-center gap-3 bg-black/60 backdrop-blur-md px-3.5 py-1 rounded-xl border border-white/10 text-xs font-mono">
                     <div className="flex items-center gap-1.5">
                       <span className="text-slate-400">New Spec L₀:</span>
                       <strong className="text-emerald-400 font-bold">{newSpecNum.toFixed(2)} mm</strong>
@@ -216,286 +427,376 @@ export const Part3DBlueprintModal: React.FC<Part3DBlueprintModalProps> = ({
                     <span className="text-slate-600">|</span>
                     <div className="flex items-center gap-1.5">
                       <span className="text-slate-400">Max Cycles:</span>
-                      <strong className="text-[#00FF00] font-bold">
+                      <strong className="text-cyan-300 font-bold">
                         {typeof maxCyclesCalculated === 'number' ? `${maxCyclesCalculated} รอบ` : maxCyclesCalculated}
                       </strong>
                     </div>
                   </div>
 
-                  {/* Right Controls Toolbars */}
-                  <div className="flex items-center gap-2 bg-[#08090b]/90 backdrop-blur-md p-1.5 rounded-lg border border-white/15 shadow-md">
-                    {/* Render Mode Switcher */}
-                    <div className="flex items-center bg-[#1a1b22] rounded p-0.5 border border-white/10">
-                      <button
-                        onClick={() => setRenderMode('WIREFRAME')}
-                        className={`px-2.5 py-1 text-[11px] font-mono font-bold rounded transition-colors cursor-pointer ${
-                          renderMode === 'WIREFRAME' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white'
-                        }`}
-                        title="โหมดสาย Wireframe โปร่งแสง (Match Blueprint)"
-                      >
-                        Wireframe
-                      </button>
-                      <button
-                        onClick={() => setRenderMode('SHADED')}
-                        className={`px-2.5 py-1 text-[11px] font-mono font-bold rounded transition-colors cursor-pointer ${
-                          renderMode === 'SHADED' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-white'
-                        }`}
-                        title="โหมดผิวเนื้อโลหะสมจริง (Polished Steel)"
-                      >
-                        Shaded Metal
-                      </button>
-                      <button
-                        onClick={() => setRenderMode('X_RAY')}
-                        className={`px-2.5 py-1 text-[11px] font-mono font-bold rounded transition-colors cursor-pointer ${
-                          renderMode === 'X_RAY' ? 'bg-sky-600 text-white shadow' : 'text-slate-400 hover:text-white'
-                        }`}
-                        title="โหมดเอ็กซเรย์เห็นภายใน (X-Ray Cutaway)"
-                      >
-                        X-Ray
-                      </button>
-                    </div>
+                  {/* Right Action Controls */}
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    {currentPhoto && !isUploaderOpen ? (
+                      <>
+                        {/* Zoom Controls */}
+                        <div className="flex items-center bg-[#090a0d] p-0.5 rounded-lg border border-white/10">
+                          <button
+                            type="button"
+                            onClick={handleZoomIn}
+                            className="p-1.5 text-slate-300 hover:text-white hover:bg-white/10 rounded transition-colors cursor-pointer"
+                            title="ซูมขยาย (Zoom In)"
+                          >
+                            <ZoomIn className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleZoomOut}
+                            className="p-1.5 text-slate-300 hover:text-white hover:bg-white/10 rounded transition-colors cursor-pointer"
+                            title="ย่อขนาด (Zoom Out)"
+                          >
+                            <ZoomOut className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleResetZoom}
+                            className="p-1.5 text-slate-300 hover:text-white hover:bg-white/10 rounded transition-colors cursor-pointer"
+                            title="รีเซ็ตขนาด 100% (Reset Zoom)"
+                          >
+                            <RotateCw className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
 
-                    {/* Auto Spin Toggle */}
-                    <button
-                      onClick={() => setIsAutoSpin(!isAutoSpin)}
-                      className={`p-1.5 rounded text-xs font-mono flex items-center gap-1 font-bold border cursor-pointer transition-all ${
-                        isAutoSpin 
-                          ? 'bg-[#00FF00] text-black border-[#00FF00]' 
-                          : 'bg-[#1e1f26] text-slate-300 hover:text-white border-white/10'
+                        {/* Replace / Change Photo Button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsUploaderOpen(true);
+                            setPreviewImageUrl(null);
+                          }}
+                          className="px-3 py-1.5 rounded-lg text-xs font-bold font-mono bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/50 text-cyan-300 flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+                          title="เปลี่ยนรูปถ่ายชิ้นงานใหม่"
+                        >
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>เปลี่ยนรูป</span>
+                        </button>
+
+                        {/* Delete Photo Button */}
+                        <button
+                          type="button"
+                          onClick={handleDeletePhoto}
+                          className="p-1.5 rounded-lg text-xs bg-rose-950/80 hover:bg-rose-900 border border-rose-500/40 text-rose-300 hover:text-rose-100 cursor-pointer active:scale-95 transition-all"
+                          title="ลบรูปถ่ายชิ้นงานนี้"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </>
+                    ) : (
+                      currentPhoto && (
+                        <button
+                          type="button"
+                          onClick={() => setIsUploaderOpen(false)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-bold font-mono bg-[#22222a] hover:bg-[#333340] border border-white/10 text-slate-300 hover:text-white flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <span>กลับไปดูรูปถ่าย</span>
+                        </button>
+                      )
+                    )}
+                  </div>
+                </div>
+
+                {/* Main Viewport Content Area */}
+                <div className="w-full flex-1 flex items-center justify-center relative overflow-hidden my-2 rounded-xl bg-black/40 border border-white/5">
+                  
+                  {/* Subtle Grid Lines Texture */}
+                  <div className="absolute inset-0 opacity-10 pointer-events-none bg-[radial-gradient(#06b6d4_1px,transparent_1px)] [background-size:24px_24px]" />
+
+                  {/* SCENARIO A: DISPLAYING PHOTO VIEWPORT */}
+                  {currentPhoto && !isUploaderOpen ? (
+                    <div 
+                      className={`w-full h-full flex items-center justify-center p-4 relative ${
+                        zoomScale > 1.0 ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-default'
                       }`}
-                      title={isAutoSpin ? 'หยุดหมุน 360°' : 'หมุนดู 360° อัตโนมัติ (Auto 360 Spin)'}
+                      onMouseDown={handleMouseDown}
+                      onMouseMove={handleMouseMove}
+                      onMouseUp={handleMouseUp}
+                      onMouseLeave={handleMouseUp}
                     >
-                      {isAutoSpin ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-                      <span className="hidden sm:inline">Spin 360°</span>
-                    </button>
+                      <div
+                        className="transition-transform duration-100 ease-out flex items-center justify-center max-w-full max-h-full"
+                        style={{
+                          transform: `translate(${panPosition.x}px, ${panPosition.y}px) scale(${zoomScale})`,
+                          transformOrigin: 'center center'
+                        }}
+                      >
+                        <img 
+                          src={currentPhoto.imageUrl} 
+                          alt={partRow.partName}
+                          className="max-h-[440px] max-w-full object-contain rounded-lg shadow-2xl border border-white/10 select-none pointer-events-none"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = 'none';
+                            setUploadError('ไม่สามารถโหลดภาพจากแหล่งข้อมูลนี้ได้ ลิงก์อาจเสียหรือถูกลบไปแล้ว');
+                          }}
+                        />
+                      </div>
 
-                    {/* Zoom Buttons */}
-                    <button
-                      onClick={handleZoomIn}
-                      className="p-1.5 text-slate-300 hover:text-white bg-[#1e1f26] rounded border border-white/10 hover:bg-slate-700 cursor-pointer"
-                      title="ซูมขยาย (Zoom In)"
-                    >
-                      <ZoomIn className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={handleZoomOut}
-                      className="p-1.5 text-slate-300 hover:text-white bg-[#1e1f26] rounded border border-white/10 hover:bg-slate-700 cursor-pointer"
-                      title="ย่อมุมมอง (Zoom Out)"
-                    >
-                      <ZoomOut className="w-3.5 h-3.5" />
-                    </button>
+                      {/* Floating Bottom Metadata Badge */}
+                      <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between gap-3 text-xs font-mono bg-black/75 backdrop-blur-md px-3.5 py-2 rounded-xl border border-white/10 pointer-events-auto">
+                        <div className="flex items-center gap-2 truncate">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                          <span className="font-bold text-white truncate">{partRow.partName}</span>
+                          <span className="text-slate-400">({partRow.partCode})</span>
+                        </div>
 
-                    {/* Reset Camera Button */}
-                    <button
-                      onClick={handleResetCamera}
-                      className="p-1.5 text-slate-300 hover:text-white bg-[#1e1f26] rounded border border-white/10 hover:bg-slate-700 cursor-pointer"
-                      title="รีเซ็ตมุมมองและทิศทาง (Reset Camera)"
-                    >
-                      <RotateCw className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Main 3D Canvas Canvas Renderer */}
-                <div 
-                  className="w-full flex-1 flex items-center justify-center cursor-grab active:cursor-grabbing my-2 relative"
-                  onMouseDown={handleMouseDown}
-                >
-                  {/* Subtle Background Blueprint Grid Lines */}
-                  <div className="absolute inset-0 opacity-15 pointer-events-none bg-[radial-gradient(#00FF00_1px,transparent_1px)] [background-size:20px_20px]" />
-
-                  {/* 3D Object Container with Perspective Transform */}
-                  <div 
-                    className="transition-transform duration-75 ease-out flex items-center justify-center relative z-10"
-                    style={{
-                      transform: `perspective(900px) rotateX(${rotationX}deg) rotateY(${rotationY}deg) scale(${zoomScale})`,
-                      transformStyle: 'preserve-3d'
-                    }}
-                  >
-                    <svg width="360" height="360" viewBox="-180 -180 360 360" className="drop-shadow-[0_15px_30px_rgba(0,255,0,0.15)]">
-                      <defs>
-                        {/* Shaded Metallic Steel Gradients */}
-                        <linearGradient id="metalMainShaded" x1="0%" y1="0%" x2="100%" y2="100%">
-                          <stop offset="0%" stopColor="#64748b" />
-                          <stop offset="35%" stopColor="#e2e8f0" />
-                          <stop offset="70%" stopColor="#334155" />
-                          <stop offset="100%" stopColor="#0f172a" />
-                        </linearGradient>
-
-                        <linearGradient id="metalGreenHighlight" x1="0%" y1="0%" x2="0%" y2="100%">
-                          <stop offset="0%" stopColor="#00FF00" stopOpacity="0.9" />
-                          <stop offset="100%" stopColor="#006600" stopOpacity="0.4" />
-                        </linearGradient>
-
-                        <linearGradient id="xRayGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                          <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.3" />
-                          <stop offset="100%" stopColor="#0369a1" stopOpacity="0.6" />
-                        </linearGradient>
-
-                        {/* Drop Glow Filter */}
-                        <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
-                          <feGaussianBlur stdDeviation="3" result="blur" />
-                          <feComposite in="SourceGraphic" in2="blur" operator="over" />
-                        </filter>
-                      </defs>
-
-                      {/* Dynamic 3D Geometry Rendering based on Part Category */}
-                      {isPunch ? (
-                        /* PUNCH GEOMETRY (Pierce Punch, Burring Punch, etc.) */
-                        <g 
-                          stroke={renderMode === 'WIREFRAME' ? '#00FF00' : renderMode === 'X_RAY' ? '#38bdf8' : '#475569'} 
-                          strokeWidth={renderMode === 'WIREFRAME' ? '1.5' : '1'} 
-                          fill={renderMode === 'WIREFRAME' ? 'none' : renderMode === 'X_RAY' ? 'url(#xRayGradient)' : 'url(#metalMainShaded)'}
+                        <div className="flex items-center gap-3 text-slate-300 text-[11px] flex-shrink-0">
+                          <span>
+                            แหล่งที่มา: <strong className="text-cyan-300">{currentPhoto.sourceType === 'LOCAL_UPLOAD' ? 'ไฟล์จากเครื่อง' : 'URL ภายนอก'}</strong>
+                          </span>
+                          <span className="text-slate-600">|</span>
+                          <span>
+                            บันทึกเมื่อ: <strong className="text-slate-200">{new Date(currentPhoto.uploadedAt).toLocaleString('th-TH')}</strong>
+                          </span>
+                          <span className="text-slate-600">|</span>
+                          <a
+                            href={currentPhoto.imageUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-cyan-400 hover:text-cyan-300 underline flex items-center gap-1 font-bold"
+                            title="เปิดรูปภาพขนาดเต็มในแท็บใหม่"
+                          >
+                            <span>เปิดเต็มจอ</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    
+                    /* SCENARIO B: UPLOADER INTERFACE (EMPTY STATE OR CHANGE PHOTO) */
+                    <div className="w-full max-w-2xl p-6 flex flex-col items-center justify-center space-y-4">
+                      
+                      {/* Upload Source Tabs: Local File vs External URL */}
+                      <div className="flex items-center bg-[#181922] p-1 rounded-xl border border-white/10 w-full max-w-md">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUploadSourceType('FILE');
+                            setUploadError(null);
+                          }}
+                          className={`flex-1 py-2 text-xs font-bold font-mono rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                            uploadSourceType === 'FILE'
+                              ? 'bg-cyan-500 text-slate-950 font-black shadow-md'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
                         >
-                          {/* Upper Shank Cylinder Head */}
-                          <ellipse cx="0" cy="-90" rx="55" ry="22" fill={renderMode === 'WIREFRAME' ? 'none' : renderMode === 'X_RAY' ? 'none' : '#94a3b8'} />
-                          <path d="M -55,-90 L -55,-25 A 55 22 0 0 0 55,-25 L 55,-90 Z" />
-                          <ellipse cx="0" cy="-25" rx="55" ry="22" fill={renderMode === 'WIREFRAME' ? 'none' : renderMode === 'X_RAY' ? 'none' : '#64748b'} />
+                          <Upload className="w-4 h-4" />
+                          <span>อัปโหลดไฟล์จากเครื่อง</span>
+                        </button>
 
-                          {/* Center Alignment Axis Guide Line */}
-                          <line x1="0" y1="-110" x2="0" y2="110" stroke="#00FF00" strokeWidth="1" strokeDasharray="4 4" opacity="0.6" />
-
-                          {/* Middle Taper Transition Cone */}
-                          <path d="M -55,-25 L -30,25 A 30 12 0 0 0 30,25 L 55,-25 Z" fill={renderMode === 'WIREFRAME' ? 'none' : renderMode === 'X_RAY' ? 'none' : '#475569'} />
-                          <ellipse cx="0" cy="25" rx="30" ry="12" fill="none" stroke="#00FF00" strokeWidth="1" strokeDasharray="2 2" />
-
-                          {/* Lower Cutting Pin Body */}
-                          <path d="M -30,25 L -30,95 A 30 12 0 0 0 30,95 L 30,25 Z" fill={renderMode === 'WIREFRAME' ? 'none' : 'url(#metalGreenHighlight)'} />
-                          <ellipse cx="0" cy="95" rx="30" ry="12" fill={renderMode === 'WIREFRAME' ? 'none' : '#00FF00'} opacity="0.8" />
-
-                          {/* Dotted Wear Limit Ring Line (L_min Indicator) */}
-                          <ellipse cx="0" cy="70" rx="30" ry="12" fill="none" stroke="#f43f5e" strokeWidth="1.5" strokeDasharray="4 3" />
-
-                          {/* Tip Chamfer & Cutting Diameter Ellipse */}
-                          <circle cx="0" cy="95" r="14" fill="none" stroke="#ffffff" strokeWidth="1.5" strokeDasharray="3 3" />
-                        </g>
-                      ) : isDie ? (
-                        /* DIE GEOMETRY (Pierce Die, Burring Die, Block Die) */
-                        <g 
-                          stroke={renderMode === 'WIREFRAME' ? '#00FF00' : renderMode === 'X_RAY' ? '#38bdf8' : '#64748b'} 
-                          strokeWidth={renderMode === 'WIREFRAME' ? '1.5' : '1'} 
-                          fill={renderMode === 'WIREFRAME' ? 'none' : renderMode === 'X_RAY' ? 'url(#xRayGradient)' : 'url(#metalMainShaded)'}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUploadSourceType('URL');
+                            setUploadError(null);
+                          }}
+                          className={`flex-1 py-2 text-xs font-bold font-mono rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                            uploadSourceType === 'URL'
+                              ? 'bg-cyan-500 text-slate-950 font-black shadow-md'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
                         >
-                          {/* Outer Die Block 3D Isometric Faces */}
-                          <path d="M -75,-50 L 75,-50 L 75,50 L -75,50 Z" fill={renderMode === 'WIREFRAME' ? 'none' : '#334155'} />
-                          <path d="M 75,-50 L 115,-20 L 115,80 L 75,50 Z" fill={renderMode === 'WIREFRAME' ? 'none' : '#1e293b'} />
-                          <path d="M -75,50 L 75,50 L 115,80 L -35,80 Z" fill={renderMode === 'WIREFRAME' ? 'none' : '#0f172a'} />
+                          <LinkIcon className="w-4 h-4" />
+                          <span>ระบุ URL ลิงก์รูปภาพ</span>
+                        </button>
+                      </div>
 
-                          {/* Counterbore Entry Chamfer */}
-                          <ellipse cx="20" cy="15" rx="36" ry="18" fill="#000000" stroke="#00FF00" strokeWidth="2" />
-                          <ellipse cx="20" cy="35" rx="36" ry="18" fill="none" stroke="#00FF00" strokeWidth="1" strokeDasharray="3 3" />
-
-                          {/* Inner Precision Slug Relief Hole Wireframes */}
-                          <ellipse cx="20" cy="55" rx="28" ry="14" fill="none" stroke="#38bdf8" strokeWidth="1.5" strokeDasharray="2 2" />
-
-                          {/* Die Corner Mounting Holes */}
-                          <circle cx="-50" cy="-25" r="7" fill="none" stroke="#00FF00" strokeWidth="1" />
-                          <circle cx="50" cy="-25" r="7" fill="none" stroke="#00FF00" strokeWidth="1" />
-                        </g>
-                      ) : isSlit ? (
-                        /* SLIT / CUTTER / SHEAR BLADE GEOMETRY */
-                        <g 
-                          stroke={renderMode === 'WIREFRAME' ? '#00FF00' : renderMode === 'X_RAY' ? '#38bdf8' : '#475569'} 
-                          strokeWidth={renderMode === 'WIREFRAME' ? '1.5' : '1'} 
-                          fill={renderMode === 'WIREFRAME' ? 'none' : renderMode === 'X_RAY' ? 'url(#xRayGradient)' : 'url(#metalMainShaded)'}
-                        >
-                          {/* Shear Blade Body Block */}
-                          <path d="M -80,-60 L 80,-60 L 80,40 L -80,40 Z" fill={renderMode === 'WIREFRAME' ? 'none' : '#334155'} />
-                          <path d="M 80,-60 L 110,-35 L 110,65 L 80,40 Z" fill={renderMode === 'WIREFRAME' ? 'none' : '#1e293b'} />
-                          <path d="M -80,40 L 80,40 L 110,65 L -50,65 Z" fill={renderMode === 'WIREFRAME' ? 'none' : '#0f172a'} />
-
-                          {/* Angled Shear Cutting Edge Bevel */}
-                          <path d="M -80,-60 L 80,-40 L 80,-20 L -80,-40 Z" fill={renderMode === 'WIREFRAME' ? 'none' : 'url(#metalGreenHighlight)'} stroke="#00FF00" strokeWidth="2" />
-                          <line x1="-80" y1="-40" x2="80" y2="-20" stroke="#ffffff" strokeWidth="1.5" strokeDasharray="4 2" />
-
-                          {/* Mounting Counterbore Slots */}
-                          <rect x="-40" y="-10" width="25" height="30" rx="12" fill="none" stroke="#00FF00" strokeWidth="1.5" />
-                          <rect x="20" y="-10" width="25" height="30" rx="12" fill="none" stroke="#00FF00" strokeWidth="1.5" />
-                        </g>
-                      ) : isPin ? (
-                        /* GUIDE PIN / PILOT PIN GEOMETRY */
-                        <g 
-                          stroke={renderMode === 'WIREFRAME' ? '#00FF00' : renderMode === 'X_RAY' ? '#38bdf8' : '#475569'} 
-                          strokeWidth={renderMode === 'WIREFRAME' ? '1.5' : '1'} 
-                          fill={renderMode === 'WIREFRAME' ? 'none' : renderMode === 'X_RAY' ? 'url(#xRayGradient)' : 'url(#metalMainShaded)'}
-                        >
-                          {/* Domed Pilot Head Top */}
-                          <path d="M -30,-80 Q 0,-115 30,-80 Z" fill={renderMode === 'WIREFRAME' ? 'none' : '#00FF00'} opacity="0.8" />
-                          <ellipse cx="0" cy="-80" rx="30" ry="12" fill={renderMode === 'WIREFRAME' ? 'none' : '#94a3b8'} />
-
-                          {/* Main Precision Ground Shaft Body */}
-                          <path d="M -30,-80 L -30,80 A 30 12 0 0 0 30,80 L 30,-80 Z" />
-                          <ellipse cx="0" cy="80" rx="30" ry="12" fill={renderMode === 'WIREFRAME' ? 'none' : '#64748b'} />
-
-                          {/* Retaining Ring Groove */}
-                          <path d="M -35,30 L -35,45 A 35 14 0 0 0 35,45 L 35,30 Z" fill="none" stroke="#00FF00" strokeWidth="1.5" strokeDasharray="3 2" />
-
-                          {/* Axis Centerline */}
-                          <line x1="0" y1="-120" x2="0" y2="100" stroke="#00FF00" strokeWidth="1" strokeDasharray="4 4" opacity="0.6" />
-                        </g>
-                      ) : (
-                        /* FORM / BUCKING / GENERIC PRECISION TOOLING */
-                        <g 
-                          stroke={renderMode === 'WIREFRAME' ? '#00FF00' : renderMode === 'X_RAY' ? '#38bdf8' : '#475569'} 
-                          strokeWidth={renderMode === 'WIREFRAME' ? '1.5' : '1'} 
-                          fill={renderMode === 'WIREFRAME' ? 'none' : renderMode === 'X_RAY' ? 'url(#xRayGradient)' : 'url(#metalMainShaded)'}
-                        >
-                          <ellipse cx="0" cy="-80" rx="60" ry="24" fill={renderMode === 'WIREFRAME' ? 'none' : '#94a3b8'} />
-                          <path d="M -60,-80 L -60,-10 A 60 24 0 0 0 60,-10 L 60,-80 Z" />
-                          <ellipse cx="0" cy="-10" rx="60" ry="24" />
-
-                          <path d="M -60,-10 L -40,60 A 40 16 0 0 0 40,60 L 60,-10 Z" fill={renderMode === 'WIREFRAME' ? 'none' : 'url(#metalGreenHighlight)'} />
-                          <ellipse cx="0" cy="60" rx="40" ry="16" fill={renderMode === 'WIREFRAME' ? 'none' : '#00FF00'} opacity="0.8" />
-                        </g>
+                      {/* Error Alert Display */}
+                      {uploadError && (
+                        <div className="w-full p-3 bg-rose-950/80 border border-rose-500/50 rounded-xl text-xs text-rose-200 flex items-center gap-2 font-mono">
+                          <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                          <span>{uploadError}</span>
+                        </div>
                       )}
-                    </svg>
-                  </div>
+
+                      {/* Upload Method A: File Drag & Drop / File Picker */}
+                      {uploadSourceType === 'FILE' ? (
+                        <div
+                          onDrop={handleDrop}
+                          onDragOver={handleDragOver}
+                          onClick={() => fileInputRef.current?.click()}
+                          className={`w-full p-8 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center text-center cursor-pointer transition-all ${
+                            previewImageUrl 
+                              ? 'border-emerald-500/60 bg-emerald-950/20' 
+                              : 'border-white/20 hover:border-cyan-400/60 bg-white/[0.02] hover:bg-white/[0.04]'
+                          }`}
+                        >
+                          <input 
+                            ref={fileInputRef}
+                            type="file" 
+                            accept="image/png,image/jpeg,image/webp,image/gif" 
+                            className="hidden" 
+                            onChange={handleFileInputChange}
+                          />
+
+                          {isCompressing ? (
+                            <div className="flex flex-col items-center space-y-2">
+                              <RefreshCw className="w-8 h-8 text-cyan-400 animate-spin" />
+                              <p className="text-xs font-mono text-cyan-300">กำลังประมวลผลและปรับขนาดภาพ...</p>
+                            </div>
+                          ) : previewImageUrl ? (
+                            <div className="space-y-3 flex flex-col items-center">
+                              <img 
+                                src={previewImageUrl} 
+                                alt="Preview" 
+                                className="max-h-48 rounded-lg shadow-lg border border-white/20 object-contain"
+                              />
+                              <p className="text-xs font-mono text-emerald-400 font-bold flex items-center gap-1.5">
+                                <CheckCircle2 className="w-4 h-4" />
+                                โหลดรูปสำเร็จ: {selectedFileName}
+                              </p>
+                              <span className="text-[11px] text-slate-400 underline">คลิกเพื่อเลือกรูปใหม่</span>
+                            </div>
+                          ) : (
+                            <div className="space-y-2 flex flex-col items-center">
+                              <div className="p-4 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 mb-1">
+                                <Upload className="w-8 h-8" />
+                              </div>
+                              <h3 className="text-sm sm:text-base font-bold text-white">
+                                ลากไฟล์รูปภาพชิ้นงานจริงมาวางที่นี่
+                              </h3>
+                              <p className="text-xs text-slate-400 max-w-sm">
+                                หรือคลิกเพื่อเปิดเลือกไฟล์จากคอมพิวเตอร์ / โทรศัพท์ (รองรับ .PNG, .JPG, .WEBP)
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+
+                        /* Upload Method B: External Image URL */
+                        <div className="w-full space-y-3 bg-[#181922] p-5 rounded-2xl border border-white/10">
+                          <label className="block text-xs font-mono font-bold text-slate-300">
+                            URL รูปภาพจากภายนอก (Direct Image URL):
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="url"
+                              value={urlInputValue}
+                              onChange={(e) => setUrlInputValue(e.target.value)}
+                              placeholder="https://example.com/images/part-punch-01.jpg"
+                              className="flex-1 bg-black/60 border border-white/20 rounded-xl px-3.5 py-2 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400"
+                            />
+                            <button
+                              type="button"
+                              onClick={handleLoadUrlPreview}
+                              className="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold font-mono text-xs rounded-xl cursor-pointer transition-all active:scale-95 flex-shrink-0"
+                            >
+                              โหลดรูปภาพ
+                            </button>
+                          </div>
+
+                          {previewImageUrl && (
+                            <div className="mt-3 p-3 bg-black/40 rounded-xl border border-white/10 flex flex-col items-center space-y-2">
+                              <span className="text-[11px] font-mono text-emerald-400 font-bold flex items-center gap-1">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                โหลดรูปตัวอย่างสำเร็จ
+                              </span>
+                              <img 
+                                src={previewImageUrl} 
+                                alt="URL Preview" 
+                                className="max-h-48 rounded-lg shadow-md border border-white/15 object-contain"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Save & Cancel Action Buttons */}
+                      <div className="flex items-center gap-3 pt-2">
+                        {currentPhoto && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsUploaderOpen(false);
+                              setPreviewImageUrl(null);
+                            }}
+                            className="px-5 py-2 rounded-xl text-xs font-mono font-bold bg-[#22222a] hover:bg-[#333340] border border-white/10 text-slate-300 hover:text-white cursor-pointer"
+                          >
+                            ยกเลิก
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          disabled={!previewImageUrl}
+                          onClick={handleSavePhoto}
+                          className={`px-6 py-2 rounded-xl text-xs font-mono font-black transition-all cursor-pointer flex items-center gap-2 shadow-lg ${
+                            previewImageUrl 
+                              ? 'bg-gradient-to-r from-emerald-400 to-cyan-400 text-slate-950 hover:brightness-110 active:scale-95 shadow-[0_0_20px_rgba(16,185,129,0.4)]' 
+                              : 'bg-white/10 text-slate-500 cursor-not-allowed border border-white/5'
+                          }`}
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>บันทึกรูปชิ้นงานจริง</span>
+                        </button>
+                      </div>
+
+                    </div>
+                  )}
+
                 </div>
 
-                {/* Canvas Floating Bottom Info Bar */}
-                <div className="flex items-center justify-between text-xs font-mono text-slate-400 border-t border-[#2a2b34] pt-2.5 mt-auto flex-wrap gap-2 z-20 bg-[#121317]/80 backdrop-blur-md px-2 rounded-lg">
-                  <div className="flex items-center gap-2 text-[11px] text-slate-300">
-                    <Compass className="w-4 h-4 text-[#00FF00] animate-spin" style={{ animationDuration: '10s' }} />
-                    <span>🖱️ คลิกและลากเมาส์หมุน 360° | Zoom: {(zoomScale * 100).toFixed(0)}%</span>
+                {/* Viewport Bottom Hint Bar */}
+                <div className="flex items-center justify-between text-xs font-mono text-slate-400 pt-1 border-t border-white/5">
+                  <div className="flex items-center gap-2">
+                    <Info className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>รูปภาพจะถูกจัดเก็บในฐานข้อมูลของพาร์ท {partRow.partCode} และใช้แสดงผลในทุกจุดตรวจสอบ</span>
                   </div>
-
-                  <div className="flex items-center gap-4 text-[11px]">
-                    <span className="text-emerald-400 font-bold">Standard: Fin Die Ø5 & Ø7</span>
-                    <span className="text-slate-500">|</span>
-                    <span className="text-[#00FF00] font-mono">High-Precision Geometry Model</span>
-                  </div>
+                  <span className="text-slate-500 hidden sm:inline">
+                    รองรับรูปจากกล้องถ่ายภาพ, ไฟล์สแกน, และรูปจากโรงงาน
+                  </span>
                 </div>
 
               </div>
-
             </div>
           ) : (
-            /* Tab 2: Calculation Ladder Step Table (Full Width) */
-            <div className="bg-[#14151a] border border-[#2a2b34] rounded-xl p-5 space-y-4 h-full overflow-y-auto">
-              <div className="flex items-center justify-between border-b border-[#2d2e38] pb-3">
-                <div>
-                  <h3 className="font-bold text-base text-white flex items-center gap-2 font-mono">
-                    <Calculator className="w-5 h-5 text-[#00FF00]" />
-                    <span>ตารางลำดับรอบการเจียรลับคม (Regrind Life Cycle Step Ladder)</span>
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    แสดงสเปกการลดลงของความยาวจากการเจียรแต่ละครั้ง ตั้งแต่พาร์ทใหม่ (L₀ = {newSpecNum.toFixed(2)} mm) จนถึงเกณฑ์ทิ้ง (L<sub>min</sub> = {scrapLimitNum.toFixed(2)} mm)
-                  </p>
+
+            /* ======================================================== */
+            /* TAB 2: GRIND LADDER SPECIFICATION TABLE                 */
+            /* ======================================================== */
+            <div className="w-full h-full flex flex-col justify-between space-y-3 min-h-0">
+              
+              {/* Grind Table Header Summary Bar */}
+              <div className="flex items-center justify-between p-3.5 bg-[#14151a] rounded-xl border border-[#2a2b34] text-xs font-mono flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                    <Calculator className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white">ตารางคำนวณและสเปกการเจียรลับคม (Regrind Ladder Steps)</h3>
+                    <p className="text-slate-400 text-[11px]">
+                      พาร์ท: <strong className="text-slate-200">{partRow.partName}</strong> | มาตรฐานความยาวใหม่: <strong className="text-emerald-400">{newSpecNum.toFixed(2)} mm</strong>
+                    </p>
+                  </div>
                 </div>
-                <div className="text-right font-mono text-xs bg-black/40 px-3 py-1.5 rounded-lg border border-white/10">
-                  <span className="text-[#00FF00] font-bold block">
-                    Max Capacity: {typeof maxCyclesCalculated === 'number' ? `${maxCyclesCalculated} Cycles` : maxCyclesCalculated}
-                  </span>
-                  <span className="text-slate-400 text-[11px]">
-                    ระยะเจียรรวมสูงสุด: {totalAllowableGrind.toFixed(2)} mm
-                  </span>
+
+                <div className="flex items-center gap-4 text-slate-300">
+                  <div className="text-right">
+                    <span className="text-slate-500 text-[10px] block">ระยะที่เจียรได้รวม</span>
+                    <strong className="text-[#00FF00] font-bold text-sm">
+                      {isDisposable ? '0.00 mm (Dispose)' : `${totalAllowableGrind.toFixed(2)} mm`}
+                    </strong>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-slate-500 text-[10px] block">จำนวนรอบสูงสุด</span>
+                    <strong className="text-purple-300 font-bold text-sm">
+                      {typeof maxCyclesCalculated === 'number' ? `${maxCyclesCalculated} รอบ` : maxCyclesCalculated}
+                    </strong>
+                  </div>
                 </div>
               </div>
 
-              {/* Step Ladder Matrix Table */}
-              <div className="overflow-x-auto rounded-lg border border-[#2d2e38]">
-                <table className="w-full text-left text-xs font-mono">
-                  <thead className="bg-[#1a1b22] text-slate-300 uppercase text-[10px] border-b border-[#2d2e38]">
+              {/* Grind Step Rows Table */}
+              <div className="w-full flex-1 bg-[#14151a] border border-[#2a2b34] rounded-xl overflow-y-auto custom-scrollbar shadow-inner min-h-0">
+                <table className="w-full text-xs font-mono text-left border-collapse">
+                  <thead className="bg-[#1b1c24] text-slate-300 border-b border-[#2d2e3a] sticky top-0 z-10">
                     <tr>
                       <th className="py-2.5 px-4 text-center w-20">รอบที่ (Cycle)</th>
                       <th className="py-2.5 px-4">สถานะพาร์ท / รอบการซ่อมบำรุง</th>
@@ -569,18 +870,22 @@ export const Part3DBlueprintModal: React.FC<Part3DBlueprintModalProps> = ({
               </div>
             </div>
           )}
+
         </div>
 
-        {/* Modal Footer */}
-        <div className="flex items-center justify-between px-6 py-3 bg-[#18191c] border-t border-[#2d2e38] text-xs font-mono text-slate-400">
+        {/* ======================================================== */}
+        {/* 3. MODAL FOOTER */}
+        {/* ======================================================== */}
+        <div className="flex items-center justify-between px-5 sm:px-6 py-3 bg-[#18191c] border-t border-[#2d2e38] text-xs font-mono text-slate-400 flex-shrink-0">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-[#00FF00]" />
-            <span>Fin Die Tooling Specification Standard Rev 2025 - 3D Simulation & Verification</span>
+            <ShieldCheck className="w-4 h-4 text-cyan-400" />
+            <span>Fin Die Tooling Real Workpiece Photo & Standard Specifications Rev 2025</span>
           </div>
 
           <button
+            type="button"
             onClick={onClose}
-            className="px-5 py-1.5 bg-[#25262c] hover:bg-[#32333b] text-white font-bold rounded-lg border border-white/10 transition-colors cursor-pointer"
+            className="px-5 py-1.5 bg-[#25262c] hover:bg-[#32333b] text-white font-bold rounded-lg border border-white/10 transition-colors cursor-pointer active:scale-95"
           >
             ปิดหน้าต่าง
           </button>

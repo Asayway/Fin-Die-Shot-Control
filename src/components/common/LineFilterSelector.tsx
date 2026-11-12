@@ -15,7 +15,7 @@ export interface LineFilterSelectorProps {
   showShortTag?: boolean;
 }
 
-const LINES_LIST: ProductionLineId[] = ['E1', 'E2', 'E3-1', 'E3-2', 'E3-3', 'E4', 'E5'];
+const LINES_LIST: ProductionLineId[] = ['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5'];
 
 export const LineFilterSelector: React.FC<LineFilterSelectorProps> = ({
   selectedLine,
