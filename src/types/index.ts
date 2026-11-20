@@ -582,6 +582,12 @@ export interface ReplacementRecord {
   regrindCycleCount?: number;
   remarks?: string;
   isImportedSeed?: boolean;
+  skipStageShotReset?: boolean;
+  skipStockDeduction?: boolean;
+  shotCaptureMode?: 'LIVE_PLC' | 'MANUAL';
+  isRetroactive?: boolean;
+  linkedMasterLogId?: string;
+  stageId?: string;
 }
 
 export interface RegrindingRecord {

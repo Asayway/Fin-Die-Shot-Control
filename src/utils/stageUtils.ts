@@ -222,14 +222,24 @@ export function isPartMatchingInteractiveStage(
     return ipStage.includes('REFLARE');
   }
 
-  // 5. SLIT / LOUVER PUNCH STAGE
-  if (lp.includes('SLIT-') || lp.includes('LOUV-') || lp.includes('SLIT_PUNCH') || ls.includes('SLIT PUNCH') || ls.includes('LOUVER PUNCH')) {
-    return (ipStage.includes('SLIT') || ipStage.includes('LOUVER')) && !ipName.includes('DIE');
+  // 5. LOUVER PUNCH STAGE (Distinct from SLIT PUNCH and WIDE LOWER)
+  if (lp.includes('LOUV-') || ls.includes('LOUVER PUNCH')) {
+    return (ipStage.includes('LOUVER') || ipName.includes('LOUVER')) && !ipName.includes('DIE') && !ipStage.includes('WIDE LOWER') && !ipName.includes('WIDE LOWER');
   }
 
-  // 6. SLIT / LOUVER DIE STAGE (DIE A & DIE B)
-  if (ls.includes('DIE STAGE') || ls.includes('SLIT / LOUVER DIE') || ls.includes('SLIT DIE') || ls.includes('LOUVER DIE')) {
-    return (ipStage.includes('SLIT') || ipStage.includes('LOUVER')) && ipName.includes('DIE');
+  // 5b. SLIT PUNCH STAGE
+  if (lp.includes('SLIT-') || lp.includes('SLIT_PUNCH') || ls.includes('SLIT PUNCH')) {
+    return (ipStage === 'SLIT' || (ipStage.includes('SLIT') && !ipStage.includes('ROW SLIT'))) && !ipName.includes('DIE');
+  }
+
+  // 6. LOUVER DIE STAGE
+  if (lp.includes('D-LOUV') || ls.includes('LOUVER DIE')) {
+    return (ipStage.includes('LOUVER') || ipName.includes('LOUVER')) && ipName.includes('DIE');
+  }
+
+  // 6b. SLIT DIE STAGE (DIE A & DIE B)
+  if (ls.includes('DIE STAGE') || ls.includes('SLIT / LOUVER DIE') || ls.includes('SLIT DIE')) {
+    return (ipStage === 'SLIT' || (ipStage.includes('SLIT') && !ipStage.includes('ROW SLIT'))) && ipName.includes('DIE');
   }
 
   // 7. ROW SLIT BLADE STAGE

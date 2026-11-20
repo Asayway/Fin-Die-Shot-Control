@@ -109,6 +109,7 @@ type Listener = () => void;
 
 class StorageService {
   private listeners: Set<Listener> = new Set();
+  private memoryStore: Map<string, string> = new Map();
 
   constructor() {
     this.ensureInitialized();
@@ -133,16 +134,48 @@ class StorageService {
     });
   }
 
-  private ensureInitialized() {
-    this.cleanUpStorageQuota();
-    const initialized = localStorage.getItem(STORAGE_KEYS.SEED_INITIALIZED);
-    const users = localStorage.getItem(STORAGE_KEYS.USERS);
-    const parts = localStorage.getItem(STORAGE_KEYS.PART_MASTERS);
-    const lines = localStorage.getItem(STORAGE_KEYS.LINE_MONITORING);
-    if (!initialized || !users || !parts || !lines || initialized !== SEED_DATA_VERSION) {
-      this.resetToSeedData();
+  public getRawItem(key: string): string | null {
+    if (this.memoryStore.has(key)) {
+      return this.memoryStore.get(key) ?? null;
     }
-    this.migrateStageNamesToEnglish();
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+
+  private safeRemoveItem(key: string): void {
+    this.memoryStore.delete(key);
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // ignore
+    }
+  }
+
+  private ensureInitialized() {
+    try {
+      this.cleanUpStorageQuota(false);
+      const initialized = this.getRawItem(STORAGE_KEYS.SEED_INITIALIZED);
+      const users = this.getRawItem(STORAGE_KEYS.USERS);
+      const parts = this.getRawItem(STORAGE_KEYS.PART_MASTERS);
+      const lines = this.getRawItem(STORAGE_KEYS.LINE_MONITORING);
+      const lifeStandards = this.getRawItem(STORAGE_KEYS.LIFE_STANDARDS);
+      if (!initialized || !users || !parts || !lines || !lifeStandards || initialized !== SEED_DATA_VERSION) {
+        this.resetToSeedData();
+      }
+      this.migrateStageNamesToEnglish();
+      this.migrateE3WLP168AndLouverToE3Slit();
+    } catch (err) {
+      console.error('[storageService] Initialization recovery triggered:', err);
+      try {
+        this.cleanUpStorageQuota(true);
+        this.resetToSeedData();
+      } catch (recoveryErr) {
+        console.error('[storageService] Recovery failed:', recoveryErr);
+      }
+    }
   }
 
   private migrateStageNamesToEnglish() {
@@ -157,7 +190,7 @@ class StorageService {
         }
       });
       if (updatedParts) {
-        localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(parts));
+        this.safeSetItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(parts));
       }
 
       let updatedGroups = false;
@@ -170,46 +203,431 @@ class StorageService {
       if (updatedGroups) {
         // deduplicate just in case
         const uniqueGroups = Array.from(new Set(cleanedGroups));
-        localStorage.setItem(STORAGE_KEYS.STAGE_GROUPS, JSON.stringify(uniqueGroups));
+        this.safeSetItem(STORAGE_KEYS.STAGE_GROUPS, JSON.stringify(uniqueGroups));
       }
     } catch (e) {
       console.error('Error migrating stage names:', e);
     }
   }
 
-  public cleanUpStorageQuota() {
+  /**
+   * Non-destructive one-time migration:
+   * - Updates E3 WL+ to 168 positions / 82 row-slit blades (matching E3 New Cor)
+   * - Moves Louver Punch (DWG-LV-001, DWG-LV-002) from E3 WL+ (e3_2) to E3 SLIT (e3_1: 180)
+   * Preserves all user history, replacements, and custom Part Master price/supplier edits.
+   */
+  private migrateE3WLP168AndLouverToE3Slit() {
+    const MIGRATION_FLAG = 'fin_press_mig_e3_wlp168_louver_e3slit_v1';
     try {
-      // 1. Purge oversized legacy interactive pin arrays
+      if (this.getRawItem(MIGRATION_FLAG) === '1') return;
+
+      // 1. Update PART_MASTERS installQty & applicableLines for Louver Punches (DWG-LV-001, DWG-LV-002)
+      const rawParts = this.getRawItem(STORAGE_KEYS.PART_MASTERS);
+      if (rawParts) {
+        const parts = JSON.parse(rawParts);
+        if (Array.isArray(parts)) {
+          let changedParts = false;
+          parts.forEach((p: any) => {
+            if (p?.partCode === 'DWG-LV-001' || p?.partCode === 'DWG-LV-002') {
+              p.installQty = { ...(p.installQty || {}), e3_1: 180, totalQty: 180 };
+              delete p.installQty.e3_2;
+              p.applicableLines = ['E3 SLIT'];
+              changedParts = true;
+            }
+          });
+          if (changedParts) {
+            this.safeSetItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(parts));
+          }
+        }
+      }
+
+      // 2. Update LINE_CONFIGS for E3 SLIT and E3 WL+
+      const rawConfigs = this.getRawItem(STORAGE_KEYS.LINE_CONFIGS);
+      let updatedE3SlitCfg: LineActiveConfiguration | null = null;
+      let updatedE3WlpCfg: LineActiveConfiguration | null = null;
+      if (rawConfigs) {
+        const configs: LineActiveConfiguration[] = JSON.parse(rawConfigs);
+        if (Array.isArray(configs)) {
+          let changedCfg = false;
+          configs.forEach(cfg => {
+            if (cfg.lineId === 'E3 SLIT') {
+              cfg.installedPartQuantities = {
+                ...(cfg.installedPartQuantities || {}),
+                'DWG-LV-001': 180,
+                'DWG-LV-002': 180
+              };
+              updatedE3SlitCfg = cfg;
+              changedCfg = true;
+            } else if (cfg.lineId === 'E3 WL+') {
+              const qtyMap = { ...(cfg.installedPartQuantities || {}) };
+              delete qtyMap['DWG-LV-001'];
+              delete qtyMap['DWG-LV-002'];
+              cfg.installedPartQuantities = qtyMap;
+              cfg.rowsCount = 42;
+              cfg.columnsCount = 4;
+              cfg.pathsCount = '4P';
+              cfg.finType = 'Wide Lower 4P';
+              cfg.mainFinDie = 'Fin Die E3 WL+ (Ø7 GOLD Wide Lower 4P)';
+              cfg.dieName = 'Fin Die E3 WL+ (Ø7 GOLD Wide Lower 4P)';
+              cfg.notes = 'Wide Lower 4P gold fin tooling (168 EA / Stage)';
+              updatedE3WlpCfg = cfg;
+              changedCfg = true;
+            }
+          });
+          if (changedCfg) {
+            this.safeSetItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
+          }
+        }
+      }
+
+      // 3. Update LINE_MONITORING for E3 SLIT and E3 WL+
+      const rawMonitoring = this.getRawItem(STORAGE_KEYS.LINE_MONITORING);
+      if (rawMonitoring) {
+        const monitoring = JSON.parse(rawMonitoring);
+        if (monitoring && typeof monitoring === 'object') {
+          let changedMon = false;
+          const standards = this.getLifeStandards();
+          const stocks = this.getSpareStocks();
+
+          if (monitoring['E3 SLIT']) {
+            const slitMon = monitoring['E3 SLIT'] as LineLiveMonitoringData;
+            if (updatedE3SlitCfg) {
+              slitMon.activeConfig = updatedE3SlitCfg;
+            }
+            const addLouverIfMissing = (code: 'DWG-LV-001' | 'DWG-LV-002', name: string) => {
+              if (!slitMon.items.some(it => it.partCode === code)) {
+                const baseShot = slitMon.machineShotTotal || 0;
+                const cfgToUse = slitMon.activeConfig || INITIAL_LINE_CONFIGS[2];
+                const stock = stocks.find(s => s.partCode === code);
+                const std = standards.find(s => s.configKey?.partCode === code || s.partName === name);
+                slitMon.items.push(
+                  calculatePartMetrics(
+                    {
+                      slotId: `SLOT-E3 SLIT-${code}`,
+                      partCode: code,
+                      partName: name,
+                      stagePunchDie: 'LOUVER',
+                      position: 'LOUVER',
+                      installQty: 180,
+                      backupQty: stock?.availableQuantity ?? 10,
+                      usedShot: 0,
+                      currentShot: 0,
+                      shotAtLastChange: baseShot,
+                      lastChangeShot: baseShot,
+                      regrindCount: 0,
+                      totalMmGround: 0,
+                      lifeLimit: std?.lifeLimitShots || 50000000
+                    },
+                    cfgToUse,
+                    standards,
+                    stocks
+                  )
+                );
+                changedMon = true;
+              }
+            };
+            addLouverIfMissing('DWG-LV-001', 'LOUVER PUNCH (U)');
+            addLouverIfMissing('DWG-LV-002', 'LOUVER PUNCH (L)');
+          }
+
+          if (monitoring['E3 WL+']) {
+            const wlpMon = monitoring['E3 WL+'] as LineLiveMonitoringData;
+            const prevLen = wlpMon.items.length;
+            wlpMon.items = wlpMon.items.filter(it => it.partCode !== 'DWG-LV-001' && it.partCode !== 'DWG-LV-002');
+            if (wlpMon.items.length !== prevLen) changedMon = true;
+            if (updatedE3WlpCfg) {
+              wlpMon.activeConfig = updatedE3WlpCfg;
+              changedMon = true;
+            }
+          }
+
+          if (changedMon) {
+            this.safeSetItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(monitoring));
+          }
+        }
+      }
+
+      // 4. Update TV_DISPLAY_CONFIGS for E3 SLIT & E3 WL+
+      const rawTv = this.getRawItem(STORAGE_KEYS.TV_DISPLAY_CONFIGS);
+      if (rawTv) {
+        const tvCfg = JSON.parse(rawTv);
+        if (tvCfg && typeof tvCfg === 'object') {
+          let changedTv = false;
+          if (Array.isArray(tvCfg['E3 SLIT'])) {
+            ['DWG-LV-001', 'DWG-LV-002'].forEach(code => {
+              if (!tvCfg['E3 SLIT'].includes(code)) {
+                tvCfg['E3 SLIT'].push(code);
+                changedTv = true;
+              }
+            });
+          }
+          if (Array.isArray(tvCfg['E3 WL+'])) {
+            const filtered = tvCfg['E3 WL+'].filter((c: string) => c !== 'DWG-LV-001' && c !== 'DWG-LV-002');
+            if (filtered.length !== tvCfg['E3 WL+'].length) {
+              tvCfg['E3 WL+'] = filtered;
+              changedTv = true;
+            }
+          }
+          if (changedTv) {
+            this.safeSetItem(STORAGE_KEYS.TV_DISPLAY_CONFIGS, JSON.stringify(tvCfg));
+          }
+        }
+      }
+
+      // 5. Prune obsolete E3 WL+ pin overrides (>56 cols, >82 blades, and moved s-slit/s-louver stages)
+      const wlpOverrideKey = 'FIN_DIE_PIN_OVERRIDES_V5_E3 WL+';
+      const rawWlpOverrides = localStorage.getItem(wlpOverrideKey);
+      if (rawWlpOverrides) {
+        try {
+          const overrides = JSON.parse(rawWlpOverrides);
+          if (overrides && typeof overrides === 'object') {
+            let pruned = false;
+            Object.keys(overrides).forEach(pinId => {
+              if (
+                pinId.includes('-s-slit-punch-') ||
+                pinId.includes('-s-slit-die-') ||
+                pinId.includes('-s-louver-punch-') ||
+                pinId.includes('-s-louver-die-')
+              ) {
+                delete overrides[pinId];
+                pruned = true;
+                return;
+              }
+              const colMatch = pinId.match(/-C(\d+)$/);
+              if (colMatch) {
+                const colNum = parseInt(colMatch[1], 10);
+                if (pinId.includes('-s-row-slit-') && colNum > 82) {
+                  delete overrides[pinId];
+                  pruned = true;
+                } else if (
+                  (pinId.includes('-s-burr-') ||
+                    pinId.includes('-s-pierce-') ||
+                    pinId.includes('-s-wide-lower-') ||
+                    pinId.includes('-s-hitch-feed-')) &&
+                  colNum > 56
+                ) {
+                  delete overrides[pinId];
+                  pruned = true;
+                }
+              }
+            });
+            if (pruned) {
+              localStorage.setItem(wlpOverrideKey, JSON.stringify(overrides));
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      this.safeSetItem(MIGRATION_FLAG, '1');
+    } catch (e) {
+      console.error('Error migrating E3 WL+ & Louver stages:', e);
+    }
+  }
+
+  public cleanUpStorageQuota(aggressive: boolean = false) {
+    try {
+      // 1. Purge oversized legacy interactive pin arrays and obsolete seed flags
       for (let i = localStorage.length - 1; i >= 0; i--) {
         const key = localStorage.key(i);
-        if (key && (key.startsWith('FIN_DIE_INTERACTIVE_PINS_') || key.startsWith('FIN_DIE_PINS_'))) {
+        if (!key) continue;
+        if (
+          key.startsWith('FIN_DIE_INTERACTIVE_PINS_') ||
+          key.startsWith('FIN_DIE_PINS_') ||
+          key.startsWith('FIN_DIE_PIN_OVERRIDES_V3_') ||
+          key.startsWith('FIN_DIE_PIN_OVERRIDES_V4_') ||
+          key.startsWith('FIN_DIE_COMPACT_PIN_OVERRIDES_') ||
+          (key.startsWith('fin_press_seed_init_') && key !== STORAGE_KEYS.SEED_INITIALIZED)
+        ) {
           localStorage.removeItem(key);
         }
       }
 
-      // 2. Bound history arrays to avoid quota overflow
-      const rawAudit = localStorage.getItem(STORAGE_KEYS.AUDIT_LOGS);
-      if (rawAudit) {
+      // 2. Strip duplicated base64 imageUrl inside PART_MASTERS (images live in PART_PHOTOS only)
+      const rawParts = localStorage.getItem(STORAGE_KEYS.PART_MASTERS);
+      if (rawParts && rawParts.includes('imageUrl')) {
         try {
-          const logs = JSON.parse(rawAudit);
-          if (Array.isArray(logs) && logs.length > 200) {
-            localStorage.setItem(STORAGE_KEYS.AUDIT_LOGS, JSON.stringify(logs.slice(0, 100)));
+          const parsedParts = JSON.parse(rawParts);
+          if (Array.isArray(parsedParts)) {
+            let stripped = false;
+            parsedParts.forEach((p: any) => {
+              if (p && typeof p === 'object' && 'imageUrl' in p) {
+                delete p.imageUrl;
+                stripped = true;
+              }
+            });
+            if (stripped) {
+              localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(parsedParts));
+            }
           }
-        } catch (e) {
+        } catch {
           // ignore
         }
       }
 
+      // 3. Bound history arrays to avoid quota overflow
+      const auditCap = aggressive ? 20 : 100;
+      const rawAudit = localStorage.getItem(STORAGE_KEYS.AUDIT_LOGS);
+      if (rawAudit) {
+        try {
+          const logs = JSON.parse(rawAudit);
+          if (Array.isArray(logs) && logs.length > auditCap) {
+            localStorage.setItem(STORAGE_KEYS.AUDIT_LOGS, JSON.stringify(logs.slice(0, auditCap)));
+          }
+        } catch {
+          if (aggressive) localStorage.removeItem(STORAGE_KEYS.AUDIT_LOGS);
+        }
+      }
+
+      const shotCap = aggressive ? 20 : 100;
       const rawShot = localStorage.getItem(STORAGE_KEYS.SHOT_LOGS);
       if (rawShot) {
         try {
           const logs = JSON.parse(rawShot);
-          if (Array.isArray(logs) && logs.length > 200) {
-            localStorage.setItem(STORAGE_KEYS.SHOT_LOGS, JSON.stringify(logs.slice(0, 100)));
+          if (Array.isArray(logs) && logs.length > shotCap) {
+            localStorage.setItem(STORAGE_KEYS.SHOT_LOGS, JSON.stringify(logs.slice(0, shotCap)));
           }
-        } catch (e) {
+        } catch {
+          if (aggressive) localStorage.removeItem(STORAGE_KEYS.SHOT_LOGS);
+        }
+      }
+
+      const rawDowntime = localStorage.getItem(STORAGE_KEYS.DOWNTIME_LOGS);
+      if (rawDowntime) {
+        try {
+          const logs = JSON.parse(rawDowntime);
+          if (Array.isArray(logs) && logs.length > (aggressive ? 20 : 100)) {
+            localStorage.setItem(STORAGE_KEYS.DOWNTIME_LOGS, JSON.stringify(logs.slice(0, aggressive ? 20 : 100)));
+          }
+        } catch {
+          if (aggressive) localStorage.removeItem(STORAGE_KEYS.DOWNTIME_LOGS);
+        }
+      }
+
+      // 4. Strip oversized base64 photoUrl from older replacement records
+      const rawReplacements = localStorage.getItem(STORAGE_KEYS.REPLACEMENTS);
+      if (rawReplacements && (rawReplacements.length > 400_000 || aggressive)) {
+        try {
+          const reps = JSON.parse(rawReplacements);
+          if (Array.isArray(reps)) {
+            let changed = false;
+            reps.forEach((r: any, idx: number) => {
+              if (r && r.photoUrl && (aggressive || idx >= 15)) {
+                delete r.photoUrl;
+                changed = true;
+              }
+            });
+            if (changed) {
+              localStorage.setItem(STORAGE_KEYS.REPLACEMENTS, JSON.stringify(reps));
+            }
+          }
+        } catch {
           // ignore
         }
+      }
+
+      // 5. Bound PART_PHOTOS size so base64 images don't starve operational data
+      const rawPhotos = localStorage.getItem(STORAGE_KEYS.PART_PHOTOS);
+      if (rawPhotos && (rawPhotos.length > 1_500_000 || (aggressive && rawPhotos.length > 200_000))) {
+        try {
+          const photosMap = JSON.parse(rawPhotos);
+          if (photosMap && typeof photosMap === 'object') {
+            const entries = Object.entries(photosMap) as [string, any][];
+            entries.sort((a, b) => {
+              const ta = Date.parse(a[1]?.uploadedAt || '') || 0;
+              const tb = Date.parse(b[1]?.uploadedAt || '') || 0;
+              return tb - ta;
+            });
+            const maxBytes = aggressive ? 150_000 : 1_400_000;
+            const kept: Record<string, any> = {};
+            let currentSize = 2;
+            for (const [k, v] of entries) {
+              const entrySize = JSON.stringify(v).length + k.length + 6;
+              if (currentSize + entrySize <= maxBytes) {
+                kept[k] = v;
+                currentSize += entrySize;
+              }
+            }
+            if (Object.keys(kept).length === 0 && aggressive) {
+              localStorage.removeItem(STORAGE_KEYS.PART_PHOTOS);
+            } else {
+              localStorage.setItem(STORAGE_KEYS.PART_PHOTOS, JSON.stringify(kept));
+            }
+          }
+        } catch {
+          if (aggressive) localStorage.removeItem(STORAGE_KEYS.PART_PHOTOS);
+        }
+      }
+
+      // 6. Compact MASTER_LOGS photos before falling back to aggressive eviction
+      const rawMasterLogs = localStorage.getItem('findie_master_history_logs_v2');
+      if (rawMasterLogs && (rawMasterLogs.length > 350_000 || aggressive)) {
+        try {
+          const parsedMaster = JSON.parse(rawMasterLogs);
+          if (Array.isArray(parsedMaster)) {
+            let changed = false;
+            const photoKeepCount = aggressive ? 0 : 10;
+            let trimmed = parsedMaster.map((entry: any, idx: number) => {
+              if (entry && entry.photoUrl && idx >= photoKeepCount) {
+                changed = true;
+                return { ...entry, photoUrl: undefined };
+              }
+              return entry;
+            });
+            if (aggressive && trimmed.length > 500) {
+              trimmed = trimmed.slice(0, 500);
+              changed = true;
+            }
+            if (changed) {
+              localStorage.setItem('findie_master_history_logs_v2', JSON.stringify(trimmed));
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      // 7. Strip duplicated photoUrl from FIN_DIE_PIN_OVERRIDES_V5_* entries
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('FIN_DIE_PIN_OVERRIDES_V5_')) {
+          const val = localStorage.getItem(key);
+          if (val && (val.includes('photoUrl') || (aggressive && val.length > 150_000))) {
+            try {
+              const parsed = JSON.parse(val);
+              if (parsed && typeof parsed === 'object') {
+                const compacted: Record<string, any> = {};
+                Object.entries(parsed).forEach(([pinKey, pinVal]: [string, any]) => {
+                  if (pinVal && typeof pinVal === 'object') {
+                    compacted[pinKey] = {
+                      ...pinVal,
+                      historyLogs: Array.isArray(pinVal.historyLogs)
+                        ? pinVal.historyLogs.slice(0, 10).map((l: any) => ({ ...l, photoUrl: undefined }))
+                        : undefined
+                    };
+                  }
+                });
+                const serialized = JSON.stringify(compacted);
+                if (aggressive && serialized.length > 300_000) {
+                  localStorage.removeItem(key);
+                } else {
+                  localStorage.setItem(key, serialized);
+                }
+              }
+            } catch {
+              if (aggressive) localStorage.removeItem(key);
+            }
+          }
+        }
+      }
+
+      // 8. Aggressive fallback: remove non-critical logs & drafts
+      if (aggressive) {
+        localStorage.removeItem(STORAGE_KEYS.AUDIT_LOGS);
+        localStorage.removeItem(STORAGE_KEYS.OFFLINE_BUFFER);
+        localStorage.removeItem(STORAGE_KEYS.SHOT_DRAFTS);
+        localStorage.removeItem(STORAGE_KEYS.REPLACEMENT_DRAFTS);
       }
     } catch (e) {
       console.warn('Storage quota cleanup exception:', e);
@@ -219,28 +637,62 @@ class StorageService {
   public safeSetItem(key: string, value: string): boolean {
     try {
       localStorage.setItem(key, value);
+      this.memoryStore.delete(key);
       return true;
     } catch (err) {
       console.warn(`[storageService] Quota warning while setting "${key}", attempting cleanup:`, err);
-      this.cleanUpStorageQuota();
+      this.cleanUpStorageQuota(false);
       try {
         localStorage.setItem(key, value);
+        this.memoryStore.delete(key);
         return true;
-      } catch (retryErr) {
-        console.error(`[storageService] Failed to set "${key}" even after quota cleanup:`, retryErr);
-        return false;
+      } catch {
+        this.cleanUpStorageQuota(true);
+        try {
+          localStorage.setItem(key, value);
+          this.memoryStore.delete(key);
+          return true;
+        } catch (finalErr) {
+          console.warn(`[storageService] Using in-memory fallback for "${key}" due to storage quota:`, finalErr);
+          this.memoryStore.set(key, value);
+          return false;
+        }
       }
     }
   }
 
   public resetToSeedData() {
     this.cleanUpAllPinOverrides();
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(INITIAL_USERS));
-    localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(INITIAL_USERS[0]));
-    localStorage.setItem(STORAGE_KEYS.STAGE_GROUPS, JSON.stringify(DEFAULT_STAGE_GROUPS));
-    localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(INITIAL_PART_MASTERS));
-    localStorage.setItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(INITIAL_LINE_CONFIGS));
-    localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(INITIAL_PART_LIFE_STANDARDS));
+    this.cleanUpStorageQuota(false);
+
+    // Clear resettable keys first so overwriting does not require 2x storage quota
+    const keysToResetBeforeWrite = [
+      STORAGE_KEYS.PART_MASTERS,
+      STORAGE_KEYS.LINE_CONFIGS,
+      STORAGE_KEYS.LIFE_STANDARDS,
+      STORAGE_KEYS.LINE_MONITORING,
+      STORAGE_KEYS.SPARE_STOCKS,
+      STORAGE_KEYS.REPLACEMENTS,
+      STORAGE_KEYS.REPLACEMENT_DRAFTS,
+      STORAGE_KEYS.REGRINDS,
+      STORAGE_KEYS.REGRIND_STANDARDS,
+      STORAGE_KEYS.INSPECTIONS,
+      STORAGE_KEYS.SHOT_LOGS,
+      STORAGE_KEYS.SHOT_DRAFTS,
+      STORAGE_KEYS.AUDIT_LOGS,
+      STORAGE_KEYS.DOWNTIME_LOGS,
+      STORAGE_KEYS.SYSTEM_ALERTS,
+      STORAGE_KEYS.OFFLINE_BUFFER,
+      STORAGE_KEYS.SEED_INITIALIZED
+    ];
+    keysToResetBeforeWrite.forEach(k => this.safeRemoveItem(k));
+
+    this.safeSetItem(STORAGE_KEYS.USERS, JSON.stringify(INITIAL_USERS));
+    this.safeSetItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(INITIAL_USERS[0]));
+    this.safeSetItem(STORAGE_KEYS.STAGE_GROUPS, JSON.stringify(DEFAULT_STAGE_GROUPS));
+    this.safeSetItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(INITIAL_PART_MASTERS));
+    this.safeSetItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(INITIAL_LINE_CONFIGS));
+    this.safeSetItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(INITIAL_PART_LIFE_STANDARDS));
     
     // Generate initial live monitoring dataset for 7 production lines (E1, E2, E3 SLIT, E3 WL+, E3 New Cor, E4, E5) with 0 initial shots
     const linesMonitoring: Record<ProductionLineId, LineLiveMonitoringData> = {
@@ -253,23 +705,23 @@ class StorageService {
       'E5': this.generateLineMonitoring('E5', INITIAL_LINE_CONFIGS[6], 0)
     };
 
-    localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(linesMonitoring));
-    localStorage.setItem(STORAGE_KEYS.SPARE_STOCKS, JSON.stringify(INITIAL_SPARE_STOCKS));
-    localStorage.setItem(STORAGE_KEYS.REPLACEMENTS, JSON.stringify(INITIAL_REPLACEMENT_HISTORY));
-    localStorage.setItem(STORAGE_KEYS.REPLACEMENT_DRAFTS, JSON.stringify([]));
-    localStorage.setItem(STORAGE_KEYS.REGRINDS, JSON.stringify(INITIAL_REGRIND_RECORDS));
-    localStorage.setItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(INITIAL_REGRIND_MASTER_STANDARDS));
-    localStorage.setItem(STORAGE_KEYS.INSPECTIONS, JSON.stringify(INITIAL_INSPECTIONS));
-    localStorage.setItem(STORAGE_KEYS.SHOT_LOGS, JSON.stringify(INITIAL_SHOT_LOGS));
-    localStorage.setItem(STORAGE_KEYS.AUDIT_LOGS, JSON.stringify(INITIAL_AUDIT_LOGS));
-    localStorage.setItem(STORAGE_KEYS.DOWNTIME_LOGS, JSON.stringify(INITIAL_DOWNTIME_LOGS));
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(DEFAULT_SYSTEM_SETTINGS));
-    localStorage.setItem(STORAGE_KEYS.PLC_CONFIG, JSON.stringify(DEFAULT_PLC_CONFIG));
-    localStorage.setItem(STORAGE_KEYS.PLC_MAPPINGS, JSON.stringify(INITIAL_PLC_REGISTER_MAPPINGS));
-    localStorage.setItem(STORAGE_KEYS.GATEWAY_STATUS, JSON.stringify(INITIAL_GATEWAY_STATUS));
-    localStorage.setItem(STORAGE_KEYS.SYSTEM_ALERTS, JSON.stringify(INITIAL_SYSTEM_ALERTS));
-    localStorage.setItem(STORAGE_KEYS.OFFLINE_BUFFER, JSON.stringify([]));
-    localStorage.setItem(STORAGE_KEYS.SEED_INITIALIZED, SEED_DATA_VERSION);
+    this.safeSetItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(linesMonitoring));
+    this.safeSetItem(STORAGE_KEYS.SPARE_STOCKS, JSON.stringify(INITIAL_SPARE_STOCKS));
+    this.safeSetItem(STORAGE_KEYS.REPLACEMENTS, JSON.stringify(INITIAL_REPLACEMENT_HISTORY));
+    this.safeSetItem(STORAGE_KEYS.REPLACEMENT_DRAFTS, JSON.stringify([]));
+    this.safeSetItem(STORAGE_KEYS.REGRINDS, JSON.stringify(INITIAL_REGRIND_RECORDS));
+    this.safeSetItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(INITIAL_REGRIND_MASTER_STANDARDS));
+    this.safeSetItem(STORAGE_KEYS.INSPECTIONS, JSON.stringify(INITIAL_INSPECTIONS));
+    this.safeSetItem(STORAGE_KEYS.SHOT_LOGS, JSON.stringify(INITIAL_SHOT_LOGS));
+    this.safeSetItem(STORAGE_KEYS.AUDIT_LOGS, JSON.stringify(INITIAL_AUDIT_LOGS));
+    this.safeSetItem(STORAGE_KEYS.DOWNTIME_LOGS, JSON.stringify(INITIAL_DOWNTIME_LOGS));
+    this.safeSetItem(STORAGE_KEYS.SETTINGS, JSON.stringify(DEFAULT_SYSTEM_SETTINGS));
+    this.safeSetItem(STORAGE_KEYS.PLC_CONFIG, JSON.stringify(DEFAULT_PLC_CONFIG));
+    this.safeSetItem(STORAGE_KEYS.PLC_MAPPINGS, JSON.stringify(INITIAL_PLC_REGISTER_MAPPINGS));
+    this.safeSetItem(STORAGE_KEYS.GATEWAY_STATUS, JSON.stringify(INITIAL_GATEWAY_STATUS));
+    this.safeSetItem(STORAGE_KEYS.SYSTEM_ALERTS, JSON.stringify(INITIAL_SYSTEM_ALERTS));
+    this.safeSetItem(STORAGE_KEYS.OFFLINE_BUFFER, JSON.stringify([]));
+    this.safeSetItem(STORAGE_KEYS.SEED_INITIALIZED, SEED_DATA_VERSION);
 
     this.notify();
   }
@@ -299,14 +751,14 @@ class StorageService {
   public resetToCleanGoLive(initialShotBaseline: number | Record<ProductionLineId, number> = DEFAULT_FACTORY_PLC_METERS) {
     this.cleanUpAllPinOverrides();
 
-    localStorage.setItem(STORAGE_KEYS.REPLACEMENTS, JSON.stringify([]));
-    localStorage.setItem(STORAGE_KEYS.REPLACEMENT_DRAFTS, JSON.stringify([]));
-    localStorage.setItem(STORAGE_KEYS.REGRINDS, JSON.stringify([]));
-    localStorage.setItem(STORAGE_KEYS.INSPECTIONS, JSON.stringify([]));
-    localStorage.setItem(STORAGE_KEYS.SHOT_LOGS, JSON.stringify([]));
-    localStorage.setItem(STORAGE_KEYS.DOWNTIME_LOGS, JSON.stringify([]));
-    localStorage.setItem(STORAGE_KEYS.SYSTEM_ALERTS, JSON.stringify([]));
-    localStorage.setItem(STORAGE_KEYS.OFFLINE_BUFFER, JSON.stringify([]));
+    this.safeSetItem(STORAGE_KEYS.REPLACEMENTS, JSON.stringify([]));
+    this.safeSetItem(STORAGE_KEYS.REPLACEMENT_DRAFTS, JSON.stringify([]));
+    this.safeSetItem(STORAGE_KEYS.REGRINDS, JSON.stringify([]));
+    this.safeSetItem(STORAGE_KEYS.INSPECTIONS, JSON.stringify([]));
+    this.safeSetItem(STORAGE_KEYS.SHOT_LOGS, JSON.stringify([]));
+    this.safeSetItem(STORAGE_KEYS.DOWNTIME_LOGS, JSON.stringify([]));
+    this.safeSetItem(STORAGE_KEYS.SYSTEM_ALERTS, JSON.stringify([]));
+    this.safeSetItem(STORAGE_KEYS.OFFLINE_BUFFER, JSON.stringify([]));
 
     const lineConfigs = this.getLineConfigs();
 
@@ -327,7 +779,7 @@ class StorageService {
       'E5': this.generateLineMonitoring('E5', lineConfigs.find(c => c.lineId === 'E5') || INITIAL_LINE_CONFIGS[6], getBaseline('E5'))
     };
 
-    localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(linesMonitoring));
+    this.safeSetItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(linesMonitoring));
 
     // Also align PLC registers currentVal in plcConfig
     const plcConfig = this.getPLCConfig();
@@ -338,7 +790,7 @@ class StorageService {
           plcConfig.lineRegisters[lId].lastPulse = new Date().toLocaleTimeString('th-TH');
         }
       });
-      localStorage.setItem(STORAGE_KEYS.PLC_CONFIG, JSON.stringify(plcConfig));
+      this.safeSetItem(STORAGE_KEYS.PLC_CONFIG, JSON.stringify(plcConfig));
     }
 
     this.addAuditLog(
@@ -439,7 +891,7 @@ class StorageService {
   // --- Getters ---
   public getUsers(): User[] {
     try {
-      const raw = localStorage.getItem(STORAGE_KEYS.USERS);
+      const raw = this.getRawItem(STORAGE_KEYS.USERS);
       if (!raw) return INITIAL_USERS;
       const parsed = JSON.parse(raw);
       return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_USERS;
@@ -450,7 +902,7 @@ class StorageService {
 
   public getCurrentUser(): User {
     try {
-      const raw = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
+      const raw = this.getRawItem(STORAGE_KEYS.CURRENT_USER);
       if (!raw) return INITIAL_USERS[0];
       const parsed = JSON.parse(raw);
       if (parsed && parsed.id && parsed.name) return parsed;
@@ -461,14 +913,14 @@ class StorageService {
   }
 
   public setCurrentUser(user: User) {
-    localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(user));
+    this.safeSetItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(user));
     this.addAuditLog('SYSTEM', `Switched active user to ${user.name} (${user.role})`);
     this.notify();
   }
 
   public getStageGroups(): string[] {
     try {
-      const stored = localStorage.getItem(STORAGE_KEYS.STAGE_GROUPS);
+      const stored = this.getRawItem(STORAGE_KEYS.STAGE_GROUPS);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -491,13 +943,13 @@ class StorageService {
         uniqueGroups.push(trimmed);
       }
     });
-    localStorage.setItem(STORAGE_KEYS.STAGE_GROUPS, JSON.stringify(uniqueGroups));
+    this.safeSetItem(STORAGE_KEYS.STAGE_GROUPS, JSON.stringify(uniqueGroups));
     this.notify();
   }
 
   public getPartMasters(): PartMaster[] {
     try {
-      const raw = localStorage.getItem(STORAGE_KEYS.PART_MASTERS);
+      const raw = this.getRawItem(STORAGE_KEYS.PART_MASTERS);
       if (!raw) return INITIAL_PART_MASTERS;
       const parsed = JSON.parse(raw);
       return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_PART_MASTERS;
@@ -516,14 +968,14 @@ class StorageService {
     } else {
       list.push(part);
     }
-    localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(list));
+    this.safeSetItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(list));
     this.addAuditLog('SYSTEM', `Updated Part Master: ${part.partCode} (${part.partName})`, `อัปเดตข้อมูลชิ้นส่วนหลัก ${part.partName}`);
     this.notify();
   }
 
   public getPartPhotos(): Record<string, PartWorkpiecePhotoMeta> {
     try {
-      const raw = localStorage.getItem(STORAGE_KEYS.PART_PHOTOS);
+      const raw = this.getRawItem(STORAGE_KEYS.PART_PHOTOS);
       if (!raw) {
         const defaultSample: Record<string, PartWorkpiecePhotoMeta> = {
           'DWG-PB-001': {
@@ -535,7 +987,7 @@ class StorageService {
             uploadedBy: 'System Standard'
           }
         };
-        localStorage.setItem(STORAGE_KEYS.PART_PHOTOS, JSON.stringify(defaultSample));
+        this.safeSetItem(STORAGE_KEYS.PART_PHOTOS, JSON.stringify(defaultSample));
         return defaultSample;
       }
       const parsed = JSON.parse(raw);
@@ -565,24 +1017,7 @@ class StorageService {
       uploadedBy: photo.uploadedBy || currentUser?.name || 'Operator'
     };
 
-    try {
-      localStorage.setItem(STORAGE_KEYS.PART_PHOTOS, JSON.stringify(all));
-    } catch (e) {
-      console.warn('Storage quota warning when saving part photo:', e);
-    }
-
-    // Also sync imageUrl to PartMaster if available
-    try {
-      const parts = this.getPartMasters();
-      const pIdx = parts.findIndex(p => p.partCode === cleanCode);
-      if (pIdx >= 0) {
-        (parts[pIdx] as any).imageUrl = photo.imageUrl;
-        localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(parts));
-      }
-    } catch {
-      // ignore
-    }
-
+    this.safeSetItem(STORAGE_KEYS.PART_PHOTOS, JSON.stringify(all));
     this.notify();
   }
 
@@ -592,14 +1027,14 @@ class StorageService {
     const cleanCode = partCode.trim();
     if (all[cleanCode]) {
       delete all[cleanCode];
-      localStorage.setItem(STORAGE_KEYS.PART_PHOTOS, JSON.stringify(all));
+      this.safeSetItem(STORAGE_KEYS.PART_PHOTOS, JSON.stringify(all));
     }
     try {
       const parts = this.getPartMasters();
       const pIdx = parts.findIndex(p => p.partCode === cleanCode);
       if (pIdx >= 0 && (parts[pIdx] as any).imageUrl) {
         delete (parts[pIdx] as any).imageUrl;
-        localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(parts));
+        this.safeSetItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(parts));
       }
     } catch {
       // ignore
@@ -621,7 +1056,7 @@ class StorageService {
         }
       }
     });
-    if (changed) localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(lifeStds));
+    if (changed) this.safeSetItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(lifeStds));
 
     // Sync Regrind Standards
     changed = false;
@@ -635,7 +1070,7 @@ class StorageService {
         }
       }
     });
-    if (changed) localStorage.setItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(regrindStds));
+    if (changed) this.safeSetItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(regrindStds));
 
     // Sync Spare Stocks
     changed = false;
@@ -646,7 +1081,7 @@ class StorageService {
         changed = true;
       }
     });
-    if (changed) localStorage.setItem(STORAGE_KEYS.SPARE_STOCKS, JSON.stringify(stocks));
+    if (changed) this.safeSetItem(STORAGE_KEYS.SPARE_STOCKS, JSON.stringify(stocks));
 
     // Sync Position Locks
     changed = false;
@@ -657,21 +1092,21 @@ class StorageService {
         changed = true;
       }
     });
-    if (changed) localStorage.setItem(STORAGE_KEYS.POSITION_LOCKS, JSON.stringify(locks));
+    if (changed) this.safeSetItem(STORAGE_KEYS.POSITION_LOCKS, JSON.stringify(locks));
   }
 
   public savePartMasters(parts: PartMaster[]): void {
-    localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(parts));
+    this.safeSetItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(parts));
     this.addAuditLog('SYSTEM', `Bulk updated ${parts.length} Part Master catalog records`);
     this.notify();
   }
 
   public savePartMastersBulk(parts: PartMaster[], lifeStds: PartLifeStandard[]): void {
     // Save part masters
-    localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(parts));
+    this.safeSetItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(parts));
     
     // Save life standards
-    localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(lifeStds));
+    this.safeSetItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(lifeStds));
 
     // Batch sync name/stage changes to other stores
     let regrindChanged = false;
@@ -713,13 +1148,13 @@ class StorageService {
     });
 
     if (regrindChanged) {
-      localStorage.setItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(regrindStds));
+      this.safeSetItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(regrindStds));
     }
     if (stocksChanged) {
-      localStorage.setItem(STORAGE_KEYS.SPARE_STOCKS, JSON.stringify(stocks));
+      this.safeSetItem(STORAGE_KEYS.SPARE_STOCKS, JSON.stringify(stocks));
     }
     if (locksChanged) {
-      localStorage.setItem(STORAGE_KEYS.POSITION_LOCKS, JSON.stringify(locks));
+      this.safeSetItem(STORAGE_KEYS.POSITION_LOCKS, JSON.stringify(locks));
     }
 
     this.addAuditLog('SYSTEM', `Bulk updated ${parts.length} Part Master catalog and standards records`, `อัปเดตข้อมูลชิ้นส่วนหลักและมาตรฐานจำนวน ${parts.length} รายการ`);
@@ -766,7 +1201,7 @@ class StorageService {
       }
     });
     if (updatedCount > 0) {
-      localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(list));
+      this.safeSetItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(list));
     }
 
     // Also update Life Standards
@@ -779,7 +1214,7 @@ class StorageService {
       }
     });
     if (lifeUpdated) {
-      localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(lifeStds));
+      this.safeSetItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(lifeStds));
     }
 
     // Also update Regrind Standards
@@ -792,7 +1227,7 @@ class StorageService {
       }
     });
     if (regrindUpdated) {
-      localStorage.setItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(regrindStds));
+      this.safeSetItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(regrindStds));
     }
 
     // Also update Line items in production lines monitoring
@@ -809,7 +1244,7 @@ class StorageService {
       });
     }
     if (monUpdated) {
-      localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(allMonitoring));
+      this.safeSetItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(allMonitoring));
     }
 
     this.addAuditLog('SYSTEM', `Renamed Stage Group from "${oldStageName}" to "${cleanNewName}" across ${updatedCount} parts`);
@@ -834,7 +1269,7 @@ class StorageService {
       }
     });
     if (updatedCount > 0) {
-      localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(list));
+      this.safeSetItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(list));
     }
 
     // Update Life Standards
@@ -847,7 +1282,7 @@ class StorageService {
       }
     });
     if (lifeUpdated) {
-      localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(lifeStds));
+      this.safeSetItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(lifeStds));
     }
 
     // Update Regrind Standards
@@ -860,7 +1295,7 @@ class StorageService {
       }
     });
     if (regrindUpdated) {
-      localStorage.setItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(regrindStds));
+      this.safeSetItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(regrindStds));
     }
 
     // Update Line items in production lines monitoring
@@ -877,7 +1312,7 @@ class StorageService {
       });
     }
     if (monUpdated) {
-      localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(allMonitoring));
+      this.safeSetItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(allMonitoring));
     }
 
     this.addAuditLog('SYSTEM', `Deleted Stage Group "${stageName}" and reassigned ${updatedCount} parts to "${fallbackStage}"`);
@@ -890,17 +1325,17 @@ class StorageService {
     if (idx >= 0) {
       const part = list[idx];
       list.splice(idx, 1);
-      localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(list));
+      this.safeSetItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(list));
       
       // Cleanup orphaned records
       const lifeStds = this.getLifeStandards().filter(std => std.configKey.partCode !== partCode);
-      localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(lifeStds));
+      this.safeSetItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(lifeStds));
       
       const regrindStds = this.getRegrindMasterStandards().filter(std => std.partCode !== partCode);
-      localStorage.setItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(regrindStds));
+      this.safeSetItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(regrindStds));
       
       const stocks = this.getSpareStocks().filter(stk => stk.partCode !== partCode);
-      localStorage.setItem(STORAGE_KEYS.SPARE_STOCKS, JSON.stringify(stocks));
+      this.safeSetItem(STORAGE_KEYS.SPARE_STOCKS, JSON.stringify(stocks));
 
       const configs = this.getLineConfigs();
       let configsChanged = false;
@@ -910,7 +1345,7 @@ class StorageService {
           configsChanged = true;
         }
       });
-      if (configsChanged) localStorage.setItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
+      if (configsChanged) this.safeSetItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
       
       this.addAuditLog('SYSTEM', `Deleted Part Master: ${part.partCode} (${part.partName}) and related config records`, `ลบข้อมูลชิ้นส่วนหลัก ${part.partName}`);
       this.notify();
@@ -919,7 +1354,7 @@ class StorageService {
 
   public getLineConfigs(): LineActiveConfiguration[] {
     try {
-      const raw = localStorage.getItem(STORAGE_KEYS.LINE_CONFIGS);
+      const raw = this.getRawItem(STORAGE_KEYS.LINE_CONFIGS);
       if (!raw) return INITIAL_LINE_CONFIGS;
       const parsed = JSON.parse(raw);
       return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_LINE_CONFIGS;
@@ -929,11 +1364,11 @@ class StorageService {
   }
 
   public saveLineConfigs(configs: LineActiveConfiguration[]): void {
-    localStorage.setItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
+    this.safeSetItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
 
     // Synchronize activeConfig and items' installedQty, backupQty, lineStockQty in LINE_MONITORING
     try {
-      const raw = localStorage.getItem(STORAGE_KEYS.LINE_MONITORING);
+      const raw = this.getRawItem(STORAGE_KEYS.LINE_MONITORING);
       if (raw) {
         const allMonitoring = JSON.parse(raw);
         if (allMonitoring && typeof allMonitoring === 'object') {
@@ -956,7 +1391,7 @@ class StorageService {
           });
 
           if (changed) {
-            localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(allMonitoring));
+            this.safeSetItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(allMonitoring));
           }
         }
       }
@@ -969,9 +1404,9 @@ class StorageService {
   }
 
   public getLifeStandards(): PartLifeStandard[] {
-    const raw = localStorage.getItem(STORAGE_KEYS.LIFE_STANDARDS);
+    const raw = this.getRawItem(STORAGE_KEYS.LIFE_STANDARDS);
     if (!raw) {
-      localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(INITIAL_PART_LIFE_STANDARDS));
+      this.safeSetItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(INITIAL_PART_LIFE_STANDARDS));
       return INITIAL_PART_LIFE_STANDARDS;
     }
     try {
@@ -994,7 +1429,7 @@ class StorageService {
   }
 
   public saveLifeStandards(standards: PartLifeStandard[]): void {
-    localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(standards));
+    this.safeSetItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(standards));
     this.addAuditLog('STANDARD_CHANGE', `Bulk updated ${standards.length} Part Life Standards`);
     this.notify();
   }
@@ -1010,9 +1445,9 @@ class StorageService {
       'E5': this.generateLineMonitoring('E5', INITIAL_LINE_CONFIGS[6] || INITIAL_LINE_CONFIGS[0], 0)
     };
 
-    const raw = localStorage.getItem(STORAGE_KEYS.LINE_MONITORING);
+    const raw = this.getRawItem(STORAGE_KEYS.LINE_MONITORING);
     if (!raw) {
-      localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(defaultLinesMonitoring));
+      this.safeSetItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(defaultLinesMonitoring));
       return defaultLinesMonitoring;
     }
     try {
@@ -1027,7 +1462,7 @@ class StorageService {
           }
         });
         if (updated) {
-          localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(parsed));
+          this.safeSetItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(parsed));
         }
         return parsed;
       }
@@ -1045,14 +1480,14 @@ class StorageService {
       const defaultData = this.generateLineMonitoring(lineId, config, 100000);
       const safeAll = all && typeof all === 'object' ? all : ({} as Record<ProductionLineId, LineLiveMonitoringData>);
       safeAll[lineId] = defaultData;
-      localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(safeAll));
+      this.safeSetItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(safeAll));
       return defaultData;
     }
     return all[lineId];
   }
 
   public getActiveE3FinDie(): 'E3 SLIT' | 'E3 WL+' | 'E3 New Cor' {
-    const stored = localStorage.getItem(STORAGE_KEYS.ACTIVE_E3_FIN_DIE);
+    const stored = this.getRawItem(STORAGE_KEYS.ACTIVE_E3_FIN_DIE);
     if (stored === 'E3 SLIT' || stored === 'E3 WL+' || stored === 'E3 New Cor') {
       return stored as any;
     }
@@ -1063,7 +1498,7 @@ class StorageService {
     const prev = this.getActiveE3FinDie();
     if (prev === dieId) return;
 
-    localStorage.setItem(STORAGE_KEYS.ACTIVE_E3_FIN_DIE, dieId);
+    this.safeSetItem(STORAGE_KEYS.ACTIVE_E3_FIN_DIE, dieId);
 
     // Also update line operational statuses in monitoring
     const all = this.getLinesMonitoring();
@@ -1085,7 +1520,7 @@ class StorageService {
         }
       }
     });
-    localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(all));
+    this.safeSetItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(all));
 
     const user = this.getCurrentUser();
     const by = operatorName || user.name;
@@ -1100,7 +1535,7 @@ class StorageService {
 
   public getSpareStocks(): SpareStockItem[] {
     try {
-      const raw = localStorage.getItem(STORAGE_KEYS.SPARE_STOCKS);
+      const raw = this.getRawItem(STORAGE_KEYS.SPARE_STOCKS);
       if (!raw) return INITIAL_SPARE_STOCKS;
       const parsed = JSON.parse(raw);
       return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_SPARE_STOCKS;
@@ -1111,7 +1546,7 @@ class StorageService {
 
   public getReplacements(): ReplacementRecord[] {
     try {
-      const raw = localStorage.getItem(STORAGE_KEYS.REPLACEMENTS);
+      const raw = this.getRawItem(STORAGE_KEYS.REPLACEMENTS);
       if (!raw) return INITIAL_REPLACEMENT_HISTORY;
       const parsed = JSON.parse(raw);
       return Array.isArray(parsed) ? parsed : INITIAL_REPLACEMENT_HISTORY;
@@ -1122,7 +1557,7 @@ class StorageService {
 
   public getReplacementDrafts(): any[] {
     try {
-      const raw = localStorage.getItem(STORAGE_KEYS.REPLACEMENT_DRAFTS);
+      const raw = this.getRawItem(STORAGE_KEYS.REPLACEMENT_DRAFTS);
       if (!raw) return [];
       const parsed = JSON.parse(raw);
       return Array.isArray(parsed) ? parsed : [];
@@ -1145,20 +1580,20 @@ class StorageService {
     } else {
       drafts.unshift(draftRecord);
     }
-    localStorage.setItem(STORAGE_KEYS.REPLACEMENT_DRAFTS, JSON.stringify(drafts.slice(0, 50)));
+    this.safeSetItem(STORAGE_KEYS.REPLACEMENT_DRAFTS, JSON.stringify(drafts.slice(0, 50)));
     this.notify();
     return draftRecord;
   }
 
   public deleteReplacementDraft(draftId: string): void {
     const drafts = this.getReplacementDrafts().filter(d => d.id !== draftId);
-    localStorage.setItem(STORAGE_KEYS.REPLACEMENT_DRAFTS, JSON.stringify(drafts));
+    this.safeSetItem(STORAGE_KEYS.REPLACEMENT_DRAFTS, JSON.stringify(drafts));
     this.notify();
   }
 
   public getRegrindRecords(): RegrindingRecord[] {
     try {
-      const raw = localStorage.getItem(STORAGE_KEYS.REGRINDS);
+      const raw = this.getRawItem(STORAGE_KEYS.REGRINDS);
       if (!raw) return INITIAL_REGRIND_RECORDS;
       const parsed = JSON.parse(raw);
       return Array.isArray(parsed) ? parsed : INITIAL_REGRIND_RECORDS;
@@ -1168,7 +1603,7 @@ class StorageService {
   }
 
   public getRegrindMasterStandards(): RegrindMasterStandard[] {
-    const raw = localStorage.getItem(STORAGE_KEYS.REGRIND_STANDARDS);
+    const raw = this.getRawItem(STORAGE_KEYS.REGRIND_STANDARDS);
     if (!raw) return INITIAL_REGRIND_MASTER_STANDARDS;
     try {
       const parsed = JSON.parse(raw);
@@ -1186,7 +1621,7 @@ class StorageService {
     } else {
       standards.push(standard);
     }
-    localStorage.setItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(standards));
+    this.safeSetItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(standards));
     this.addAuditLog(
       'STANDARD_CHANGE',
       `Updated Regrind Standard for ${standard.partName} (${standard.partCode}): Grinding ${standard.grindingAmountPerTimeMm}mm/time, Max ${standard.maxRegrindCount} times`,
@@ -1197,7 +1632,7 @@ class StorageService {
 
   public getInspections(): ConditionInspectionRecord[] {
     try {
-      const raw = localStorage.getItem(STORAGE_KEYS.INSPECTIONS);
+      const raw = this.getRawItem(STORAGE_KEYS.INSPECTIONS);
       if (!raw) return INITIAL_INSPECTIONS;
       const parsed = JSON.parse(raw);
       return Array.isArray(parsed) ? parsed : INITIAL_INSPECTIONS;
@@ -1208,7 +1643,7 @@ class StorageService {
 
   public getShotLogs(): ShotEntryRecord[] {
     try {
-      const raw = localStorage.getItem(STORAGE_KEYS.SHOT_LOGS);
+      const raw = this.getRawItem(STORAGE_KEYS.SHOT_LOGS);
       if (!raw) return INITIAL_SHOT_LOGS;
       const parsed = JSON.parse(raw);
       return Array.isArray(parsed) ? parsed : INITIAL_SHOT_LOGS;
@@ -1219,7 +1654,7 @@ class StorageService {
 
   public getAuditLogs(): AuditLogEntry[] {
     try {
-      const raw = localStorage.getItem(STORAGE_KEYS.AUDIT_LOGS);
+      const raw = this.getRawItem(STORAGE_KEYS.AUDIT_LOGS);
       if (!raw) return INITIAL_AUDIT_LOGS;
       const parsed = JSON.parse(raw);
       return Array.isArray(parsed) ? parsed : INITIAL_AUDIT_LOGS;
@@ -1229,7 +1664,7 @@ class StorageService {
   }
 
   public saveLinesMonitoring(lines: Record<ProductionLineId, LineLiveMonitoringData>): void {
-    localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(lines));
+    this.safeSetItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(lines));
     this.notify();
   }
 
@@ -1237,7 +1672,7 @@ class StorageService {
     const limits = [200, 100, 50, 20, 5];
     for (const limit of limits) {
       try {
-        localStorage.setItem(STORAGE_KEYS.AUDIT_LOGS, JSON.stringify(logs.slice(0, limit)));
+        this.safeSetItem(STORAGE_KEYS.AUDIT_LOGS, JSON.stringify(logs.slice(0, limit)));
         return; // Successfully saved, stop trying
       } catch (e) {
         console.warn(`[StorageService] Failed to save audit logs at limit ${limit}, trying smaller limit...`, e);
@@ -1245,11 +1680,11 @@ class StorageService {
     }
     // If even 5 logs fail, try saving just 1
     try {
-      localStorage.setItem(STORAGE_KEYS.AUDIT_LOGS, JSON.stringify(logs.slice(0, 1)));
+      this.safeSetItem(STORAGE_KEYS.AUDIT_LOGS, JSON.stringify(logs.slice(0, 1)));
     } catch (e) {
       console.error('[StorageService] Critical: localStorage is completely full. Removing audit logs to avoid blocking app functionality.', e);
       try {
-        localStorage.removeItem(STORAGE_KEYS.AUDIT_LOGS);
+        this.safeRemoveItem(STORAGE_KEYS.AUDIT_LOGS);
       } catch (rmErr) {
         // Safe fallback
       }
@@ -1260,7 +1695,7 @@ class StorageService {
     const limits = [200, 100, 50, 20, 5];
     for (const limit of limits) {
       try {
-        localStorage.setItem(STORAGE_KEYS.SHOT_LOGS, JSON.stringify(logs.slice(0, limit)));
+        this.safeSetItem(STORAGE_KEYS.SHOT_LOGS, JSON.stringify(logs.slice(0, limit)));
         return; // Successfully saved, stop trying
       } catch (e) {
         console.warn(`[StorageService] Failed to save shot logs at limit ${limit}, trying smaller limit...`, e);
@@ -1268,11 +1703,11 @@ class StorageService {
     }
     // If even 5 logs fail, try saving just 1
     try {
-      localStorage.setItem(STORAGE_KEYS.SHOT_LOGS, JSON.stringify(logs.slice(0, 1)));
+      this.safeSetItem(STORAGE_KEYS.SHOT_LOGS, JSON.stringify(logs.slice(0, 1)));
     } catch (e) {
       console.error('[StorageService] Critical: localStorage is completely full. Removing shot logs to avoid blocking app functionality.', e);
       try {
-        localStorage.removeItem(STORAGE_KEYS.SHOT_LOGS);
+        this.safeRemoveItem(STORAGE_KEYS.SHOT_LOGS);
       } catch (rmErr) {
         // Safe fallback
       }
@@ -1438,7 +1873,7 @@ class StorageService {
 
   public getShotDrafts(): ShotEntryRecord[] {
     try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEYS.SHOT_DRAFTS) || '[]');
+      return JSON.parse(this.getRawItem(STORAGE_KEYS.SHOT_DRAFTS) || '[]');
     } catch {
       return [];
     }
@@ -1479,7 +1914,7 @@ class StorageService {
       drafts.unshift(draftRecord);
     }
 
-    localStorage.setItem(STORAGE_KEYS.SHOT_DRAFTS, JSON.stringify(drafts.slice(0, 50)));
+    this.safeSetItem(STORAGE_KEYS.SHOT_DRAFTS, JSON.stringify(drafts.slice(0, 50)));
     this.addAuditLog('SHOT_ADJUSTMENT', `Saved Shot Entry draft (${draftRecord.id}) for Line ${draftRecord.lineId}`);
     this.notify();
     return draftRecord;
@@ -1487,7 +1922,7 @@ class StorageService {
 
   public deleteShotDraft(draftId: string): void {
     const drafts = this.getShotDrafts().filter(d => d.id !== draftId);
-    localStorage.setItem(STORAGE_KEYS.SHOT_DRAFTS, JSON.stringify(drafts));
+    this.safeSetItem(STORAGE_KEYS.SHOT_DRAFTS, JSON.stringify(drafts));
     this.notify();
   }
 
@@ -1711,7 +2146,7 @@ class StorageService {
     });
 
     all[params.lineId] = line;
-    localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(all));
+    this.safeSetItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(all));
 
     // 5. Create Shot Log Record
     const user = this.getCurrentUser();
@@ -1869,7 +2304,7 @@ class StorageService {
       };
     }
 
-    localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(all));
+    this.safeSetItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(all));
     this.notify();
   }
 
@@ -1983,7 +2418,7 @@ class StorageService {
       logs.unshift(resetRecord);
     });
 
-    localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(all));
+    this.safeSetItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(all));
     this.safeSaveShotLogs(logs);
 
     const linesDesc = `Line ${targetLineId}`;
@@ -2161,7 +2596,7 @@ class StorageService {
     });
 
     all[originalRecord.lineId] = line;
-    localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(all));
+    this.safeSetItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(all));
 
     // 4. Update Original Record Status & Insert Reversal + Corrected Records
     logs[origIndex] = {
@@ -2239,7 +2674,7 @@ class StorageService {
     });
 
     all[lineId] = line;
-    localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(all));
+    this.safeSetItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(all));
 
     // Add Shot log
     const user = this.getCurrentUser();
@@ -2390,12 +2825,13 @@ class StorageService {
       return { success: false, error: 'Rule 10 Error: Cannot install a part lot marked as SCRAP / REJECT.' };
     }
 
-    const newId = `REP-${new Date().getFullYear()}-${String(replacements.length + 1).padStart(4, '0')}`;
+    const uniqueSuffix = Math.random().toString(36).slice(2, 5).toUpperCase();
+    const newId = `REP-${new Date().getFullYear()}-${String(replacements.length + 1).padStart(4, '0')}-${uniqueSuffix}`;
     const machineShot = record.machineShotAtReplacement !== undefined ? Number(record.machineShotAtReplacement) : line.machineShotTotal;
     const removedShot = record.removedPartUsedShot !== undefined ? Number(record.removedPartUsedShot) : (item ? (item.usedShot !== undefined ? item.usedShot : item.currentShot) : 0);
     const removedRegrind = record.removedPartRegrindCount !== undefined ? Number(record.removedPartRegrindCount) : (item ? item.regrindCount : 0);
 
-    const initialStatus = (record.approvalStatus as any) || (user.role === 'OPERATOR' ? 'SUBMITTED' : 'APPROVED');
+    const initialStatus = (record.approvalStatus as any) || (record.skipStageShotReset ? 'COMPLETED' : (user.role === 'OPERATOR' ? 'SUBMITTED' : 'APPROVED'));
     const isApprovedOrCompleted = initialStatus === 'APPROVED' || initialStatus === 'COMPLETED';
 
     const newRecord: ReplacementRecord = {
@@ -2407,6 +2843,7 @@ class StorageService {
       partCode: record.partCode || (item ? item.partCode : 'UNKNOWN'),
       partName: record.partName || (item ? item.partName : 'Tooling Part'),
       stageName: record.stageName || (item ? item.stagePunchDie : record.partName || 'Tooling Stage'),
+      stageId: record.stageId,
       position: record.position || 'ALL',
       replacementType: record.replacementType || 'NEW PART',
       fullSetOrPartial: isPartial ? 'PARTIAL' : 'FULL_SET',
@@ -2430,7 +2867,12 @@ class StorageService {
       quantityMismatchReason: record.quantityMismatchReason,
       quantityMismatchApprovedBy: record.quantityMismatchApprovedBy,
       positionDetails: record.positionDetails,
-      stockUpdated: isApprovedOrCompleted,
+      stockUpdated: isApprovedOrCompleted && !record.skipStockDeduction,
+      skipStageShotReset: record.skipStageShotReset,
+      skipStockDeduction: record.skipStockDeduction,
+      shotCaptureMode: record.shotCaptureMode,
+      isRetroactive: record.isRetroactive,
+      linkedMasterLogId: record.linkedMasterLogId,
       timestamp: new Date().toISOString(),
 
       // Aliases for compatibility
@@ -2449,7 +2891,7 @@ class StorageService {
     };
 
     replacements.unshift(newRecord);
-    localStorage.setItem(STORAGE_KEYS.REPLACEMENTS, JSON.stringify(replacements));
+    this.safeSetItem(STORAGE_KEYS.REPLACEMENTS, JSON.stringify(replacements));
 
     // Delete draft if one was used
     if (record.draftId) {
@@ -2492,7 +2934,7 @@ class StorageService {
     record.stockUpdated = true;
 
     replacements[idx] = record;
-    localStorage.setItem(STORAGE_KEYS.REPLACEMENTS, JSON.stringify(replacements));
+    this.safeSetItem(STORAGE_KEYS.REPLACEMENTS, JSON.stringify(replacements));
 
     // Apply tooling reset and stock deduction upon approval
     this.applyReplacementToMonitoringAndStock(record);
@@ -2516,7 +2958,7 @@ class StorageService {
     replacements[idx].approvalStatus = 'REJECTED';
     replacements[idx].note = `${replacements[idx].note || ''} [REJECTED: ${reason}]`;
 
-    localStorage.setItem(STORAGE_KEYS.REPLACEMENTS, JSON.stringify(replacements));
+    this.safeSetItem(STORAGE_KEYS.REPLACEMENTS, JSON.stringify(replacements));
     this.addAuditLog(
       'REPLACEMENT',
       `REJECTED Replacement ${recordId}: ${reason}`,
@@ -2536,7 +2978,7 @@ class StorageService {
     replacements[idx].approvalStatus = 'CANCELLED';
     replacements[idx].note = `${replacements[idx].note || ''} [CANCELLED: ${reason}]`;
 
-    localStorage.setItem(STORAGE_KEYS.REPLACEMENTS, JSON.stringify(replacements));
+    this.safeSetItem(STORAGE_KEYS.REPLACEMENTS, JSON.stringify(replacements));
     this.addAuditLog(
       'REPLACEMENT',
       `CANCELLED Replacement ${recordId}: ${reason}`,
@@ -2548,19 +2990,163 @@ class StorageService {
     return { success: true };
   }
 
+  public updateReplacementRecord(recordId: string, updates: Partial<ReplacementRecord>): { success: boolean; error?: string } {
+    const replacements = this.getReplacements();
+    const idx = replacements.findIndex(r => r.id === recordId);
+    if (idx === -1) return { success: false, error: `Replacement record ${recordId} not found` };
+
+    const existing = replacements[idx];
+    const updated: ReplacementRecord = {
+      ...existing,
+      ...updates,
+      shotAtChange: updates.machineShotAtReplacement ?? existing.shotAtChange,
+      shotAtReplacement: updates.machineShotAtReplacement ?? existing.shotAtReplacement,
+      partAccumulatedShots: updates.removedPartUsedShot ?? existing.partAccumulatedShots,
+      reason: updates.replacementReason ?? updates.reason ?? existing.reason,
+      technicianName: updates.changedBy ?? updates.technicianName ?? existing.technicianName,
+      replacementDate: updates.replacementDateTime ?? updates.replacementDate ?? existing.replacementDate
+    };
+    replacements[idx] = updated;
+    this.safeSetItem(STORAGE_KEYS.REPLACEMENTS, JSON.stringify(replacements));
+    this.addAuditLog(
+      'REPLACEMENT',
+      `UPDATED Replacement ${recordId} on Line ${updated.lineId} (${updated.partName})`,
+      `แก้ไขประวัติการเปลี่ยนอะไหล่ ${recordId} (${updated.partName}) สาย ${updated.lineId}`,
+      updated.lineId
+    );
+    this.notify();
+    return { success: true };
+  }
+
+  public deleteReplacementRecord(recordId: string): { success: boolean; error?: string } {
+    const replacements = this.getReplacements();
+    const target = replacements.find(r => r.id === recordId);
+    if (!target) return { success: false, error: `Replacement record ${recordId} not found` };
+
+    const filtered = replacements.filter(r => r.id !== recordId);
+    this.safeSetItem(STORAGE_KEYS.REPLACEMENTS, JSON.stringify(filtered));
+    this.addAuditLog(
+      'REPLACEMENT',
+      `DELETED Replacement ${recordId} on Line ${target.lineId} (${target.partName})`,
+      `ลบประวัติการเปลี่ยนอะไหล่ ${recordId} (${target.partName}) สาย ${target.lineId}`,
+      target.lineId
+    );
+    this.notify();
+    return { success: true };
+  }
+
   private applyReplacementToMonitoringAndStock(record: ReplacementRecord) {
     const all = this.getLinesMonitoring();
     const line = all[record.lineId];
     const standards = this.getLifeStandards();
     const stocks = this.getSpareStocks();
+    const lineConfigs = this.getLineConfigs();
+    const partMasters = this.getPartMasters();
+
+    // Resolve canonical Drawing/PartCode for accurate Parts Stock linkage
+    let resolvedPartCode = record.partCode || '';
+    const hasStockEntry = stocks.some(s => s.partCode === resolvedPartCode);
+    if (!hasStockEntry) {
+      const matchedLineItem = line?.items?.find(item =>
+        record.stageName ? isPartMatchingInteractiveStage(item, resolvedPartCode, record.stageName) : false
+      );
+      if (matchedLineItem?.partCode) {
+        resolvedPartCode = matchedLineItem.partCode;
+      } else {
+        const matchedPm = partMasters.find(pm => {
+          const linesList = ((pm as any).applicableLines || []) as ProductionLineId[];
+          const lineOk = linesList.length === 0 || linesList.includes(record.lineId);
+          return lineOk && record.stageName
+            ? isPartMatchingInteractiveStage(
+                { partCode: pm.partCode, partName: pm.partName, stagePunchDie: pm.stageName },
+                resolvedPartCode,
+                record.stageName
+              )
+            : false;
+        });
+        if (matchedPm?.partCode) {
+          resolvedPartCode = matchedPm.partCode;
+        }
+      }
+    }
+
+    let updatedLineStockQty: number | undefined;
+
+    // Deduct automatically from Parts Stock (LINE_CONFIGS.stockQuantities + SPARE_STOCKS) when enabled
+    if (!record.skipStockDeduction && resolvedPartCode) {
+      const deduct = Math.max(1, record.changedQuantity || record.replacedQty || 1);
+
+      // 1. Deduct from line-level stockQuantities (used by 4. STOCK MATRIX)
+      let configUpdated = false;
+      const updatedConfigs = lineConfigs.map(cfg => {
+        if (cfg.lineId === record.lineId && cfg.stockQuantities) {
+          const currentLineQty = cfg.stockQuantities[resolvedPartCode];
+          if (currentLineQty !== undefined) {
+            const nextLineQty = Math.max(0, currentLineQty - deduct);
+            updatedLineStockQty = nextLineQty;
+            configUpdated = true;
+            return {
+              ...cfg,
+              stockQuantities: {
+                ...cfg.stockQuantities,
+                [resolvedPartCode]: nextLineQty
+              }
+            };
+          }
+        }
+        return cfg;
+      });
+      if (configUpdated) {
+        this.safeSetItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(updatedConfigs));
+      }
+
+      // 2. Deduct from canonical and line-scoped SPARE_STOCKS entries
+      const lineScopedCode = `${record.lineId}-${resolvedPartCode}`;
+      let stockChanged = false;
+      stocks.forEach(stockItem => {
+        if (stockItem.partCode === resolvedPartCode || stockItem.partCode === lineScopedCode) {
+          const currentQty = stockItem.onHandQuantity !== undefined ? stockItem.onHandQuantity : (stockItem.currentStockQty || 0);
+          const nextQty = Math.max(0, currentQty - deduct);
+          stockItem.onHandQuantity = nextQty;
+          stockItem.currentStockQty = nextQty;
+          stockItem.availableQuantity = Math.max(0, nextQty - (stockItem.reservedQuantity || 0) - (stockItem.quarantineQuantity || 0));
+          const minStock = stockItem.minimumStock ?? stockItem.safetyStockQty ?? 0;
+          const reqFull = stockItem.requiredQuantityPerFullReplacement || 1;
+          stockItem.stockStatus =
+            stockItem.availableQuantity === 0
+              ? 'NO_STOCK'
+              : stockItem.availableQuantity < reqFull
+              ? 'LOW_STOCK'
+              : stockItem.availableQuantity <= minStock
+              ? 'MINIMUM'
+              : 'AVAILABLE';
+          if (stockItem.partCode === lineScopedCode && updatedLineStockQty === undefined) {
+            updatedLineStockQty = stockItem.availableQuantity;
+          }
+          stockChanged = true;
+        }
+      });
+      if (stockChanged) {
+        this.safeSetItem(STORAGE_KEYS.SPARE_STOCKS, JSON.stringify(stocks));
+      }
+    }
 
     if (line) {
+      let lineMonitoringChanged = false;
       line.items = line.items.map(item => {
-        if (
-          item.partCode === record.partCode || 
-          (record.stageName && isPartMatchingInteractiveStage(item, record.partCode || '', record.stageName))
-        ) {
-          // Rule 2 & 6 & 7: Start life from 0 on replacement, update last change shot to machine shot at replacement
+        const isTargetItem =
+          item.partCode === resolvedPartCode ||
+          item.partCode === record.partCode ||
+          (record.stageName && isPartMatchingInteractiveStage(item, resolvedPartCode || record.partCode || '', record.stageName));
+
+        if (!isTargetItem) return item;
+
+        const nextBackupQty =
+          !record.skipStockDeduction && updatedLineStockQty !== undefined ? updatedLineStockQty : item.backupQty;
+
+        if (!record.skipStageShotReset) {
+          lineMonitoringChanged = true;
+          // Rule 2 & 6 & 7: Start life from 0 on full-stage replacement, update last change shot
           const nextRegrindCount = record.replacementType === 'RE-GROUND PART' ? (item.regrindCount + 1) : 0;
           return calculatePartMetrics(
             {
@@ -2570,11 +3156,11 @@ class StorageService {
               stagePunchDie: item.stagePunchDie,
               position: item.position,
               installQty: item.installQty,
-              backupQty: item.backupQty,
+              backupQty: nextBackupQty,
               currentShot: 0,
               usedShot: 0,
-              lastChangeShot: record.machineShotAtReplacement || line.machineShotTotal,
-              shotAtLastChange: record.machineShotAtReplacement || line.machineShotTotal,
+              lastChangeShot: record.machineShotAtReplacement ?? line.machineShotTotal,
+              shotAtLastChange: record.machineShotAtReplacement ?? line.machineShotTotal,
               regrindCount: nextRegrindCount,
               totalMmGround: item.totalMmGround || 0
             },
@@ -2583,17 +3169,29 @@ class StorageService {
             stocks
           );
         }
+
+        if (nextBackupQty !== item.backupQty) {
+          lineMonitoringChanged = true;
+          return { ...item, backupQty: nextBackupQty };
+        }
         return item;
       });
-      all[record.lineId] = line;
-      localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(all));
-    }
 
-    // Rule 12: Update warehouse spare stock only after approval / completion
-    const stockItem = stocks.find(s => s.partCode === record.partCode);
-    if (stockItem) {
-      stockItem.currentStockQty = Math.max(0, stockItem.currentStockQty - (record.changedQuantity || record.replacedQty || 1));
-      localStorage.setItem(STORAGE_KEYS.SPARE_STOCKS, JSON.stringify(stocks));
+      if (updatedLineStockQty !== undefined && line.activeConfig?.stockQuantities) {
+        line.activeConfig = {
+          ...line.activeConfig,
+          stockQuantities: {
+            ...line.activeConfig.stockQuantities,
+            [resolvedPartCode]: updatedLineStockQty
+          }
+        };
+        lineMonitoringChanged = true;
+      }
+
+      if (lineMonitoringChanged) {
+        all[record.lineId] = line;
+        this.safeSetItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(all));
+      }
     }
   }
 
@@ -2738,7 +3336,7 @@ class StorageService {
 
     // Rule 6 & 7: Preserve every regrind transaction in historical record (never overwrite)
     regrinds.unshift(newRecord);
-    localStorage.setItem(STORAGE_KEYS.REGRINDS, JSON.stringify(regrinds));
+    this.safeSetItem(STORAGE_KEYS.REGRINDS, JSON.stringify(regrinds));
 
     this.addAuditLog(
       'REGRIND',
@@ -2787,7 +3385,7 @@ class StorageService {
     }
 
     regrinds[idx] = regrind;
-    localStorage.setItem(STORAGE_KEYS.REGRINDS, JSON.stringify(regrinds));
+    this.safeSetItem(STORAGE_KEYS.REGRINDS, JSON.stringify(regrinds));
 
     this.addAuditLog(
       'REGRIND',
@@ -2809,7 +3407,7 @@ class StorageService {
     regrinds[idx].status = status;
     if (reason) regrinds[idx].note = `${regrinds[idx].note || ''} [STATUS CHANGE ${oldStatus} -> ${status}: ${reason}]`;
 
-    localStorage.setItem(STORAGE_KEYS.REGRINDS, JSON.stringify(regrinds));
+    this.safeSetItem(STORAGE_KEYS.REGRINDS, JSON.stringify(regrinds));
 
     this.addAuditLog(
       'REGRIND',
@@ -2830,7 +3428,7 @@ class StorageService {
       id: newId
     };
     inspections.unshift(newRecord);
-    localStorage.setItem(STORAGE_KEYS.INSPECTIONS, JSON.stringify(inspections));
+    this.safeSetItem(STORAGE_KEYS.INSPECTIONS, JSON.stringify(inspections));
 
     this.addAuditLog(
       'SYSTEM',
@@ -2854,7 +3452,7 @@ class StorageService {
         updatedAt: new Date().toISOString()
       });
     }
-    localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(standards));
+    this.safeSetItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(standards));
 
     this.addAuditLog(
       'STANDARD_CHANGE',
@@ -2870,7 +3468,7 @@ class StorageService {
     const standards = this.getLifeStandards();
     const target = standards.find(s => s.id === standardId);
     const filtered = standards.filter(s => s.id !== standardId);
-    localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(filtered));
+    this.safeSetItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(filtered));
     if (target) {
       this.addAuditLog(
         'STANDARD_CHANGE',
@@ -2896,14 +3494,14 @@ class StorageService {
         status: config.status || (config.isActive ? 'ACTIVE' : 'DRAFT')
       });
     }
-    localStorage.setItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
+    this.safeSetItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
 
     // If active, update active config in live monitoring
     if (config.isActive) {
       const all = this.getLinesMonitoring();
       if (all[config.lineId]) {
         all[config.lineId].activeConfig = config;
-        localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(all));
+        this.safeSetItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(all));
       }
     }
 
@@ -2941,7 +3539,7 @@ class StorageService {
     line.machineStatus = newStatus;
     line.lastUpdate = nowIso.replace('T', ' ').substring(0, 19);
     all[lineId] = line;
-    localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(all));
+    this.safeSetItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(all));
 
     // 2. Keep active configuration in sync
     const configs = this.getLineConfigs();
@@ -2949,7 +3547,7 @@ class StorageService {
     if (configIdx >= 0) {
       configs[configIdx].isActive = true;
       configs[configIdx].status = newStatus === 'RUNNING' ? 'ACTIVE' : 'INACTIVE';
-      localStorage.setItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
+      this.safeSetItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
     }
 
     const logs = this.getDowntimeLogs();
@@ -2975,7 +3573,7 @@ class StorageService {
         notes: `Switched status from ${previousStatus} to ${newStatus}`
       };
       logs.unshift(newDt);
-      localStorage.setItem(STORAGE_KEYS.DOWNTIME_LOGS, JSON.stringify(logs));
+      this.safeSetItem(STORAGE_KEYS.DOWNTIME_LOGS, JSON.stringify(logs));
     }
 
     // 4. If switching back to RUNNING or IDLE, auto-resolve any open ongoing downtime for this line
@@ -2992,7 +3590,7 @@ class StorageService {
         }
       });
       if (resolvedCount > 0) {
-        localStorage.setItem(STORAGE_KEYS.DOWNTIME_LOGS, JSON.stringify(logs));
+        this.safeSetItem(STORAGE_KEYS.DOWNTIME_LOGS, JSON.stringify(logs));
       }
     }
 
@@ -3044,7 +3642,7 @@ class StorageService {
     });
 
     if (configsChanged) {
-      localStorage.setItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
+      this.safeSetItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
     }
 
     const allMonitoring = this.getLinesMonitoring();
@@ -3074,7 +3672,7 @@ class StorageService {
     });
 
     if (monitoringChanged) {
-      localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(allMonitoring));
+      this.safeSetItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(allMonitoring));
     }
 
     this.notify();
@@ -3125,7 +3723,7 @@ class StorageService {
       approvedAt: nowIso
     };
     configs[targetConfigIdx] = activatedConfig;
-    localStorage.setItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
+    this.safeSetItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
 
     // 3. Update line live monitoring items:
     // Continue accumulated shots for parts physically remaining installed
@@ -3186,7 +3784,7 @@ class StorageService {
       lineData.items = newTrackingItems;
       lineData.lastUpdate = new Date().toISOString().replace('T', ' ').substring(0, 19);
       allMonitoring[lineId] = lineData;
-      localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(allMonitoring));
+      this.safeSetItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(allMonitoring));
     }
 
     this.addAuditLog(
@@ -3213,7 +3811,7 @@ class StorageService {
       effectiveTo: new Date().toISOString(),
       notes: reason ? `${cfg.notes || ''} [Deactivated: ${reason}]` : cfg.notes
     };
-    localStorage.setItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
+    this.safeSetItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
 
     this.addAuditLog(
       'CONFIGURATION',
@@ -3272,7 +3870,7 @@ class StorageService {
       };
       configs.push(currentConfig);
     }
-    localStorage.setItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
+    this.safeSetItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
 
     // Update line monitoring live items
     const allMonitoring = this.getLinesMonitoring();
@@ -3338,7 +3936,7 @@ class StorageService {
     lineData.items = newTrackingItems;
     lineData.lastUpdate = new Date().toISOString().substring(0, 19);
     allMonitoring[lineId] = lineData;
-    localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(allMonitoring));
+    this.safeSetItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(allMonitoring));
 
     this.addAuditLog(
       'CONFIGURATION',
@@ -3381,7 +3979,7 @@ class StorageService {
     };
 
     configs.push(newConfig);
-    localStorage.setItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
+    this.safeSetItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
 
     this.addAuditLog(
       'CONFIGURATION',
@@ -3421,7 +4019,7 @@ class StorageService {
     };
 
     configs.push(newConfig);
-    localStorage.setItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
+    this.safeSetItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
 
     this.addAuditLog(
       'CONFIGURATION',
@@ -3440,7 +4038,7 @@ class StorageService {
     if (idx === -1) return false;
 
     configs[idx].status = 'PENDING APPROVAL';
-    localStorage.setItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
+    this.safeSetItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
 
     this.addAuditLog(
       'CONFIGURATION',
@@ -3463,7 +4061,7 @@ class StorageService {
     }
 
     const filtered = configs.filter(c => c.id !== configId);
-    localStorage.setItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(filtered));
+    this.safeSetItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(filtered));
 
     this.addAuditLog(
       'CONFIGURATION',
@@ -3588,7 +4186,7 @@ class StorageService {
     } else {
       stocks.push(item);
     }
-    localStorage.setItem(STORAGE_KEYS.SPARE_STOCKS, JSON.stringify(stocks));
+    this.safeSetItem(STORAGE_KEYS.SPARE_STOCKS, JSON.stringify(stocks));
 
     this.logStructuredAudit({
       module: 'SPARE_STOCK',
@@ -3608,10 +4206,10 @@ class StorageService {
   }
 
   public saveSpareStocksList(stocks: SpareStockItem[]): void {
-    localStorage.setItem(STORAGE_KEYS.SPARE_STOCKS, JSON.stringify(stocks));
+    this.safeSetItem(STORAGE_KEYS.SPARE_STOCKS, JSON.stringify(stocks));
 
     try {
-      const raw = localStorage.getItem(STORAGE_KEYS.LINE_MONITORING);
+      const raw = this.getRawItem(STORAGE_KEYS.LINE_MONITORING);
       if (raw) {
         const allMonitoring = JSON.parse(raw);
         if (allMonitoring && typeof allMonitoring === 'object') {
@@ -3631,7 +4229,7 @@ class StorageService {
           });
 
           if (changed) {
-            localStorage.setItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(allMonitoring));
+            this.safeSetItem(STORAGE_KEYS.LINE_MONITORING, JSON.stringify(allMonitoring));
           }
         }
       }
@@ -3647,7 +4245,7 @@ class StorageService {
   // ==========================================
 
   public getPositionLocks(lineId?: ProductionLineId): PositionLockRecord[] {
-    const raw = localStorage.getItem(STORAGE_KEYS.POSITION_LOCKS);
+    const raw = this.getRawItem(STORAGE_KEYS.POSITION_LOCKS);
     let locks: PositionLockRecord[] = [];
     try {
       locks = raw ? JSON.parse(raw) : [];
@@ -3657,7 +4255,7 @@ class StorageService {
     
     if (locks.length === 0) {
       locks = this.initializeDefaultPositionLocks();
-      localStorage.setItem(STORAGE_KEYS.POSITION_LOCKS, JSON.stringify(locks));
+      this.safeSetItem(STORAGE_KEYS.POSITION_LOCKS, JSON.stringify(locks));
     }
 
     if (lineId) {
@@ -3749,7 +4347,7 @@ class StorageService {
     notes?: string,
     freezeShotCount: boolean = true
   ): PositionLockRecord {
-    const raw = localStorage.getItem(STORAGE_KEYS.POSITION_LOCKS);
+    const raw = this.getRawItem(STORAGE_KEYS.POSITION_LOCKS);
     let locks: PositionLockRecord[] = [];
     try {
       locks = raw ? JSON.parse(raw) : this.initializeDefaultPositionLocks();
@@ -3793,7 +4391,7 @@ class StorageService {
     };
 
     locks[idx] = updated;
-    localStorage.setItem(STORAGE_KEYS.POSITION_LOCKS, JSON.stringify(locks));
+    this.safeSetItem(STORAGE_KEYS.POSITION_LOCKS, JSON.stringify(locks));
 
     this.logStructuredAudit({
       module: 'SECURITY',
@@ -3819,7 +4417,7 @@ class StorageService {
     lockReason: string,
     notes?: string
   ): void {
-    const raw = localStorage.getItem(STORAGE_KEYS.POSITION_LOCKS);
+    const raw = this.getRawItem(STORAGE_KEYS.POSITION_LOCKS);
     let locks: PositionLockRecord[] = [];
     try {
       locks = raw ? JSON.parse(raw) : this.initializeDefaultPositionLocks();
@@ -3845,7 +4443,7 @@ class StorageService {
       return item;
     });
 
-    localStorage.setItem(STORAGE_KEYS.POSITION_LOCKS, JSON.stringify(locks));
+    this.safeSetItem(STORAGE_KEYS.POSITION_LOCKS, JSON.stringify(locks));
 
     this.logStructuredAudit({
       module: 'SECURITY',
@@ -3864,10 +4462,10 @@ class StorageService {
   }
 
   public applyMigration(parts: PartMaster[], regrindMasters: RegrindMasterStandard[], configs: LineActiveConfiguration[], lifeStandards: PartLifeStandard[]) {
-    localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(parts));
-    localStorage.setItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(regrindMasters));
-    localStorage.setItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
-    localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(lifeStandards));
+    this.safeSetItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(parts));
+    this.safeSetItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(regrindMasters));
+    this.safeSetItem(STORAGE_KEYS.LINE_CONFIGS, JSON.stringify(configs));
+    this.safeSetItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(lifeStandards));
     this.notify();
   }
 
@@ -3876,9 +4474,9 @@ class StorageService {
   // ==========================================
 
   public getPLCConfig(): PLCConfig {
-    const raw = localStorage.getItem(STORAGE_KEYS.PLC_CONFIG);
+    const raw = this.getRawItem(STORAGE_KEYS.PLC_CONFIG);
     if (!raw) {
-      localStorage.setItem(STORAGE_KEYS.PLC_CONFIG, JSON.stringify(DEFAULT_PLC_CONFIG));
+      this.safeSetItem(STORAGE_KEYS.PLC_CONFIG, JSON.stringify(DEFAULT_PLC_CONFIG));
       return DEFAULT_PLC_CONFIG;
     }
     try {
@@ -3890,7 +4488,7 @@ class StorageService {
   }
 
   public savePLCConfig(config: PLCConfig): void {
-    localStorage.setItem(STORAGE_KEYS.PLC_CONFIG, JSON.stringify(config));
+    this.safeSetItem(STORAGE_KEYS.PLC_CONFIG, JSON.stringify(config));
     this.addAuditLog('SYSTEM', 'Updated PLC Direct Driver configuration parameters and register mappings');
     this.notify();
   }
@@ -3900,9 +4498,9 @@ class StorageService {
   // ==========================================
 
   public getDowntimeLogs(): DowntimeLogEntry[] {
-    const raw = localStorage.getItem(STORAGE_KEYS.DOWNTIME_LOGS);
+    const raw = this.getRawItem(STORAGE_KEYS.DOWNTIME_LOGS);
     if (!raw) {
-      localStorage.setItem(STORAGE_KEYS.DOWNTIME_LOGS, JSON.stringify(INITIAL_DOWNTIME_LOGS));
+      this.safeSetItem(STORAGE_KEYS.DOWNTIME_LOGS, JSON.stringify(INITIAL_DOWNTIME_LOGS));
       return INITIAL_DOWNTIME_LOGS;
     }
     try {
@@ -3919,7 +4517,7 @@ class StorageService {
       ...entry
     };
     logs.unshift(newEntry);
-    localStorage.setItem(STORAGE_KEYS.DOWNTIME_LOGS, JSON.stringify(logs));
+    this.safeSetItem(STORAGE_KEYS.DOWNTIME_LOGS, JSON.stringify(logs));
     this.notify();
     return newEntry;
   }
@@ -3934,7 +4532,7 @@ class StorageService {
       target.endTime = end;
       target.durationMinutes = Math.max(1, Math.round((endMs - startMs) / (60 * 1000)));
       target.isResolved = true;
-      localStorage.setItem(STORAGE_KEYS.DOWNTIME_LOGS, JSON.stringify(logs));
+      this.safeSetItem(STORAGE_KEYS.DOWNTIME_LOGS, JSON.stringify(logs));
       this.notify();
     }
   }
@@ -4039,9 +4637,9 @@ class StorageService {
   // ==========================================
 
   public getSettings(): SystemSettings {
-    const raw = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+    const raw = this.getRawItem(STORAGE_KEYS.SETTINGS);
     if (!raw) {
-      localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(DEFAULT_SYSTEM_SETTINGS));
+      this.safeSetItem(STORAGE_KEYS.SETTINGS, JSON.stringify(DEFAULT_SYSTEM_SETTINGS));
       return DEFAULT_SYSTEM_SETTINGS;
     }
     try {
@@ -4056,7 +4654,7 @@ class StorageService {
   public saveSettings(settings: Partial<SystemSettings>): void {
     const current = this.getSettings();
     const updated: SystemSettings = { ...current, ...settings, theme: 'dark' };
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(updated));
+    this.safeSetItem(STORAGE_KEYS.SETTINGS, JSON.stringify(updated));
     this.addAuditLog('SYSTEM', 'Updated system preferences & operational thresholds');
     this.notify();
   }
@@ -4070,9 +4668,9 @@ class StorageService {
   // ==========================================
 
   public getPLCRegisterMappings(): Record<ProductionLineId, PLCRegisterMapping> {
-    const raw = localStorage.getItem(STORAGE_KEYS.PLC_MAPPINGS);
+    const raw = this.getRawItem(STORAGE_KEYS.PLC_MAPPINGS);
     if (!raw) {
-      localStorage.setItem(STORAGE_KEYS.PLC_MAPPINGS, JSON.stringify(INITIAL_PLC_REGISTER_MAPPINGS));
+      this.safeSetItem(STORAGE_KEYS.PLC_MAPPINGS, JSON.stringify(INITIAL_PLC_REGISTER_MAPPINGS));
       return INITIAL_PLC_REGISTER_MAPPINGS;
     }
     try {
@@ -4086,14 +4684,14 @@ class StorageService {
   public savePLCRegisterMapping(mapping: PLCRegisterMapping): void {
     const all = this.getPLCRegisterMappings();
     all[mapping.lineId] = { ...mapping, readOnly: true };
-    localStorage.setItem(STORAGE_KEYS.PLC_MAPPINGS, JSON.stringify(all));
+    this.safeSetItem(STORAGE_KEYS.PLC_MAPPINGS, JSON.stringify(all));
     const tag = mapping.tagName || mapping.plcTagName || 'ShotRegister';
     this.addAuditLog('CONFIGURATION', `Updated PLC Register mapping for Line ${mapping.lineId} (${tag} @ ${mapping.registerAddress})`, undefined, mapping.lineId);
     this.notify();
   }
 
   public savePLCRegisterMappings(mappings: Record<ProductionLineId, PLCRegisterMapping>): void {
-    localStorage.setItem(STORAGE_KEYS.PLC_MAPPINGS, JSON.stringify(mappings));
+    this.safeSetItem(STORAGE_KEYS.PLC_MAPPINGS, JSON.stringify(mappings));
     this.addAuditLog('CONFIGURATION', 'Updated all PLC register telemetry mappings (7 lines)');
     this.notify();
   }
@@ -4103,9 +4701,9 @@ class StorageService {
   // ==========================================
 
   public getGatewayStatus(): GatewayStatusInfo {
-    const raw = localStorage.getItem(STORAGE_KEYS.GATEWAY_STATUS);
+    const raw = this.getRawItem(STORAGE_KEYS.GATEWAY_STATUS);
     if (!raw) {
-      localStorage.setItem(STORAGE_KEYS.GATEWAY_STATUS, JSON.stringify(INITIAL_GATEWAY_STATUS));
+      this.safeSetItem(STORAGE_KEYS.GATEWAY_STATUS, JSON.stringify(INITIAL_GATEWAY_STATUS));
       return INITIAL_GATEWAY_STATUS;
     }
     try {
@@ -4134,9 +4732,9 @@ class StorageService {
   // ==========================================
 
   public getSystemAlerts(): SystemAlertItem[] {
-    const raw = localStorage.getItem(STORAGE_KEYS.SYSTEM_ALERTS);
+    const raw = this.getRawItem(STORAGE_KEYS.SYSTEM_ALERTS);
     if (!raw) {
-      localStorage.setItem(STORAGE_KEYS.SYSTEM_ALERTS, JSON.stringify(INITIAL_SYSTEM_ALERTS));
+      this.safeSetItem(STORAGE_KEYS.SYSTEM_ALERTS, JSON.stringify(INITIAL_SYSTEM_ALERTS));
       return INITIAL_SYSTEM_ALERTS;
     }
     try {
@@ -4157,7 +4755,7 @@ class StorageService {
     };
     alerts.unshift(newAlert);
     if (alerts.length > 50) alerts.length = 50;
-    localStorage.setItem(STORAGE_KEYS.SYSTEM_ALERTS, JSON.stringify(alerts));
+    this.safeSetItem(STORAGE_KEYS.SYSTEM_ALERTS, JSON.stringify(alerts));
     this.notify();
     return newAlert;
   }
@@ -4170,7 +4768,7 @@ class StorageService {
       item.acknowledgedBy = userName;
       item.acknowledgedAt = new Date().toISOString();
       item.isRead = true;
-      localStorage.setItem(STORAGE_KEYS.SYSTEM_ALERTS, JSON.stringify(alerts));
+      this.safeSetItem(STORAGE_KEYS.SYSTEM_ALERTS, JSON.stringify(alerts));
       this.notify();
     }
   }
@@ -4180,7 +4778,7 @@ class StorageService {
     const item = alerts.find(a => a.id === id);
     if (item) {
       item.isRead = true;
-      localStorage.setItem(STORAGE_KEYS.SYSTEM_ALERTS, JSON.stringify(alerts));
+      this.safeSetItem(STORAGE_KEYS.SYSTEM_ALERTS, JSON.stringify(alerts));
       this.notify();
     }
   }
@@ -4190,7 +4788,7 @@ class StorageService {
   // ==========================================
 
   public getOfflineTelemetryBuffer(): any[] {
-    const raw = localStorage.getItem(STORAGE_KEYS.OFFLINE_BUFFER);
+    const raw = this.getRawItem(STORAGE_KEYS.OFFLINE_BUFFER);
     try {
       return raw ? JSON.parse(raw) : [];
     } catch {
@@ -4204,11 +4802,11 @@ class StorageService {
     if (buffer.length > 500) {
       buffer.splice(0, buffer.length - 500);
     }
-    localStorage.setItem(STORAGE_KEYS.OFFLINE_BUFFER, JSON.stringify(buffer));
+    this.safeSetItem(STORAGE_KEYS.OFFLINE_BUFFER, JSON.stringify(buffer));
   }
 
   public clearTelemetryBuffer(): void {
-    localStorage.setItem(STORAGE_KEYS.OFFLINE_BUFFER, JSON.stringify([]));
+    this.safeSetItem(STORAGE_KEYS.OFFLINE_BUFFER, JSON.stringify([]));
   }
 
   /**
@@ -4284,9 +4882,9 @@ class StorageService {
     }
 
     if (fixedCount > 0) {
-      localStorage.setItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(parts));
-      localStorage.setItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(lifeStds));
-      localStorage.setItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(regrindStds));
+      this.safeSetItem(STORAGE_KEYS.PART_MASTERS, JSON.stringify(parts));
+      this.safeSetItem(STORAGE_KEYS.LIFE_STANDARDS, JSON.stringify(lifeStds));
+      this.safeSetItem(STORAGE_KEYS.REGRIND_STANDARDS, JSON.stringify(regrindStds));
     }
 
     if (addedCount > 0 || fixedCount > 0) {
@@ -4298,7 +4896,7 @@ class StorageService {
   }
 
   public getTvDisplayConfigs(): Record<ProductionLineId, string[]> {
-    const raw = localStorage.getItem(STORAGE_KEYS.TV_DISPLAY_CONFIGS);
+    const raw = this.getRawItem(STORAGE_KEYS.TV_DISPLAY_CONFIGS);
     let parsed: Record<ProductionLineId, string[]> = {} as Record<ProductionLineId, string[]>;
     if (raw) {
       try {
@@ -4348,14 +4946,14 @@ class StorageService {
     });
 
     if (needsSave) {
-      localStorage.setItem(STORAGE_KEYS.TV_DISPLAY_CONFIGS, JSON.stringify(parsed));
+      this.safeSetItem(STORAGE_KEYS.TV_DISPLAY_CONFIGS, JSON.stringify(parsed));
     }
 
     return parsed;
   }
 
   public saveTvDisplayConfigs(configs: Record<ProductionLineId, string[]>): void {
-    localStorage.setItem(STORAGE_KEYS.TV_DISPLAY_CONFIGS, JSON.stringify(configs));
+    this.safeSetItem(STORAGE_KEYS.TV_DISPLAY_CONFIGS, JSON.stringify(configs));
     this.notify();
   }
 }
@@ -4400,6 +4998,8 @@ export const DEFAULT_TV_DISPLAY_CONFIGS: Record<ProductionLineId, string[]> = {
     'DWG-PB-004', // BURRING PUNCH (Ø7)
     'DWG-IR-003', // IRONING PUNCH (Ø7)
     'DWG-IR-004', // IRONING DIE (Ø7)
+    'DWG-LV-001', // LOUVER PUNCH (U)
+    'DWG-LV-002', // LOUVER PUNCH (L)
     'DWG-RF-002', // REFLARE PUNCH 7mm
     'DWG-RF-004', // REFLARE DIE (Ø7)
     'DWG-SL-010', // SLIT PUNCE NEW SLIT (Ø7)
@@ -4413,8 +5013,6 @@ export const DEFAULT_TV_DISPLAY_CONFIGS: Record<ProductionLineId, string[]> = {
   ],
   'E3 WL+': [
     'DWG-PB-005', // BURRING (WIDE LOWER)
-    'DWG-LV-001', // LOUVER PUNCH (U)
-    'DWG-LV-002', // LOUVER PUNCH (L)
     'DWG-WL-001', // LOUVER PUNCH (WIDE LOWER) UP
     'DWG-WL-002', // LOUVER PUNCH (WIDE LOWER) DOWN
     'DWG-RS-004', // ROW SLID BLADE (WIDE LOWER) 4P

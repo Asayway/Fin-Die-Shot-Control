@@ -383,13 +383,26 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
       let installQtyVal: number | undefined = undefined;
       if (activeConfig && activeConfig.installedPartQuantities) {
         const normInstallMap = Object.entries(activeConfig.installedPartQuantities).reduce((acc, [k, v]) => {
-          acc[k.trim().toUpperCase()] = v;
+          const cleanK = k.trim().toUpperCase();
+          acc[cleanK] = v;
+          const strippedK = cleanK.replace(/^(E\d+(?:-\d+)?-)/i, '').trim();
+          if (strippedK) acc[strippedK] = v;
           return acc;
         }, {} as Record<string, number>);
 
-        const lookupCode = permanentPartCode?.trim().toUpperCase() || legacyCode?.trim().toUpperCase();
-        if (lookupCode && normInstallMap[lookupCode] !== undefined) {
-          installQtyVal = normInstallMap[lookupCode];
+        const normCode = rawCode.toUpperCase();
+        const strippedCode = normCode.replace(/^(E\d+(?:-\d+)?-)/i, '').trim();
+        const matchedCode = matchedPart?.partCode?.toUpperCase() || '';
+        const strippedMatchedCode = matchedCode.replace(/^(E\d+(?:-\d+)?-)/i, '').trim();
+
+        if (normCode && normInstallMap[normCode] !== undefined) {
+          installQtyVal = normInstallMap[normCode];
+        } else if (strippedCode && normInstallMap[strippedCode] !== undefined) {
+          installQtyVal = normInstallMap[strippedCode];
+        } else if (matchedCode && normInstallMap[matchedCode] !== undefined) {
+          installQtyVal = normInstallMap[matchedCode];
+        } else if (strippedMatchedCode && normInstallMap[strippedMatchedCode] !== undefined) {
+          installQtyVal = normInstallMap[strippedMatchedCode];
         }
       }
       if (installQtyVal === undefined) {
@@ -400,15 +413,27 @@ export const TvDashboardView: React.FC<TvDashboardViewProps> = ({
       let stockQtyVal: number | undefined = undefined;
       if (activeConfig && activeConfig.stockQuantities) {
         const normStockMap = Object.entries(activeConfig.stockQuantities).reduce((acc, [k, v]) => {
-          acc[k.trim().toUpperCase()] = v;
+          const cleanK = k.trim().toUpperCase();
+          acc[cleanK] = v;
+          const strippedK = cleanK.replace(/^(E\d+(?:-\d+)?-)/i, '').trim();
+          if (strippedK) acc[strippedK] = v;
           return acc;
         }, {} as Record<string, number>);
 
-        const lookupCode = permanentPartCode?.trim().toUpperCase() || legacyCode?.trim().toUpperCase();
-        if (lookupCode && normStockMap[lookupCode] !== undefined) {
-          stockQtyVal = normStockMap[lookupCode];
+        const normCode = rawCode.toUpperCase();
+        const strippedCode = normCode.replace(/^(E\d+(?:-\d+)?-)/i, '').trim();
+        const matchedCode = matchedPart?.partCode?.toUpperCase() || '';
+        const strippedMatchedCode = matchedCode.replace(/^(E\d+(?:-\d+)?-)/i, '').trim();
+
+        if (normCode && normStockMap[normCode] !== undefined) {
+          stockQtyVal = normStockMap[normCode];
+        } else if (strippedCode && normStockMap[strippedCode] !== undefined) {
+          stockQtyVal = normStockMap[strippedCode];
+        } else if (matchedCode && normStockMap[matchedCode] !== undefined) {
+          stockQtyVal = normStockMap[matchedCode];
+        } else if (strippedMatchedCode && normStockMap[strippedMatchedCode] !== undefined) {
+          stockQtyVal = normStockMap[strippedMatchedCode];
         } else {
-          // If stockQuantities map exists on activeConfig, default missing parts to 0 to align with Stock Matrix
           stockQtyVal = 0;
         }
       }

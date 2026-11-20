@@ -19,12 +19,18 @@ import {
 import { ProductionLineId } from '../../types';
 import { PinHistoryEntry, getLineStageConfigs } from '../../views/InteractiveDieLayoutView';
 import { formatShots } from '../../services/calculationService';
+import { storageService } from '../../services/storageService';
 
 export const MASTER_LOGS_STORAGE_KEY = 'findie_master_history_logs_v2';
 
+export const getLocalDateTimeInputValue = (date: Date = new Date()): string => {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
 export const loadStoredMasterLogs = (): PinHistoryEntry[] => {
   try {
-    const raw = localStorage.getItem(MASTER_LOGS_STORAGE_KEY);
+    const raw = storageService.getRawItem(MASTER_LOGS_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) return parsed;
@@ -36,11 +42,33 @@ export const loadStoredMasterLogs = (): PinHistoryEntry[] => {
 };
 
 export const saveStoredMasterLogs = (logs: PinHistoryEntry[]) => {
-  try {
-    localStorage.setItem(MASTER_LOGS_STORAGE_KEY, JSON.stringify(logs));
-  } catch (err) {
-    console.warn('Error saving stored master logs:', err);
+  const dedupedMap = new Map<string, PinHistoryEntry>();
+  logs.forEach(entry => {
+    if (entry && entry.id) dedupedMap.set(entry.id, entry);
+  });
+  const normalized = Array.from(dedupedMap.values());
+  const fullPayload = JSON.stringify(normalized);
+
+  if (fullPayload.length < 1_500_000 && storageService.safeSetItem(MASTER_LOGS_STORAGE_KEY, fullPayload)) {
+    return;
   }
+
+  // Keep text history intact; prune embedded photos from older entries (> 10 newest)
+  const recentPhotoLogs = normalized.map((entry, idx) =>
+    idx >= 10 && entry.photoUrl ? { ...entry, photoUrl: undefined } : entry
+  );
+  if (storageService.safeSetItem(MASTER_LOGS_STORAGE_KEY, JSON.stringify(recentPhotoLogs))) {
+    return;
+  }
+
+  // Strip all photoUrl from master logs before final save/memory fallback
+  const textOnlyLogs = normalized.map(entry =>
+    entry.photoUrl ? { ...entry, photoUrl: undefined } : entry
+  );
+  storageService.safeSetItem(
+    MASTER_LOGS_STORAGE_KEY,
+    JSON.stringify(textOnlyLogs.slice(0, 500))
+  );
 };
 
 // Generate realistic factory baseline maintenance logs
@@ -312,12 +340,12 @@ export const MasterLogSetModal: React.FC<SetModalProps> = ({
   const [manualStageId, setManualStageId] = useState<string>(stages[0]?.stageId || '');
   const [manualPinCode, setManualPinCode] = useState<string>('P01');
   const [manualPartName, setManualPartName] = useState<string>(stages[0]?.shortName ? `${stages[0]?.shortName} Punch` : 'Punch Pin');
-  const [manualAction, setManualAction] = useState<'REPLACE_NEW' | 'REGRIND' | 'BROKEN' | 'SETUP_CHANGE'>('REPLACE_NEW');
+  const [manualAction, setManualAction] = useState<PinHistoryEntry['actionType']>('REPLACE_NEW');
   const [manualMachineShot, setManualMachineShot] = useState<number>(1500000);
   const [manualPinShot, setManualPinShot] = useState<number>(350000);
   const [manualTechnician, setManualTechnician] = useState<string>('ช่างสมชาย (Toolroom Lead)');
   const [manualRemarks, setManualRemarks] = useState<string>('เปลี่ยนอะไหล่ตามรอบอายุการใช้งาน (Preventive Maintenance Schedule)');
-  const [manualDateTime, setManualDateTime] = useState<string>(new Date().toISOString().slice(0, 16));
+  const [manualDateTime, setManualDateTime] = useState<string>(() => getLocalDateTimeInputValue());
   const [manualRegrindDepth, setManualRegrindDepth] = useState<number>(0.20);
   const [manualShim, setManualShim] = useState<number>(0.20);
 
@@ -357,10 +385,16 @@ export const MasterLogSetModal: React.FC<SetModalProps> = ({
 
   const handleExecuteManual = (e: React.FormEvent) => {
     e.preventDefault();
-    const actionLabelTh = manualAction === 'REPLACE_NEW' ? 'เปลี่ยนอะไหล่ใหม่ (Replace New)' :
-                          manualAction === 'REGRIND' ? 'ส่งเจียรลับคม (Regrind)' :
-                          manualAction === 'BROKEN' ? 'แจ้งชำรุด / แตกหัก (Broken Alert)' :
-                          'Toolroom Setup Overhaul';
+    const actionLabelMap: Record<string, string> = {
+      REPLACE_NEW: 'เปลี่ยนอะไหล่ใหม่ (Replace New)',
+      INSTALL_REGROUND: 'ใส่อะไหล่เจียรแล้ว (Install Re-ground)',
+      REGRIND: 'ส่งเจียรลับคม (Regrind)',
+      BROKEN: 'แจ้งชำรุด / แตกหัก (Broken Alert)',
+      INSPECT_ADJUST: 'ปรับตั้ง / ทำความสะอาด / ตรวจสอบ (Inspect)',
+      RETROACTIVE_LOG: 'บันทึกประวัติย้อนหลัง (Retroactive Log)',
+      SETUP_CHANGE: 'Toolroom Setup Overhaul'
+    };
+    const actionLabelTh = actionLabelMap[manualAction] || manualAction;
 
     const stageObj = stages.find(s => s.stageId === manualStageId);
 
@@ -370,6 +404,7 @@ export const MasterLogSetModal: React.FC<SetModalProps> = ({
       lineId: manualLineId,
       stageId: manualStageId,
       stageName: stageObj?.stageName || manualStageId,
+      partCode: stageObj?.partCode,
       pinCode: manualPinCode.trim() || 'ALL',
       partName: manualPartName.trim() || 'Part Die',
       actionType: manualAction,
@@ -379,6 +414,8 @@ export const MasterLogSetModal: React.FC<SetModalProps> = ({
       technician: manualTechnician.trim() || 'Technician',
       regrindDepthMm: manualAction === 'REGRIND' ? Number(manualRegrindDepth) : undefined,
       shimThicknessMm: manualAction === 'REGRIND' ? Number(manualShim) : undefined,
+      shotCaptureMode: 'MANUAL',
+      isRetroactive: manualAction === 'RETROACTIVE_LOG',
       remarks: manualRemarks.trim() || '-'
     };
 
@@ -628,10 +665,13 @@ export const MasterLogSetModal: React.FC<SetModalProps> = ({
                     onChange={e => setManualAction(e.target.value as any)}
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-xs font-mono text-amber-300"
                   >
-                    <option value="REPLACE_NEW">● เปลี่ยนอะไหล่ใหม่ (Replace New)</option>
-                    <option value="REGRIND">⚡ ส่งเจียรลับคม (Regrind)</option>
-                    <option value="BROKEN">✖ แจ้งชำรุด / แตกหัก (Broken)</option>
-                    <option value="SETUP_CHANGE">⚙ Toolroom Setup Overhaul</option>
+                    <option value="REPLACE_NEW">เปลี่ยนอะไหล่ใหม่ (Replace New)</option>
+                    <option value="INSTALL_REGROUND">ใส่อะไหล่เจียรแล้ว (Install Re-ground)</option>
+                    <option value="REGRIND">ส่งเจียรลับคม (Regrind)</option>
+                    <option value="BROKEN">แจ้งชำรุด / แตกหัก (Broken)</option>
+                    <option value="INSPECT_ADJUST">ปรับตั้ง / ตรวจสอบ (Inspect & Adjust)</option>
+                    <option value="RETROACTIVE_LOG">บันทึกประวัติย้อนหลัง (Retroactive)</option>
+                    <option value="SETUP_CHANGE">Toolroom Setup Overhaul</option>
                   </select>
                 </div>
 

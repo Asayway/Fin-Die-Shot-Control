@@ -149,14 +149,14 @@ export const createStandardStages = (
     gridType: 'GRID_PINS'
   };
 
-  // 5. SLIT / LOUVER PUNCH STAGE
-  const slitLouverPunch: LineStageGridConfig = {
+  // 5. SLIT PUNCH STAGE
+  const slitPunch: LineStageGridConfig = {
     stageId: 's-slit-punch',
-    stageName: isLouver ? 'LOUVER PUNCH STAGE' : 'SLIT PUNCH STAGE',
-    shortName: isLouver ? 'LOUVER PUNCH' : 'SLIT PUNCH',
+    stageName: 'SLIT PUNCH STAGE',
+    shortName: 'SLIT PUNCH',
     stageCategory: 'PUNCH_MATRIX',
-    partCode: isLouver ? `P-LOUV-${lineId}` : `P-SLIT-${lineId}`,
-    partName: isLouver ? `LOUVER PUNCH (${tubeSize})` : `SLIT PUNCH (${tubeSize})`,
+    partCode: `P-SLIT-${lineId}`,
+    partName: `SLIT PUNCH (${tubeSize})`,
     material: 'Carbide V30',
     drawingNo: `DWG-FD-${tubeSize.replace('Ø', '')}-${lineId}-SLIT-P`,
     rows: 3,
@@ -164,18 +164,18 @@ export const createStandardStages = (
     totalPins: totalPunchQty,
     maxShots: 85000000,
     maxRegrind: 4,
-    blocks: makeUnifiedBlock(cols, `${isLouver ? 'LOUVER' : 'SLIT'} PUNCH 1 BLOCK (${cols} Col × 3 Row = ${totalPunchQty} EA)`),
+    blocks: makeUnifiedBlock(cols, `SLIT PUNCH 1 BLOCK (${cols} Col × 3 Row = ${totalPunchQty} EA)`),
     gridType: 'GRID_PINS'
   };
 
-  // 6. SLIT / LOUVER DIE STAGE
-  const slitLouverDie: LineStageGridConfig = {
+  // 6. SLIT DIE STAGE
+  const slitDie: LineStageGridConfig = {
     stageId: 's-slit-die',
-    stageName: isLouver ? 'LOUVER DIE STAGE' : 'SLIT DIE STAGE',
-    shortName: isLouver ? 'LOUVER DIE' : 'SLIT DIE',
+    stageName: 'SLIT DIE STAGE',
+    shortName: 'SLIT DIE',
     stageCategory: 'DIE_SEGMENT',
     partCode: `D-SLIT-${lineId}`,
-    partName: isLouver ? `LOUVER DIE A & B (${tubeSize})` : `SLIT DIE A & B (${tubeSize})`,
+    partName: `SLIT DIE A & B (${tubeSize})`,
     material: 'Carbide V30 / Tungsten',
     drawingNo: `DWG-FD-${tubeSize.replace('Ø', '')}-${lineId}-SLIT-D`,
     rows: 2,
@@ -184,7 +184,46 @@ export const createStandardStages = (
     totalPins: slitDieSheets * 2,
     maxShots: 90000000,
     maxRegrind: 4,
-    blocks: makeUnifiedBlock(slitDieSheets, `${isLouver ? 'LOUVER' : 'SLIT'} DIE 1 BLOCK (DIE A: 1-${slitDieSheets}, DIE B: 1-${slitDieSheets})`),
+    blocks: makeUnifiedBlock(slitDieSheets, `SLIT DIE 1 BLOCK (DIE A: 1-${slitDieSheets}, DIE B: 1-${slitDieSheets})`),
+    gridType: 'DIE_SEGMENTS'
+  };
+
+  // 5b. LOUVER PUNCH STAGE (Assigned to E3 SLIT 180 EA)
+  const louverPunch: LineStageGridConfig = {
+    stageId: 's-louver-punch',
+    stageName: 'LOUVER PUNCH STAGE',
+    shortName: 'LOUVER PUNCH',
+    stageCategory: 'PUNCH_MATRIX',
+    partCode: `P-LOUV-${lineId}`,
+    partName: `LOUVER PUNCH (${tubeSize})`,
+    material: 'Carbide V30',
+    drawingNo: `DWG-FD-${tubeSize.replace('Ø', '')}-${lineId}-LOUV-P`,
+    rows: 3,
+    cols: cols,
+    totalPins: totalPunchQty,
+    maxShots: 85000000,
+    maxRegrind: 4,
+    blocks: makeUnifiedBlock(cols, `LOUVER PUNCH 1 BLOCK (${cols} Col × 3 Row = ${totalPunchQty} EA)`),
+    gridType: 'GRID_PINS'
+  };
+
+  // 6b. LOUVER DIE STAGE (Assigned to E3 SLIT)
+  const louverDie: LineStageGridConfig = {
+    stageId: 's-louver-die',
+    stageName: 'LOUVER DIE STAGE',
+    shortName: 'LOUVER DIE',
+    stageCategory: 'DIE_SEGMENT',
+    partCode: `D-LOUV-${lineId}`,
+    partName: `LOUVER DIE A & B (${tubeSize})`,
+    material: 'Carbide V30 / Tungsten',
+    drawingNo: `DWG-FD-${tubeSize.replace('Ø', '')}-${lineId}-LOUV-D`,
+    rows: 2,
+    cols: slitDieSheets,
+    sheetCount: slitDieSheets,
+    totalPins: slitDieSheets * 2,
+    maxShots: 90000000,
+    maxRegrind: 4,
+    blocks: makeUnifiedBlock(slitDieSheets, `LOUVER DIE 1 BLOCK (DIE A: 1-${slitDieSheets}, DIE B: 1-${slitDieSheets})`),
     gridType: 'DIE_SEGMENTS'
   };
 
@@ -362,10 +401,16 @@ export const createStandardStages = (
     activeStages.push(reflarePunch);
   }
 
-  // Slit / Louver
-  if (lineId === 'E1' || lineId === 'E2' || lineId === 'E3 SLIT' || lineId === 'E3 WL+' || lineId === 'E4' || lineId === 'E5') {
-    activeStages.push(slitLouverPunch);
-    activeStages.push(slitLouverDie);
+  // Slit Punch & Die (E1, E2, E3 SLIT, E4, E5)
+  if (lineId === 'E1' || lineId === 'E2' || lineId === 'E3 SLIT' || lineId === 'E4' || lineId === 'E5') {
+    activeStages.push(slitPunch);
+    activeStages.push(slitDie);
+  }
+
+  // Louver Punch & Die (Moved from E3 WL+ to E3 SLIT keeping 180 EA)
+  if (lineId === 'E3 SLIT' || isLouver) {
+    activeStages.push(louverPunch);
+    activeStages.push(louverDie);
   }
 
   // S1 Center Notch (E1)
@@ -431,7 +476,7 @@ export const LINE_DIE_MATRIX_CONFIG: Record<ProductionLineId, LineDieMatrixSpec>
     stages: createStandardStages('E2', 68, 'Ø5', false, 68, 12)
   },
 
-  // LINE E3 SLIT: Ø7 Slit, 180 EA (60 Cols x 3 Rows)
+  // LINE E3 SLIT: Ø7 Slit + Louver, 180 EA (60 Cols x 3 Rows)
   'E3 SLIT': {
     lineId: 'E3 SLIT',
     lineName: 'Line E3 SLIT (Ø7 Slit 3P)',
@@ -441,14 +486,14 @@ export const LINE_DIE_MATRIX_CONFIG: Record<ProductionLineId, LineDieMatrixSpec>
     stages: createStandardStages('E3 SLIT', 60, 'Ø7', false, 118, 15)
   },
 
-  // LINE E3 WL+: Ø7 Louver, 180 EA (60 Cols x 3 Rows)
+  // LINE E3 WL+: Ø7 Wide Lower 4P, 168 EA (56 Cols x 3 Rows) - Aligned with E3 New Cor
   'E3 WL+': {
     lineId: 'E3 WL+',
-    lineName: 'Line E3 WL+ (Ø7 Louver)',
+    lineName: 'Line E3 WL+ (Ø7 Wide Lower 4P)',
     tubeSize: 'Ø7',
-    finType: 'Louver',
-    totalPinsPerSet: 180,
-    stages: createStandardStages('E3 WL+', 60, 'Ø7', true, 118, 15)
+    finType: 'Wide Lower 4P',
+    totalPinsPerSet: 168,
+    stages: createStandardStages('E3 WL+', 56, 'Ø7', false, 82, 12)
   },
 
   // LINE E3 New Cor: Ø7 Wide Lower 4P, 168 EA (56 Cols x 3 Rows)
@@ -458,7 +503,7 @@ export const LINE_DIE_MATRIX_CONFIG: Record<ProductionLineId, LineDieMatrixSpec>
     tubeSize: 'Ø7',
     finType: 'Wide Lower 4P',
     totalPinsPerSet: 168,
-    stages: createStandardStages('E3 New Cor', 56, 'Ø7', true, 82, 12)
+    stages: createStandardStages('E3 New Cor', 56, 'Ø7', false, 82, 12)
   },
 
   // LINE E4: Ø5 Slit, 198 EA (66 Cols x 3 Rows)

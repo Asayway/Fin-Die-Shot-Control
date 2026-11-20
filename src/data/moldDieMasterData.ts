@@ -102,13 +102,13 @@ export const MOLD_DIE_MASTER_ITEMS_2025: MoldDieMasterItem[] = [
     "regrindStandard": { "perGrindMm": "Dispose of after 1 use", "totalGrindMm": "-", "regrindCycles": "-", "note": "Dispose of after 1 use" }
   },
 
-  // 3. LOUVER (10-11)
+  // 3. LOUVER (10-11) - Installed on E3 SLIT (180 EA)
   {
     "no": 10,
     "stage": "LOUVER",
     "partName": "LOUVER PUNCH (U)",
     "drawingNo": "DWG-LV-001",
-    "installQty": { "e3_2": 180, "totalQty": 180 },
+    "installQty": { "e3_1": 180, "totalQty": 180 },
     "shotLifeCycle": { "e1_pcm": 50, "e2_gold": 100, "e3_1_pcm": 50, "e3_2_gold": 100, "e3_3_gold": 100, "e4_bare": 100, "e5_bare": 100, "e6_pcm": 50 },
     "regrindStandard": { "perGrindMm": "Dispose of after 1 use", "totalGrindMm": "-", "regrindCycles": "-", "note": "Dispose of after 1 use" }
   },
@@ -117,7 +117,7 @@ export const MOLD_DIE_MASTER_ITEMS_2025: MoldDieMasterItem[] = [
     "stage": "LOUVER",
     "partName": "LOUVER PUNCH (L)",
     "drawingNo": "DWG-LV-002",
-    "installQty": { "e3_2": 180, "totalQty": 180 },
+    "installQty": { "e3_1": 180, "totalQty": 180 },
     "shotLifeCycle": { "e1_pcm": 50, "e2_gold": 100, "e3_1_pcm": 50, "e3_2_gold": 100, "e3_3_gold": 100, "e4_bare": 100, "e5_bare": 100, "e6_pcm": 50 },
     "regrindStandard": { "perGrindMm": "Dispose of after 1 use", "totalGrindMm": "-", "regrindCycles": "-", "note": "Dispose of after 1 use" }
   },

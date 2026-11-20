@@ -42,7 +42,11 @@ import {
   UploadCloud,
   Trash2,
   ZoomIn,
-  Maximize2
+  Maximize2,
+  Edit3,
+  Save,
+  Radio,
+  Package
 } from 'lucide-react';
 import {
   ProductionLineId,
@@ -62,7 +66,8 @@ import {
   MasterLogSetModal,
   MasterLogDeleteModal,
   loadStoredMasterLogs,
-  saveStoredMasterLogs
+  saveStoredMasterLogs,
+  getLocalDateTimeInputValue
 } from '../components/die/MasterLogModals';
 
 // Pin status definition: Strictly 3 industrial states (Active/Normal, Warning, Broken)
@@ -102,24 +107,64 @@ export const getCleanStageName = (name: string): string => {
   return name.replace(/\s+STAGE\b/gi, '').trim();
 };
 
+export type PinActionType =
+  | 'REPLACE_NEW'
+  | 'INSTALL_REGROUND'
+  | 'REGRIND'
+  | 'BROKEN'
+  | 'INSPECT_ADJUST'
+  | 'RETROACTIVE_LOG'
+  | 'SETUP_CHANGE';
+
 export interface PinHistoryEntry {
   id: string;
   dateTime: string;
   lineId: ProductionLineId;
   stageId: string;
   stageName: string;
+  partCode?: string;
   pinCode: string;
   partName: string;
-  actionType: 'REPLACE_NEW' | 'REGRIND' | 'BROKEN' | 'SETUP_CHANGE';
+  actionType: PinActionType;
   actionLabelTh: string;
   machineShot: number;
   pinShot: number;
   technician: string;
   regrindDepthMm?: number;
   shimThicknessMm?: number;
+  changedQty?: number;
+  lotNumber?: string;
+  serialNumber?: string;
+  stockDeducted?: boolean;
+  shotCaptureMode?: 'LIVE_PLC' | 'MANUAL';
+  isRetroactive?: boolean;
+  linkedReplacementId?: string;
+  linkedRegrindId?: string;
+  updatedAt?: string;
   remarks: string;
   photoUrl?: string;
 }
+
+const LAST_TECHNICIAN_STORAGE_KEY = 'findie_last_technician_v1';
+
+const getActionBadgeStyle = (actionType: PinHistoryEntry['actionType']) => {
+  switch (actionType) {
+    case 'REPLACE_NEW':
+      return 'bg-emerald-950 text-emerald-300 border border-emerald-700';
+    case 'INSTALL_REGROUND':
+      return 'bg-teal-950 text-teal-300 border border-teal-700';
+    case 'REGRIND':
+      return 'bg-amber-950 text-amber-300 border border-amber-700';
+    case 'BROKEN':
+      return 'bg-rose-950 text-rose-300 border border-rose-700';
+    case 'INSPECT_ADJUST':
+      return 'bg-sky-950 text-sky-300 border border-sky-700';
+    case 'RETROACTIVE_LOG':
+      return 'bg-indigo-950 text-indigo-300 border border-indigo-700';
+    default:
+      return 'bg-purple-950 text-purple-300 border border-purple-700';
+  }
+};
 
 export type StageConfig = LineStageGridConfig;
 
@@ -130,16 +175,8 @@ export const getLineStageConfigs = (lineId: ProductionLineId): LineStageGridConf
 // Fallback legacy export for backward compatibility
 export const STAGE_CONFIGS: LineStageGridConfig[] = LINE_DIE_MATRIX_CONFIG.E1.stages;
 
-const COMMON_REASONS = [
-  'หมดอายุตามรอบ (PM Limit Reached)',
-  'ปลายพันช์บิ่น/แตกหัก (Punch Chipped / Broken)',
-  'คมใบมีดทื่อ (Blade Dull / Worn)',
-  'ระยะเคลียแรนซ์หลวม (Clearance Out)',
-  'เจียรลับคมตามรอบ (Periodic Regrind)',
-  'ผิวเคลือบสึก/เกิดรอย (Coating Worn)',
-  'ตรวจสอบพบค่า Burr สูงเกินเกณฑ์ (High Burr Height)',
-  'เปลี่ยนก่อนการผลิตตามตาราง (Preventive Schedule Change)'
-];
+const shouldAutoDeductStock = (action: PinActionType): boolean =>
+  action === 'REPLACE_NEW' || action === 'BROKEN';
 
 const COMPACT_PIN_OVERRIDES_KEY = 'FIN_DIE_PIN_OVERRIDES_V5_';
 
@@ -241,7 +278,7 @@ const generateBasePins = (lineId: ProductionLineId, machineShot: number): DiePin
 // Load compact overrides for modified pins only
 const loadPinOverrides = (lineId: ProductionLineId): Record<string, Partial<DiePinItem>> => {
   try {
-    const savedCompact = localStorage.getItem(`${COMPACT_PIN_OVERRIDES_KEY}${lineId}`);
+    const savedCompact = storageService.getRawItem(`${COMPACT_PIN_OVERRIDES_KEY}${lineId}`);
     if (savedCompact) {
       return JSON.parse(savedCompact);
     }
@@ -251,18 +288,18 @@ const loadPinOverrides = (lineId: ProductionLineId): Record<string, Partial<DieP
   return {};
 };
 
-// Safely persist compact overrides
+// Safely persist compact overrides with automatic photo stripping and storageService quota fallback
 const savePinOverrides = (lineId: ProductionLineId, overrides: Record<string, Partial<DiePinItem>>) => {
-  try {
-    localStorage.setItem(`${COMPACT_PIN_OVERRIDES_KEY}${lineId}`, JSON.stringify(overrides));
-  } catch (err) {
-    cleanUpAllLegacyPinBlobs();
-    try {
-      localStorage.setItem(`${COMPACT_PIN_OVERRIDES_KEY}${lineId}`, JSON.stringify(overrides));
-    } catch (retryErr) {
-      console.error('Could not save pin overrides:', retryErr);
-    }
-  }
+  const lightOverrides: Record<string, Partial<DiePinItem>> = {};
+  Object.entries(overrides).forEach(([k, val]) => {
+    if (!val) return;
+    lightOverrides[k] = {
+      ...val,
+      // Photos live in MASTER_LOGS_STORAGE_KEY / REPLACEMENTS — never duplicate base64 blobs per pin
+      historyLogs: val.historyLogs?.slice(0, 10).map(l => ({ ...l, photoUrl: undefined }))
+    };
+  });
+  storageService.safeSetItem(`${COMPACT_PIN_OVERRIDES_KEY}${lineId}`, JSON.stringify(lightOverrides));
 };
 
 interface InteractiveDieLayoutViewProps {
@@ -298,12 +335,19 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
   const [expandedStages, setExpandedStages] = useState<Record<string, boolean>>({});
   const lineInitializedRef = useRef<string>('');
 
-  // Operator Action Modal State (Enforcing Mandatory Latest Machine Shot Reading)
+  // Operator Action Modal State (Supporting Live Machine Sync + Manual Input + Flexible Details)
   const [selectedPin, setSelectedPin] = useState<DiePinItem | null>(null);
-  const [actionType, setActionType] = useState<'REPLACE_NEW' | 'REGRIND' | 'BROKEN'>('REPLACE_NEW');
+  const [actionType, setActionType] = useState<PinActionType>('REPLACE_NEW');
+  const [shotInputMode, setShotInputMode] = useState<'LIVE' | 'MANUAL'>('LIVE');
+  const [liveMachineShotValue, setLiveMachineShotValue] = useState<number>(0);
   const [machineShotInput, setMachineShotInput] = useState<number>(0);
+  const [manualUsedShotOverride, setManualUsedShotOverride] = useState<boolean>(false);
+  const [usedShotInput, setUsedShotInput] = useState<number>(0);
+  const [changedQtyInput, setChangedQtyInput] = useState<number>(1);
+  const [partLotNumber, setPartLotNumber] = useState<string>('');
+  const [partSerialNumber, setPartSerialNumber] = useState<string>('');
   const [technicianName, setTechnicianName] = useState<string>('');
-  const [actionDateTime, setActionDateTime] = useState<string>(new Date().toISOString().slice(0, 16));
+  const [actionDateTime, setActionDateTime] = useState<string>(() => getLocalDateTimeInputValue());
   const [remarks, setRemarks] = useState<string>('');
   const [regrindDepthMm, setRegrindDepthMm] = useState<number>(0.25);
   const [shimThicknessMm, setShimThicknessMm] = useState<number>(0.20);
@@ -312,6 +356,21 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
   const [isDragOverPhoto, setIsDragOverPhoto] = useState<boolean>(false);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // In-modal Linked History Explorer States (View / Search / Edit / Delete)
+  const [historyModalSearch, setHistoryModalSearch] = useState<string>('');
+  const [historyModalScope, setHistoryModalScope] = useState<'PIN' | 'STAGE'>('PIN');
+  const [historyModalActionFilter, setHistoryModalActionFilter] = useState<string>('ALL');
+  const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
+  const [editHistoryDraft, setEditHistoryDraft] = useState<{
+    dateTime: string;
+    machineShot: number;
+    pinShot: number;
+    technician: string;
+    lotNumber: string;
+    remarks: string;
+  } | null>(null);
+  const [confirmDeleteHistoryId, setConfirmDeleteHistoryId] = useState<string | null>(null);
 
   // Photo Lightbox Modal State
   const [activePhotoModal, setActivePhotoModal] = useState<{
@@ -335,8 +394,8 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 900;
-        const MAX_HEIGHT = 900;
+        const MAX_WIDTH = 720;
+        const MAX_HEIGHT = 720;
         let width = img.width;
         let height = img.height;
 
@@ -356,7 +415,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.72);
           setDamagePhotoUrl(compressedDataUrl);
           setIsCompressingPhoto(false);
           setFeedback({ type: 'success', message: 'แนบรูปภาพหลักฐานความเสียหายสำเร็จ' });
@@ -380,11 +439,10 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
   const [swapActionType, setSwapActionType] = useState<'REPLACE_NEW' | 'REGRIND'>('REPLACE_NEW');
   const [swapMachineShotInput, setSwapMachineShotInput] = useState<number>(0);
   const [swapTechnicianName, setSwapTechnicianName] = useState<string>('');
-  const [swapDateTime, setSwapDateTime] = useState<string>(new Date().toISOString().slice(0, 16));
+  const [swapDateTime, setSwapDateTime] = useState<string>(() => getLocalDateTimeInputValue());
   const [swapRemarks, setSwapRemarks] = useState<string>('');
   const [swapRegrindDepthMm, setSwapRegrindDepthMm] = useState<number>(0.25);
   const [swapShimThicknessMm, setSwapShimThicknessMm] = useState<number>(0.20);
-  const [swapDeductStock, setSwapDeductStock] = useState<boolean>(true);
 
   // History table filters
   const [historySearch, setHistorySearch] = useState<string>('');
@@ -402,18 +460,32 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error' | 'info' | 'warning'; message: string } | null>(null);
 
   const currentUser: User = storageService.getCurrentUser();
+  const shotInputModeRef = useRef<'LIVE' | 'MANUAL'>('LIVE');
+  useEffect(() => {
+    shotInputModeRef.current = shotInputMode;
+  }, [shotInputMode]);
+  const selectedPinRef = useRef<DiePinItem | null>(null);
+  useEffect(() => {
+    selectedPinRef.current = selectedPin;
+  }, [selectedPin]);
 
   // Active Line Stage Configurations
   const activeStageConfigs = useMemo(() => {
     return getLineStageConfigs(selectedLineId);
   }, [selectedLineId]);
 
-  // Load pins for current line: generated in memory + merged with compact user overrides
+  // Load pins for current line: generated in memory + merged with compact user overrides and real Stage baselines
   const loadLinePins = (isLineChange = false) => {
     cleanUpAllLegacyPinBlobs();
 
     const lineMonitoring = storageService.getLineMonitoring(selectedLineId);
     const machineShot = lineMonitoring?.machineShotTotal || 0;
+    setLiveMachineShotValue(machineShot);
+
+    // Sync live machine shot into open modal if LIVE mode is active
+    if (selectedPinRef.current && shotInputModeRef.current === 'LIVE') {
+      setMachineShotInput(machineShot);
+    }
 
     const basePins = generateBasePins(selectedLineId, machineShot);
     const overrides = loadPinOverrides(selectedLineId);
@@ -421,9 +493,9 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
     // Merge base deterministic pins with user-overridden modifications and live Part Master data
     const merged = basePins.map(pin => {
       const override = overrides[pin.id];
-      
+
       // Dynamic mapping to live Part Master tracking item
-      const liveItem = lineMonitoring?.items?.find(item => 
+      const liveItem = lineMonitoring?.items?.find(item =>
         isPartMatchingInteractiveStage(item, pin.partCode, pin.stageName)
       );
 
@@ -432,15 +504,22 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
       const partName = liveItem?.partName || pin.partName;
       const drawingNo = liveItem?.partCode || pin.drawingNo;
 
+      // Inherit real baseline from Stage's lastChangeShot (never reset to machineShot every tick!)
+      const stageUsed = liveItem ? (liveItem.usedShot ?? liveItem.currentShot ?? 0) : 0;
+      const stageLastChangeShot = liveItem
+        ? (liveItem.shotAtLastChange ?? liveItem.lastChangeShot ?? Math.max(0, machineShot - stageUsed))
+        : 0;
+      const baseLastChangeShot = Math.min(machineShot, Math.max(0, stageLastChangeShot));
+
       if (!override) {
-        // If no user override, compute dynamic shots directly since last change (defaults to 0 on base pin)
-        const currentShots = Math.max(0, machineShot - pin.lastReplacementShot);
+        const currentShots = Math.max(0, machineShot - baseLastChangeShot);
         return {
           ...pin,
           partCode,
           partName,
           drawingNo,
           maxShots,
+          lastReplacementShot: baseLastChangeShot,
           currentShots
         };
       }
@@ -450,8 +529,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
         mappedStatus = 'broken';
       }
 
-      // Compute dynamic shots based on overridden last replacement shot
-      const lastRepShot = override.lastReplacementShot !== undefined ? override.lastReplacementShot : pin.lastReplacementShot;
+      const lastRepShot = override.lastReplacementShot !== undefined ? override.lastReplacementShot : baseLastChangeShot;
       const currentShots = Math.max(0, machineShot - lastRepShot);
 
       return {
@@ -470,12 +548,19 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
 
     setPins(merged);
 
-    // ONLY initialize accordion expand/collapse when line changes, NEVER on background 3-second live pulses
+    // Keep open modal pin metrics synced on background updates without wiping form fields
+    if (selectedPinRef.current) {
+      const updatedSelected = merged.find(p => p.id === selectedPinRef.current?.id);
+      if (updatedSelected) {
+        setSelectedPin(updatedSelected);
+      }
+    }
+
+    // ONLY initialize accordion expand/collapse when line changes, NEVER on background live pulses
     if (isLineChange || lineInitializedRef.current !== selectedLineId) {
       lineInitializedRef.current = selectedLineId;
       const initialExpanded: Record<string, boolean> = {};
       const lineStages = getLineStageConfigs(selectedLineId);
-      // Default: Expand all stages on line load so the technician can see all stages cleanly
       lineStages.forEach(stage => {
         initialExpanded[stage.stageId] = true;
       });
@@ -486,28 +571,51 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
   useEffect(() => {
     loadLinePins(true);
     const unsub = storageService.subscribe(() => {
-      // Periodic background updates only refresh metrics without resetting user's accordion toggles
+      // Periodic background updates refresh metrics & live machine shot without resetting accordions
       loadLinePins(false);
     });
     return () => unsub();
   }, [selectedLineId]);
 
-  // When a pin is clicked, populate fields and set latest machine shot
+  // Initialize modal form fields ONLY when opening a pin (tracked by pin ID, not background refresh)
+  const openedPinIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (selectedPin) {
-      const lineMonitoring = storageService.getLineMonitoring(selectedLineId);
-      const liveMachineShot = lineMonitoring?.machineShotTotal || 0;
-      setMachineShotInput(liveMachineShot);
-      setTechnicianName('');
-      setActionType(selectedPin.status === 'broken' ? 'REPLACE_NEW' : 'REPLACE_NEW');
-      setRemarks(COMMON_REASONS[0]);
-      setActionDateTime(new Date().toISOString().slice(0, 16));
-      setRegrindDepthMm(0.25);
-      setShimThicknessMm(0.20);
-      setDamagePhotoUrl(null);
-      setIsCompressingPhoto(false);
+    if (!selectedPin) {
+      openedPinIdRef.current = null;
+      return;
     }
-  }, [selectedPin]);
+    if (openedPinIdRef.current === selectedPin.id) {
+      return; // Avoid resetting form inputs during background live shot updates
+    }
+    openedPinIdRef.current = selectedPin.id;
+
+    const lineMonitoring = storageService.getLineMonitoring(selectedLineId);
+    const liveMachineShot = lineMonitoring?.machineShotTotal || 0;
+    setLiveMachineShotValue(liveMachineShot);
+    setShotInputMode('LIVE');
+    setMachineShotInput(liveMachineShot);
+    setManualUsedShotOverride(false);
+    setUsedShotInput(Math.max(0, liveMachineShot - selectedPin.lastReplacementShot));
+    setChangedQtyInput(1);
+    setPartLotNumber('');
+    setPartSerialNumber('');
+
+    setTechnicianName('');
+
+    setActionType('REPLACE_NEW');
+    setRemarks('');
+    setActionDateTime(getLocalDateTimeInputValue());
+    setRegrindDepthMm(0.25);
+    setShimThicknessMm(0.20);
+    setDamagePhotoUrl(null);
+    setIsCompressingPhoto(false);
+    setHistoryModalSearch('');
+    setHistoryModalScope('PIN');
+    setHistoryModalActionFilter('ALL');
+    setEditingHistoryId(null);
+    setEditHistoryDraft(null);
+    setConfirmDeleteHistoryId(null);
+  }, [selectedPin, selectedLineId]);
 
   // When a stage is selected for swap, populate fields and set latest machine shot
   useEffect(() => {
@@ -517,15 +625,14 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
       setSwapMachineShotInput(liveMachineShot);
       setSwapTechnicianName('');
       setSwapActionType('REPLACE_NEW');
-      setSwapRemarks(COMMON_REASONS[7]); // Default to Preventive Schedule Change
-      setSwapDateTime(new Date().toISOString().slice(0, 16));
+      setSwapRemarks('');
+      setSwapDateTime(getLocalDateTimeInputValue());
       setSwapRegrindDepthMm(0.25);
       setSwapShimThicknessMm(0.20);
-      setSwapDeductStock(true);
     }
   }, [selectedStageForSwap, selectedLineId]);
 
-  // Save pins helper
+  // Save pins helper (persists ANY pin that has >= 1 history entry or modified state)
   const persistPins = (updated: DiePinItem[]) => {
     setPins(updated);
 
@@ -539,12 +646,12 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
       const base = baseMap.get(pin.id);
       if (!base) return;
 
-      const hasExtraLogs = (pin.historyLogs && pin.historyLogs.length > 1);
+      const hasAnyLogs = Boolean(pin.historyLogs && pin.historyLogs.length > 0);
       const hasStatusChange = pin.status !== base.status;
-      const hasShotChange = pin.currentShots !== base.currentShots;
-      const hasRegrindChange = pin.regrindCount !== base.regrindCount;
+      const hasRegrindChange = pin.regrindCount !== base.regrindCount || pin.totalGrindDepthMm !== base.totalGrindDepthMm || pin.shimThicknessMm !== base.shimThicknessMm;
+      const hasReplacementMeta = Boolean(pin.lastReplacementDate && pin.lastReplacementDate !== '-') || Boolean(pin.lastTechnician && pin.lastTechnician !== '-');
 
-      if (hasExtraLogs || hasStatusChange || hasShotChange || hasRegrindChange) {
+      if (hasAnyLogs || hasStatusChange || hasRegrindChange || hasReplacementMeta) {
         overrides[pin.id] = {
           status: pin.status,
           currentShots: pin.currentShots,
@@ -556,7 +663,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
           shimThicknessMm: pin.shimThicknessMm,
           lastAction: pin.lastAction,
           lastTechnician: pin.lastTechnician,
-          historyLogs: (pin.historyLogs || []).slice(0, 10)
+          historyLogs: (pin.historyLogs || []).slice(0, 10).map(l => ({ ...l, photoUrl: undefined }))
         };
       }
     });
@@ -620,74 +727,161 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
     });
   }, [pins, selectedStageFilter, selectedStatusFilter, searchQuery]);
 
-  // Aggregate Master History Logs across all pins and stored master history
-  const masterHistoryLogs = useMemo(() => {
+  // Aggregate ALL Linked History Logs (Master Logs + Pin Overrides + Central Replacement Records)
+  const allUnifiedHistoryLogs = useMemo(() => {
     const logsMap = new Map<string, PinHistoryEntry>();
+    const linkedRepIds = new Set<string>();
 
-    // 1. Logs from stored master history logs
-    const storedLogs = loadStoredMasterLogs();
-    storedLogs.forEach(log => {
-      if (log && log.id) {
-        logsMap.set(log.id, log);
+    const registerEntry = (entry: PinHistoryEntry | null | undefined) => {
+      if (!entry || !entry.id) return;
+      logsMap.set(entry.id, entry);
+      if (entry.linkedReplacementId) {
+        linkedRepIds.add(entry.linkedReplacementId);
       }
-    });
+    };
 
-    // 2. Logs from current line pins in memory
+    // 1. Central stored Master Logs (unlimited persistence)
+    loadStoredMasterLogs().forEach(registerEntry);
+
+    // 2. Current line pins in memory
     pins.forEach(pin => {
-      if (pin.historyLogs && Array.isArray(pin.historyLogs)) {
+      if (Array.isArray(pin.historyLogs)) {
         pin.historyLogs.forEach(l => {
-          if (l && l.id) logsMap.set(l.id, l);
+          if (l && l.id && !logsMap.has(l.id)) registerEntry(l);
         });
       }
     });
 
-    // 3. If viewing ALL lines or another line, scan compact overrides
-    const linesToScan: ProductionLineId[] = historyLineFilter === 'ALL'
-      ? ['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5']
-      : [historyLineFilter as ProductionLineId];
-
-    linesToScan.forEach(lineId => {
+    // 3. Other lines' compact overrides
+    const allLinesList: ProductionLineId[] = ['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5'];
+    allLinesList.forEach(lineId => {
       if (lineId !== selectedLineId) {
         const overrides = loadPinOverrides(lineId);
         Object.values(overrides).forEach(override => {
           if (override?.historyLogs && Array.isArray(override.historyLogs)) {
             override.historyLogs.forEach(l => {
-              if (l && l.id) logsMap.set(l.id, l);
+              if (l && l.id && !logsMap.has(l.id)) registerEntry(l);
             });
           }
         });
       }
     });
 
-    const allLogs = Array.from(logsMap.values());
+    // 4. Bridge any ReplacementRecords from storageService that aren't already represented
+    try {
+      const systemReplacements = storageService.getReplacements();
+      systemReplacements.forEach(rep => {
+        if (!rep || !rep.id) return;
+        if (linkedRepIds.has(rep.id)) return;
+        if (rep.linkedMasterLogId && logsMap.has(rep.linkedMasterLogId)) return;
 
-    return allLogs
-      .filter(log => {
-        if (!log) return false;
-        const matchLine = historyLineFilter === 'ALL' || log.lineId === historyLineFilter;
-        const matchStage = historyStageFilter === 'ALL' || log.stageId === historyStageFilter;
-        const matchAction = historyActionFilter === 'ALL' || log.actionType === historyActionFilter;
-        const q = (historySearch || '').toLowerCase();
-        const matchSearch =
-          q === '' ||
-          (log.pinCode && log.pinCode.toLowerCase().includes(q)) ||
-          (log.partName && log.partName.toLowerCase().includes(q)) ||
-          (log.technician && log.technician.toLowerCase().includes(q)) ||
-          (log.remarks && log.remarks.toLowerCase().includes(q));
+        const lineStages = getLineStageConfigs(rep.lineId);
+        const matchedStage = lineStages.find(
+          s =>
+            s.stageId === rep.stageId ||
+            s.partCode === rep.partCode ||
+            (rep.stageName && s.stageName.toLowerCase() === rep.stageName.toLowerCase())
+        );
 
-        const logDate = log.dateTime ? String(log.dateTime).slice(0, 10) : '';
-        let matchDate = true;
-        if (historyStartDate && logDate < historyStartDate) matchDate = false;
-        if (historyEndDate && logDate > historyEndDate) matchDate = false;
+        const mappedAction: PinActionType =
+          rep.isRetroactive
+            ? 'RETROACTIVE_LOG'
+            : rep.replacementType === 'RE-GROUND PART' || rep.replacementType === 'RE_GROUND'
+            ? 'INSTALL_REGROUND'
+            : rep.replacementType === 'SCRAP'
+            ? 'BROKEN'
+            : 'REPLACE_NEW';
 
-        return matchLine && matchStage && matchAction && matchSearch && matchDate;
-      })
-      .sort((a, b) => {
-        const dateA = a.dateTime ? String(a.dateTime) : '';
-        const dateB = b.dateTime ? String(b.dateTime) : '';
-        return dateB.localeCompare(dateA);
+        registerEntry({
+          id: rep.id,
+          dateTime: (rep.replacementDateTime || rep.timestamp || '').replace('T', ' ').slice(0, 16),
+          lineId: rep.lineId,
+          stageId: rep.stageId || matchedStage?.stageId || 'general',
+          stageName: rep.stageName || matchedStage?.stageName || 'General Stage',
+          partCode: rep.partCode,
+          pinCode: rep.position || 'ALL',
+          partName: rep.partName,
+          actionType: mappedAction,
+          actionLabelTh: rep.fullSetOrPartial === 'FULL_SET' ? 'เปลี่ยนอะไหล่ยก Stage (Full Set)' : 'เปลี่ยนอะไหล่ (Replacement)',
+          machineShot: rep.machineShotAtReplacement || 0,
+          pinShot: rep.removedPartUsedShot || 0,
+          technician: rep.changedBy || rep.technicianName || '-',
+          changedQty: rep.changedQuantity,
+          lotNumber: rep.newPartLotNumber,
+          serialNumber: rep.newPartSerialNumber,
+          stockDeducted: rep.stockUpdated,
+          shotCaptureMode: rep.shotCaptureMode,
+          isRetroactive: rep.isRetroactive,
+          linkedReplacementId: rep.id,
+          remarks: rep.replacementReason || rep.note || '-',
+          photoUrl: rep.evidenceAttachment
+        });
       });
-  }, [pins, selectedLineId, historyLineFilter, historyStageFilter, historyActionFilter, historySearch, historyStartDate, historyEndDate, logsUpdateCounter]);
+    } catch (err) {
+      console.warn('Error linking system replacements into master logs:', err);
+    }
+
+    return Array.from(logsMap.values()).sort((a, b) => {
+      const dateA = a.dateTime ? String(a.dateTime) : '';
+      const dateB = b.dateTime ? String(b.dateTime) : '';
+      return dateB.localeCompare(dateA);
+    });
+  }, [pins, selectedLineId, logsUpdateCounter]);
+
+  const masterHistoryLogs = useMemo(() => {
+    return allUnifiedHistoryLogs.filter(log => {
+      if (!log) return false;
+      const matchLine = historyLineFilter === 'ALL' || log.lineId === historyLineFilter;
+      const matchStage = historyStageFilter === 'ALL' || log.stageId === historyStageFilter;
+      const matchAction = historyActionFilter === 'ALL' || log.actionType === historyActionFilter;
+      const q = (historySearch || '').toLowerCase();
+      const matchSearch =
+        q === '' ||
+        (log.pinCode && log.pinCode.toLowerCase().includes(q)) ||
+        (log.partName && log.partName.toLowerCase().includes(q)) ||
+        (log.technician && log.technician.toLowerCase().includes(q)) ||
+        (log.lotNumber && log.lotNumber.toLowerCase().includes(q)) ||
+        (log.remarks && log.remarks.toLowerCase().includes(q));
+
+      const logDate = log.dateTime ? String(log.dateTime).slice(0, 10) : '';
+      let matchDate = true;
+      if (historyStartDate && logDate < historyStartDate) matchDate = false;
+      if (historyEndDate && logDate > historyEndDate) matchDate = false;
+
+      return matchLine && matchStage && matchAction && matchSearch && matchDate;
+    });
+  }, [allUnifiedHistoryLogs, historyLineFilter, historyStageFilter, historyActionFilter, historySearch, historyStartDate, historyEndDate]);
+
+  // Linked history for the currently opened Pin Modal (supports Pin-level or Stage-level inspection)
+  const selectedPinLinkedLogs = useMemo(() => {
+    if (!selectedPin) return [];
+    const baseLogs = allUnifiedHistoryLogs.filter(log => {
+      if (log.lineId !== selectedLineId) return false;
+      const sameStage =
+        log.stageId === selectedPin.stageId ||
+        (log.stageName && log.stageName.toLowerCase() === selectedPin.stageName.toLowerCase()) ||
+        (log.partCode && log.partCode === selectedPin.partCode);
+      if (!sameStage) return false;
+      if (historyModalScope === 'STAGE') return true;
+      return (
+        log.pinCode === selectedPin.pinCode ||
+        log.pinCode === 'ALL' ||
+        log.pinCode.includes(`No. ${selectedPin.seqNo} `)
+      );
+    });
+
+    return baseLogs.filter(log => {
+      const matchAction = historyModalActionFilter === 'ALL' || log.actionType === historyModalActionFilter;
+      const q = historyModalSearch.trim().toLowerCase();
+      const matchQ =
+        q === '' ||
+        (log.technician && log.technician.toLowerCase().includes(q)) ||
+        (log.remarks && log.remarks.toLowerCase().includes(q)) ||
+        (log.lotNumber && log.lotNumber.toLowerCase().includes(q)) ||
+        (log.pinCode && log.pinCode.toLowerCase().includes(q));
+      return matchAction && matchQ;
+    });
+  }, [selectedPin, selectedLineId, allUnifiedHistoryLogs, historyModalScope, historyModalActionFilter, historyModalSearch]);
 
   // Handle pin click
   const handlePinClick = (pin: DiePinItem) => {
@@ -730,13 +924,17 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
       return;
     }
 
-    if (!swapMachineShotInput || swapMachineShotInput <= 0) {
+    if (Number.isNaN(swapMachineShotInput) || swapMachineShotInput < 0) {
       setFeedback({
         type: 'error',
-        message: 'กรุณาระบุเลขมิเตอร์ช็อตเครื่องล่าสุด ณ ขณะเปลี่ยน (Latest Machine Shot is required)'
+        message: 'กรุณาระบุเลขมิเตอร์ช็อตเครื่องให้ถูกต้อง (0 ขึ้นไป)'
       });
       return;
     }
+
+    try {
+      localStorage.setItem(LAST_TECHNICIAN_STORAGE_KEY, swapTechnicianName.trim());
+    } catch (_) {}
 
     const currentRecordedMachineShot = swapMachineShotInput;
     let actionLabelTh = '';
@@ -753,7 +951,95 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
       return;
     }
 
-    // Prepare variables for updating
+    const masterEntryId = `LOG-STAGE-${selectedStageForSwap.stageId}-${Date.now()}`;
+    const avgUsedShots = Math.round(
+      stagePins.reduce((acc, p) => acc + Math.max(0, currentRecordedMachineShot - p.lastReplacementShot), 0) / stagePins.length
+    );
+
+    let linkedReplacementId: string | undefined;
+    let linkedRegrindId: string | undefined;
+
+    if (swapActionType === 'REPLACE_NEW') {
+      actionLabelTh = 'เปลี่ยนอะไหล่ยก Stage (Full Stage Replacement)';
+      try {
+        const recordRes = storageService.recordReplacement({
+          lineId: selectedLineId,
+          stageId: selectedStageForSwap.stageId,
+          partCode: selectedStageForSwap.partCode,
+          partName: selectedStageForSwap.partName,
+          stageName: selectedStageForSwap.stageName,
+          position: 'ALL',
+          replacementType: 'FULL SET REPLACEMENT',
+          fullSetOrPartial: 'FULL_SET',
+          installedQuantity: selectedStageForSwap.totalPins,
+          changedQuantity: selectedStageForSwap.totalPins,
+          machineShotAtReplacement: currentRecordedMachineShot,
+          removedPartUsedShot: avgUsedShots,
+          removedPartRegrindCount: 0,
+          changedBy: swapTechnicianName.trim(),
+          replacementReason: swapRemarks.trim() || 'เปลี่ยนอะไหล่ใหม่ยกชุด (Full Stage Replacement)',
+          replacementDateTime: swapDateTime.replace('T', ' '),
+          approvalStatus: 'COMPLETED',
+          skipStageShotReset: false,
+          skipStockDeduction: false,
+          shotCaptureMode: 'MANUAL',
+          linkedMasterLogId: masterEntryId,
+          note: swapRemarks.trim() ? `Swap Stage: ${swapRemarks.trim()}` : undefined
+        });
+        if (recordRes.success && recordRes.record) {
+          linkedReplacementId = recordRes.record.id;
+        }
+      } catch (err) {
+        console.error('Error logging swap stage replacement record:', err);
+      }
+    } else if (swapActionType === 'REGRIND') {
+      actionLabelTh = `ส่งเจียรยก Stage (-${swapRegrindDepthMm}mm / +Shim ${swapShimThicknessMm}mm)`;
+      try {
+        const ticket = regrindService.receiveFromDieLayout({
+          lineId: selectedLineId,
+          stageName: selectedStageForSwap.stageName,
+          positionId: 'ALL (ENTIRE STAGE)',
+          partName: selectedStageForSwap.partName,
+          partCode: selectedStageForSwap.partCode,
+          removedPartRegrindCount: 0,
+          defectReason: 'NORMAL_WEAR',
+          notes: swapRemarks || `Full Stage Regrind at Machine Shot ${currentRecordedMachineShot}`,
+          technicianName: swapTechnicianName.trim()
+        });
+        linkedRegrindId = ticket?.id;
+      } catch (err) {
+        console.warn('Auto-logging batch regrind record:', err);
+      }
+    }
+
+    // Prepare consolidated stage log entry for Master History
+    const masterStageLog: PinHistoryEntry = {
+      id: masterEntryId,
+      dateTime: swapDateTime.replace('T', ' '),
+      lineId: selectedLineId,
+      stageId: selectedStageForSwap.stageId,
+      stageName: selectedStageForSwap.stageName,
+      partCode: selectedStageForSwap.partCode,
+      pinCode: 'ALL',
+      partName: `${selectedStageForSwap.partName} (Full Stage ${stagePins.length} EA)`,
+      actionType: swapActionType,
+      actionLabelTh,
+      machineShot: currentRecordedMachineShot,
+      pinShot: avgUsedShots,
+      technician: swapTechnicianName.trim(),
+      changedQty: selectedStageForSwap.totalPins,
+      stockDeducted: swapActionType === 'REPLACE_NEW',
+      regrindDepthMm: swapActionType === 'REGRIND' ? swapRegrindDepthMm : undefined,
+      shimThicknessMm: swapActionType === 'REGRIND' ? swapShimThicknessMm : undefined,
+      linkedReplacementId,
+      linkedRegrindId,
+      remarks: swapRemarks.trim() || '-'
+    };
+
+    const currentStored = loadStoredMasterLogs();
+    saveStoredMasterLogs([masterStageLog, ...currentStored]);
+
+    // Update each pin in the stage
     stagePins.forEach(pin => {
       const calculatedUsedShots = Math.max(0, currentRecordedMachineShot - pin.lastReplacementShot);
       let nextStatus: PinStatus = 'normal';
@@ -770,7 +1056,6 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
         nextRegrindCount = 0;
         nextGrindDepth = 0;
         nextShim = 0;
-        actionLabelTh = 'เปลี่ยนอะไหล่ยก Stage (Full Stage Replacement)';
       } else if (swapActionType === 'REGRIND') {
         nextRegrindCount = Math.min(pin.regrindCount + 1, pin.maxRegrind);
         nextGrindDepth = Number((nextGrindDepth + swapRegrindDepthMm).toFixed(2));
@@ -778,25 +1063,14 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
         nextShots = 0;
         nextLastReplacementShot = currentRecordedMachineShot;
         nextStatus = nextRegrindCount >= pin.maxRegrind ? 'warning' : 'normal';
-        actionLabelTh = `ส่งเจียรยก Stage ลับคมครั้งที่ ${nextRegrindCount} (-${swapRegrindDepthMm}mm / +Shim ${swapShimThicknessMm}mm)`;
       }
 
-      const historyEntry: PinHistoryEntry = {
+      const pinHistoryEntry: PinHistoryEntry = {
+        ...masterStageLog,
         id: `LOG-SWAP-${pin.id}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-        dateTime: swapDateTime.replace('T', ' '),
-        lineId: selectedLineId,
-        stageId: pin.stageId,
-        stageName: pin.stageName,
         pinCode: pin.pinCode,
         partName: pin.partName,
-        actionType: swapActionType,
-        actionLabelTh,
-        machineShot: currentRecordedMachineShot,
-        pinShot: calculatedUsedShots,
-        technician: swapTechnicianName,
-        regrindDepthMm: swapActionType === 'REGRIND' ? swapRegrindDepthMm : undefined,
-        shimThicknessMm: swapActionType === 'REGRIND' ? swapShimThicknessMm : undefined,
-        remarks: swapRemarks || '-'
+        pinShot: calculatedUsedShots
       };
 
       pin.status = nextStatus;
@@ -807,71 +1081,12 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
       pin.totalGrindDepthMm = nextGrindDepth;
       pin.shimThicknessMm = nextShim;
       pin.lastAction = actionLabelTh;
-      pin.lastTechnician = swapTechnicianName;
-      pin.historyLogs = [historyEntry, ...(pin.historyLogs || [])].slice(0, 10);
+      pin.lastTechnician = swapTechnicianName.trim();
+      pin.historyLogs = [pinHistoryEntry, ...(pin.historyLogs || [])].slice(0, 20);
     });
 
-    // Write a master consolidated Replacement Record in storageService for the entire stage!
-    if (swapActionType === 'REPLACE_NEW') {
-      try {
-        const recordRes = storageService.recordReplacement({
-          lineId: selectedLineId,
-          partCode: selectedStageForSwap.partCode,
-          stageName: selectedStageForSwap.stageName,
-          position: 'ALL',
-          replacementType: 'FULL SET REPLACEMENT',
-          fullSetOrPartial: 'FULL_SET',
-          installedQuantity: selectedStageForSwap.totalPins,
-          changedQuantity: selectedStageForSwap.totalPins,
-          machineShotAtReplacement: currentRecordedMachineShot,
-          removedPartUsedShot: 0,
-          removedPartRegrindCount: 0,
-          changedBy: swapTechnicianName,
-          replacementReason: swapRemarks || 'เปลี่ยนอะไหล่ใหม่ยกชุด (Full Stage Replacement)',
-          note: `Swap Stage: ${swapRemarks}`
-        });
-
-        if (!recordRes.success) {
-          console.warn('Full set replacement failed rules verification, registering directly:', recordRes.error);
-        }
-
-        // Deduct from spare stock if enabled
-        if (swapDeductStock) {
-          const stocks = storageService.getSpareStocks();
-          const stock = stocks.find(s => s.partCode === selectedStageForSwap.partCode);
-          if (stock) {
-            const currentOnHand = stock.onHandQuantity !== undefined ? stock.onHandQuantity : (stock.currentStockQty || 0);
-            const newOnHand = Math.max(0, currentOnHand - selectedStageForSwap.totalPins);
-            storageService.saveSpareStock({
-              ...stock,
-              onHandQuantity: newOnHand,
-              currentStockQty: newOnHand,
-              availableQuantity: Math.max(0, newOnHand - (stock.reservedQuantity || 0) - (stock.quarantineQuantity || 0))
-            });
-          }
-        }
-      } catch (err) {
-        console.error('Error logging swap stage replacement record:', err);
-      }
-    } else if (swapActionType === 'REGRIND') {
-      try {
-        regrindService.receiveFromDieLayout({
-          lineId: selectedLineId,
-          stageName: selectedStageForSwap.stageName,
-          positionId: 'ALL (ENTIRE STAGE)',
-          partName: selectedStageForSwap.partName,
-          partCode: selectedStageForSwap.partCode,
-          removedPartRegrindCount: 0,
-          defectReason: 'NORMAL_WEAR',
-          notes: swapRemarks || `Full Stage Regrind at Machine Shot ${currentRecordedMachineShot}`,
-          technicianName: swapTechnicianName
-        });
-      } catch (err) {
-        console.warn('Auto-logging batch regrind record:', err);
-      }
-    }
-
     persistPins(updatedPins);
+    setLogsUpdateCounter(c => c + 1);
 
     setFeedback({
       type: 'success',
@@ -882,7 +1097,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
     setSelectedStageForSwap(null);
   };
 
-  // Execute Operator Action (Replace New, Regrind, Broken) with Enforced Latest Machine Shot Reading
+  // Execute Operator Action (Flexible Actions, Live/Manual Shot, Optional Stock Deduct, Bidirectional Sync)
   const handleSaveAction = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPin) return;
@@ -895,64 +1110,74 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
       return;
     }
 
-    if (!machineShotInput || machineShotInput <= 0) {
+    if (Number.isNaN(machineShotInput) || machineShotInput < 0) {
       setFeedback({
         type: 'error',
-        message: 'กรุณาระบุเลขมิเตอร์ช็อตเครื่องล่าสุด ณ ขณะเปลี่ยน (Latest Machine Shot is required)'
+        message: 'กรุณาระบุเลขมิเตอร์ช็อตเครื่องให้ถูกต้อง (0 ขึ้นไป)'
       });
       return;
     }
 
-    const currentRecordedMachineShot = machineShotInput;
-    const calculatedUsedShots = Math.max(0, currentRecordedMachineShot - selectedPin.lastReplacementShot);
+    try {
+      localStorage.setItem(LAST_TECHNICIAN_STORAGE_KEY, technicianName.trim());
+    } catch (_) {}
 
-    let nextStatus: PinStatus = 'normal';
-    let nextShots = 0;
-    let nextLastReplacementShot = currentRecordedMachineShot;
+    const currentRecordedMachineShot = Math.max(0, Number(machineShotInput) || 0);
+    const calculatedUsedShots = manualUsedShotOverride
+      ? Math.max(0, Number(usedShotInput) || 0)
+      : Math.max(0, currentRecordedMachineShot - selectedPin.lastReplacementShot);
+    const qtyToRecord = Math.max(1, Number(changedQtyInput) || 1);
+    const formattedDateTime = actionDateTime.replace('T', ' ');
+    const historyId = `LOG-${Date.now()}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
+
+    let nextStatus: PinStatus = selectedPin.status;
+    let nextShots = selectedPin.currentShots;
+    let nextLastReplacementShot = selectedPin.lastReplacementShot;
+    let nextLastReplacementDate = selectedPin.lastReplacementDate;
     let nextRegrindCount = selectedPin.regrindCount;
     let nextGrindDepth = selectedPin.totalGrindDepthMm;
     let nextShim = selectedPin.shimThicknessMm;
+    let nextLastAction = selectedPin.lastAction;
+    let nextLastTechnician = selectedPin.lastTechnician;
     let actionLabelTh = '';
+
+    let linkedReplacementId: string | undefined;
+    let linkedRegrindId: string | undefined;
 
     if (actionType === 'REPLACE_NEW') {
       nextStatus = 'normal';
       nextShots = 0;
       nextLastReplacementShot = currentRecordedMachineShot;
+      nextLastReplacementDate = formattedDateTime;
       nextRegrindCount = 0;
       nextGrindDepth = 0;
       nextShim = 0;
       actionLabelTh = 'เปลี่ยนอะไหล่ใหม่ (Replace New)';
-
-      // Record to storageService replacement history
-      storageService.recordReplacement({
-        lineId: selectedLineId,
-        partCode: selectedPin.partCode,
-        stageName: selectedPin.stageName,
-        position: selectedPin.pinCode,
-        replacementType: 'PARTIAL REPLACEMENT',
-        fullSetOrPartial: 'PARTIAL',
-        installedQuantity: 1,
-        changedQuantity: 1,
-        machineShotAtReplacement: currentRecordedMachineShot,
-        removedPartUsedShot: calculatedUsedShots,
-        removedPartRegrindCount: selectedPin.regrindCount,
-        changedBy: technicianName || currentUser.name,
-        replacementReason: remarks || 'Partial replacement via 2D Die Layout',
-        evidenceAttachment: damagePhotoUrl || undefined,
-        note: remarks
-      });
+      nextLastAction = actionLabelTh;
+      nextLastTechnician = technicianName.trim();
+    } else if (actionType === 'INSTALL_REGROUND') {
+      nextStatus = 'normal';
+      nextShots = 0;
+      nextLastReplacementShot = currentRecordedMachineShot;
+      nextLastReplacementDate = formattedDateTime;
+      actionLabelTh = 'ใส่อะไหล่เจียรแล้ว (Install Re-ground)';
+      nextLastAction = actionLabelTh;
+      nextLastTechnician = technicianName.trim();
     } else if (actionType === 'REGRIND') {
       nextRegrindCount = Math.min(selectedPin.regrindCount + 1, selectedPin.maxRegrind);
       nextGrindDepth = Number((nextGrindDepth + regrindDepthMm).toFixed(2));
       nextShim = Number((nextShim + shimThicknessMm).toFixed(2));
       nextShots = 0;
       nextLastReplacementShot = currentRecordedMachineShot;
+      nextLastReplacementDate = formattedDateTime;
       nextStatus = nextRegrindCount >= selectedPin.maxRegrind ? 'warning' : 'normal';
       actionLabelTh = `ส่งเจียรลับคมครั้งที่ ${nextRegrindCount} (-${regrindDepthMm}mm / +Shim ${shimThicknessMm}mm)`;
+      nextLastAction = actionLabelTh;
+      nextLastTechnician = technicianName.trim();
 
       // Auto-queue ticket to Tooling Regrinding Management System
       try {
-        regrindService.receiveFromDieLayout({
+        const ticket = regrindService.receiveFromDieLayout({
           lineId: selectedLineId,
           stageName: selectedPin.stageName,
           positionId: selectedPin.pinCode,
@@ -961,8 +1186,9 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
           removedPartRegrindCount: selectedPin.regrindCount,
           defectReason: calculatedUsedShots >= selectedPin.maxShots ? 'NORMAL_WEAR' : 'CHIPPED',
           notes: remarks || `Sent from 2D Die Layout at Machine Shot ${currentRecordedMachineShot}`,
-          technicianName: technicianName || currentUser.name
+          technicianName: technicianName.trim() || currentUser.name
         });
+        linkedRegrindId = ticket?.id;
       } catch (err) {
         console.warn('Auto-logging regrind record:', err);
       }
@@ -970,49 +1196,162 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
       nextStatus = 'broken';
       nextShots = calculatedUsedShots;
       actionLabelTh = 'แจ้งชำรุด / แตกหัก (Broken Alert)';
+      nextLastAction = actionLabelTh;
+      nextLastTechnician = technicianName.trim();
+    } else if (actionType === 'INSPECT_ADJUST') {
+      // Inspect / Clean / Adjust: preserve life shots, clear warning if desired or keep normal
+      nextStatus = selectedPin.status === 'broken' ? 'broken' : 'normal';
+      actionLabelTh = 'ปรับตั้ง / ทำความสะอาด / ตรวจสอบ (Inspect)';
+      nextLastAction = actionLabelTh;
+      nextLastTechnician = technicianName.trim();
+    } else if (actionType === 'RETROACTIVE_LOG') {
+      // Retroactive entry: preserve current pin runtime state completely!
+      actionLabelTh = 'บันทึกประวัติย้อนหลัง (Retroactive Log)';
+    }
+
+    const trimmedRemarks = remarks.trim();
+    const autoDeductStock = shouldAutoDeductStock(actionType);
+
+    // Resolve canonical Parts Stock partCode for accurate auto-deduction
+    const resolveStockPartCode = (): string => {
+      const stocks = storageService.getSpareStocks();
+      if (stocks.some(s => s.partCode === selectedPin.partCode)) return selectedPin.partCode;
+      const lineMonitoring = storageService.getLineMonitoring(selectedLineId);
+      const liveItem = lineMonitoring?.items?.find(it =>
+        isPartMatchingInteractiveStage(it, selectedPin.partCode, selectedPin.stageName)
+      );
+      if (liveItem?.partCode) return liveItem.partCode;
+      const matchedPm = storageService.getPartMasters().find(pm => {
+        const linesList = ((pm as any).applicableLines || []) as ProductionLineId[];
+        const lineOk = linesList.length === 0 || linesList.includes(selectedLineId);
+        return (
+          lineOk &&
+          isPartMatchingInteractiveStage(
+            { partCode: pm.partCode, partName: pm.partName, stagePunchDie: pm.stageName },
+            selectedPin.partCode,
+            selectedPin.stageName
+          )
+        );
+      });
+      return matchedPm?.partCode || selectedPin.partCode;
+    };
+    const resolvedStockPartCode = resolveStockPartCode();
+
+    // Record to central storageService Replacement History (WITHOUT resetting entire Stage TV counter)
+    if (
+      actionType === 'REPLACE_NEW' ||
+      actionType === 'INSTALL_REGROUND' ||
+      actionType === 'REGRIND' ||
+      actionType === 'BROKEN' ||
+      actionType === 'RETROACTIVE_LOG'
+    ) {
+      try {
+        const repTypeMap: Record<string, any> = {
+          REPLACE_NEW: 'PARTIAL REPLACEMENT',
+          INSTALL_REGROUND: 'RE-GROUND PART',
+          REGRIND: 'RE-GROUND PART',
+          BROKEN: 'EMERGENCY REPLACEMENT',
+          RETROACTIVE_LOG: 'PARTIAL REPLACEMENT'
+        };
+        const repRes = storageService.recordReplacement({
+          lineId: selectedLineId,
+          stageId: selectedPin.stageId,
+          partCode: resolvedStockPartCode,
+          partName: selectedPin.partName,
+          stageName: selectedPin.stageName,
+          position: selectedPin.pinCode,
+          replacementType: repTypeMap[actionType] || 'PARTIAL REPLACEMENT',
+          fullSetOrPartial: 'PARTIAL',
+          installedQuantity: 1,
+          changedQuantity: qtyToRecord,
+          machineShotAtReplacement: currentRecordedMachineShot,
+          removedPartUsedShot: calculatedUsedShots,
+          removedPartRegrindCount: selectedPin.regrindCount,
+          newPartLotNumber: partLotNumber.trim() || undefined,
+          newPartSerialNumber: partSerialNumber.trim() || undefined,
+          replacementDateTime: formattedDateTime,
+          changedBy: technicianName.trim() || currentUser.name,
+          replacementReason: trimmedRemarks || actionLabelTh,
+          evidenceAttachment: damagePhotoUrl || undefined,
+          approvalStatus: 'COMPLETED',
+          skipStageShotReset: true, // CRITICAL: Never wipe whole Stage TV counter on single-pin action
+          skipStockDeduction: !autoDeductStock,
+          shotCaptureMode: shotInputMode === 'LIVE' ? 'LIVE_PLC' : 'MANUAL',
+          isRetroactive: actionType === 'RETROACTIVE_LOG',
+          linkedMasterLogId: historyId,
+          note: trimmedRemarks || undefined
+        });
+        if (repRes.success && repRes.record) {
+          linkedReplacementId = repRes.record.id;
+        }
+      } catch (err) {
+        console.warn('Error recording linked replacement entry:', err);
+      }
     }
 
     const historyEntry: PinHistoryEntry = {
-      id: `LOG-${Date.now()}`,
-      dateTime: actionDateTime.replace('T', ' '),
+      id: historyId,
+      dateTime: formattedDateTime,
       lineId: selectedLineId,
       stageId: selectedPin.stageId,
       stageName: selectedPin.stageName,
+      partCode: resolvedStockPartCode,
       pinCode: selectedPin.pinCode,
       partName: selectedPin.partName,
       actionType,
       actionLabelTh,
       machineShot: currentRecordedMachineShot,
       pinShot: calculatedUsedShots,
-      technician: technicianName || currentUser.name,
+      technician: technicianName.trim() || currentUser.name,
       regrindDepthMm: actionType === 'REGRIND' ? regrindDepthMm : undefined,
       shimThicknessMm: actionType === 'REGRIND' ? shimThicknessMm : undefined,
-      remarks: remarks || '-',
+      changedQty: qtyToRecord,
+      lotNumber: partLotNumber.trim() || undefined,
+      serialNumber: partSerialNumber.trim() || undefined,
+      stockDeducted: autoDeductStock,
+      shotCaptureMode: shotInputMode === 'LIVE' ? 'LIVE_PLC' : 'MANUAL',
+      isRetroactive: actionType === 'RETROACTIVE_LOG',
+      linkedReplacementId,
+      linkedRegrindId,
+      remarks: trimmedRemarks || '-',
       photoUrl: damagePhotoUrl || undefined
     };
+
+    // 1. Persist permanently in central Master Logs store (unlimited retention)
+    const currentStoredLogs = loadStoredMasterLogs();
+    const nextStoredLogs = [historyEntry, ...currentStoredLogs].sort((a, b) =>
+      String(b.dateTime || '').localeCompare(String(a.dateTime || ''))
+    );
+    saveStoredMasterLogs(nextStoredLogs);
+
+    // 2. Persist in pin state + compact overrides
+    const updatedLogsForPin = [historyEntry, ...(selectedPin.historyLogs || [])]
+      .sort((a, b) => String(b.dateTime || '').localeCompare(String(a.dateTime || '')))
+      .slice(0, 20);
 
     const updatedPin: DiePinItem = {
       ...selectedPin,
       status: nextStatus,
       currentShots: nextShots,
       lastReplacementShot: nextLastReplacementShot,
-      lastReplacementDate: actionDateTime.replace('T', ' '),
+      lastReplacementDate: nextLastReplacementDate,
       regrindCount: nextRegrindCount,
       totalGrindDepthMm: nextGrindDepth,
       shimThicknessMm: nextShim,
       lastAction: actionLabelTh,
-      lastTechnician: technicianName || currentUser.name,
-      historyLogs: [historyEntry, ...(selectedPin.historyLogs || [])].slice(0, 10)
+      lastTechnician: nextLastTechnician,
+      historyLogs: updatedLogsForPin
     };
 
     const nextPins = pins.map(p => (p.id === selectedPin.id ? updatedPin : p));
     persistPins(nextPins);
+    setLogsUpdateCounter(c => c + 1);
 
     setFeedback({
       type: 'success',
-      message: `บันทึกรายการ "${actionLabelTh}" สำหรับตำแหน่ง ${selectedPin.pinCode} (Shot เครื่อง: ${formatShots(currentRecordedMachineShot)}) เรียบร้อยแล้ว`
+      message: `บันทึกรายการ "${actionLabelTh}" สำหรับ ${selectedPin.pinCode} (Shot เครื่อง: ${formatShots(currentRecordedMachineShot)}${autoDeductStock ? ` • ตัดสต็อก Parts Stock -${qtyToRecord} EA` : ''}) เรียบร้อยแล้ว`
     });
-    setTimeout(() => setFeedback(null), 3500);
+    setTimeout(() => setFeedback(null), 4000);
 
     setSelectedPin(null);
   };
@@ -1073,19 +1412,16 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
 
     linesToClear.forEach(lineId => {
       try {
-        const savedCompact = localStorage.getItem(`${COMPACT_PIN_OVERRIDES_KEY}${lineId}`);
-        if (savedCompact) {
-          const overrides = JSON.parse(savedCompact);
-          let modified = false;
-          Object.keys(overrides).forEach(pinId => {
-            if (overrides[pinId].historyLogs && overrides[pinId].historyLogs.length > 0) {
-              overrides[pinId].historyLogs = [];
-              modified = true;
-            }
-          });
-          if (modified) {
-            localStorage.setItem(`${COMPACT_PIN_OVERRIDES_KEY}${lineId}`, JSON.stringify(overrides));
+        const overrides = loadPinOverrides(lineId);
+        let modified = false;
+        Object.keys(overrides).forEach(pinId => {
+          if (overrides[pinId].historyLogs && overrides[pinId].historyLogs!.length > 0) {
+            overrides[pinId].historyLogs = [];
+            modified = true;
           }
+        });
+        if (modified) {
+          savePinOverrides(lineId, overrides);
         }
       } catch (err) {
         console.warn('Error clearing history for line ' + lineId, err);
@@ -1096,11 +1432,11 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
     if (clearSystemReplacements) {
       try {
         if (scope === 'ALL_LINES') {
-          localStorage.setItem('fin_press_replacements', JSON.stringify([]));
+          storageService.safeSetItem('fin_press_replacements', JSON.stringify([]));
         } else {
           const currentReplacements = storageService.getReplacements();
           const filteredReplacements = currentReplacements.filter(r => r.lineId !== selectedLineId);
-          localStorage.setItem('fin_press_replacements', JSON.stringify(filteredReplacements));
+          storageService.safeSetItem('fin_press_replacements', JSON.stringify(filteredReplacements));
         }
       } catch (err) {
         console.warn('Error clearing system replacements:', err);
@@ -1128,35 +1464,44 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
     seededLogs.forEach(l => storedMap.set(l.id, l));
     saveStoredMasterLogs(Array.from(storedMap.values()));
 
-    // 2. Attach relevant logs to current line pins if line matches
-    const updatedPins = pins.map(pin => {
-      const matchingLogs = seededLogs.filter(l => l.lineId === selectedLineId && (l.pinCode === pin.pinCode || l.stageId === pin.stageId));
-      if (matchingLogs.length > 0) {
-        return {
-          ...pin,
-          historyLogs: [...matchingLogs, ...(pin.historyLogs || [])].slice(0, 10)
-        };
+    // 2. Attach pin-specific logs only (stage-wide logs already live in MASTER_LOGS_STORAGE_KEY to avoid 700x pin bloat)
+    const lineSpecificPinLogs = seededLogs.filter(
+      l => l.lineId === selectedLineId && l.pinCode && l.pinCode !== 'ALL'
+    );
+    if (lineSpecificPinLogs.length > 0) {
+      let hasMatchedPin = false;
+      const updatedPins = pins.map(pin => {
+        const matchingLogs = lineSpecificPinLogs.filter(l => l.pinCode === pin.pinCode);
+        if (matchingLogs.length > 0) {
+          hasMatchedPin = true;
+          const deduped = Array.from(
+            new Map([...matchingLogs, ...(pin.historyLogs || [])].map(l => [l.id, { ...l, photoUrl: undefined }])).values()
+          ).slice(0, 10);
+          return { ...pin, historyLogs: deduped };
+        }
+        return pin;
+      });
+      if (hasMatchedPin) {
+        persistPins(updatedPins);
       }
-      return pin;
-    });
-    persistPins(updatedPins);
+    }
 
-    // 3. Attach to other lines' compact overrides
+    // 3. Attach pin-specific logs to other lines' compact overrides only when an override pin matches
     const targetLines: ProductionLineId[] = scope === 'ALL'
       ? ['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5']
       : [scope];
 
     targetLines.forEach(lineId => {
       if (lineId !== selectedLineId) {
-        const overrides = loadPinOverrides(lineId);
         const lineLogs = seededLogs.filter(l => l.lineId === lineId);
         if (lineLogs.length > 0) {
+          const overrides = loadPinOverrides(lineId);
           const firstKey = Object.keys(overrides)[0] || `${lineId}-stage-log`;
           if (!overrides[firstKey]) overrides[firstKey] = {};
-          overrides[firstKey].historyLogs = [
-            ...lineLogs,
-            ...(overrides[firstKey].historyLogs || [])
-          ].slice(0, 10);
+          const merged = Array.from(
+            new Map([...lineLogs, ...(overrides[firstKey].historyLogs || [])].map(l => [l.id, { ...l, photoUrl: undefined }])).values()
+          ).slice(0, 10);
+          overrides[firstKey].historyLogs = merged;
           savePinOverrides(lineId, overrides);
         }
       }
@@ -1180,10 +1525,12 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
     const currentStored = loadStoredMasterLogs();
     saveStoredMasterLogs([newLog, ...currentStored]);
 
-    // 2. If it belongs to current line, attach to matching pin if found
-    if (newLog.lineId === selectedLineId) {
+    // 2. If it belongs to a specific pin on current line, attach to that pin only (ALL-stage logs live in MASTER_LOGS_STORAGE_KEY)
+    if (newLog.lineId === selectedLineId && newLog.pinCode && newLog.pinCode !== 'ALL') {
+      let matchedPin = false;
       const updatedPins = pins.map(pin => {
-        if (pin.stageId === newLog.stageId && (pin.pinCode === newLog.pinCode || newLog.pinCode === 'ALL')) {
+        if (pin.stageId === newLog.stageId && pin.pinCode === newLog.pinCode) {
+          matchedPin = true;
           return {
             ...pin,
             historyLogs: [newLog, ...(pin.historyLogs || [])].slice(0, 10)
@@ -1191,8 +1538,10 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
         }
         return pin;
       });
-      persistPins(updatedPins);
-    } else {
+      if (matchedPin) {
+        persistPins(updatedPins);
+      }
+    } else if (newLog.lineId !== selectedLineId) {
       // Save in overrides of that line
       const overrides = loadPinOverrides(newLog.lineId);
       const key = `${newLog.lineId}-${newLog.stageId}-${newLog.pinCode}`;
@@ -1213,11 +1562,21 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
     setTimeout(() => setFeedback(null), 3000);
   };
 
-  // 4. Delete individual history log entry
-  const handleDeleteLog = (logId: string) => {
-    // Remove from stored master logs
+  // 4. Delete individual history log entry (synchronized across Master Logs, Pin Overrides, and Central Replacements)
+  const handleDeleteLog = (logId: string, linkedReplacementId?: string) => {
     const currentStored = loadStoredMasterLogs();
+    const targetStored = currentStored.find(l => l.id === logId);
     saveStoredMasterLogs(currentStored.filter(l => l.id !== logId));
+
+    const matchedUnified = allUnifiedHistoryLogs.find(l => l.id === logId);
+    const repIdToDelete =
+      linkedReplacementId ||
+      targetStored?.linkedReplacementId ||
+      matchedUnified?.linkedReplacementId ||
+      (logId.startsWith('SYS-REP-') ? logId.replace('SYS-REP-', '') : logId.startsWith('REP-') ? logId : undefined);
+    if (repIdToDelete) {
+      storageService.deleteReplacementRecord(repIdToDelete);
+    }
 
     // Remove from current line pins
     const updatedPins = pins.map(pin => {
@@ -1231,7 +1590,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
     });
     persistPins(updatedPins);
 
-    // Remove from other lines' overrides
+    // Remove from all lines' overrides
     const linesList: ProductionLineId[] = ['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5'];
     linesList.forEach(lineId => {
       const overrides = loadPinOverrides(lineId);
@@ -1252,7 +1611,94 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
 
     setFeedback({
       type: 'success',
-      message: language === 'TH' ? 'ลบรายการประวัติสำเร็จแล้ว' : 'History log entry deleted successfully'
+      message: language === 'TH' ? 'ลบรายการประวัติและซิงค์ข้อมูลเรียบร้อยแล้ว' : 'History log entry deleted and synced'
+    });
+    setTimeout(() => setFeedback(null), 2500);
+  };
+
+  // 5. Update individual history log entry inline (synchronized across Master Logs, Pin Overrides, and Central Replacements)
+  const handleSaveEditedHistoryEntry = (entry: PinHistoryEntry) => {
+    if (!editHistoryDraft) return;
+    const formattedDateTime = editHistoryDraft.dateTime.replace('T', ' ');
+    const updatedEntry: PinHistoryEntry = {
+      ...entry,
+      dateTime: formattedDateTime,
+      machineShot: Math.max(0, Number(editHistoryDraft.machineShot) || 0),
+      pinShot: Math.max(0, Number(editHistoryDraft.pinShot) || 0),
+      technician: editHistoryDraft.technician.trim() || entry.technician,
+      lotNumber: editHistoryDraft.lotNumber.trim() || undefined,
+      remarks: editHistoryDraft.remarks.trim() || '-',
+      updatedAt: new Date().toISOString()
+    };
+
+    // 1. Update in Master Logs (or insert if previously only in override/rep)
+    const currentStored = loadStoredMasterLogs();
+    const existingIdx = currentStored.findIndex(l => l.id === entry.id);
+    let nextStored: PinHistoryEntry[];
+    if (existingIdx >= 0) {
+      nextStored = currentStored.map(l => (l.id === entry.id ? updatedEntry : l));
+    } else {
+      nextStored = [updatedEntry, ...currentStored];
+    }
+    saveStoredMasterLogs(nextStored);
+
+    // 2. Sync to Central Replacements if linked
+    const repId = entry.linkedReplacementId || (entry.id.startsWith('REP-') ? entry.id : undefined);
+    if (repId) {
+      storageService.updateReplacementRecord(repId, {
+        replacementDateTime: formattedDateTime,
+        machineShotAtReplacement: updatedEntry.machineShot,
+        removedPartUsedShot: updatedEntry.pinShot,
+        changedBy: updatedEntry.technician,
+        newPartLotNumber: updatedEntry.lotNumber,
+        replacementReason: updatedEntry.remarks,
+        note: updatedEntry.remarks
+      });
+    }
+
+    // 3. Sync inside current line pins (and update pin's lastReplacementShot if this was the latest non-retroactive log)
+    const updatedPins = pins.map(pin => {
+      const hasLog = pin.historyLogs?.some(l => l.id === entry.id);
+      if (!hasLog && !(selectedPin && pin.id === selectedPin.id)) return pin;
+      const nextLogs = (pin.historyLogs || []).map(l => (l.id === entry.id ? updatedEntry : l));
+      const isLatestLog = nextLogs[0]?.id === entry.id && !updatedEntry.isRetroactive;
+      return {
+        ...pin,
+        historyLogs: nextLogs,
+        ...(isLatestLog && (updatedEntry.actionType === 'REPLACE_NEW' || updatedEntry.actionType === 'INSTALL_REGROUND' || updatedEntry.actionType === 'REGRIND')
+          ? {
+              lastReplacementShot: updatedEntry.machineShot,
+              lastReplacementDate: updatedEntry.dateTime,
+              lastTechnician: updatedEntry.technician
+            }
+          : {})
+      };
+    });
+    persistPins(updatedPins);
+
+    // 4. Sync inside other lines' overrides if needed
+    const linesList: ProductionLineId[] = ['E1', 'E2', 'E3 SLIT', 'E3 WL+', 'E3 New Cor', 'E4', 'E5'];
+    linesList.forEach(lineId => {
+      if (lineId === selectedLineId) return;
+      const overrides = loadPinOverrides(lineId);
+      let modified = false;
+      Object.keys(overrides).forEach(key => {
+        if (overrides[key]?.historyLogs?.some(l => l.id === entry.id)) {
+          overrides[key].historyLogs = overrides[key].historyLogs!.map(l => (l.id === entry.id ? updatedEntry : l));
+          modified = true;
+        }
+      });
+      if (modified) savePinOverrides(lineId, overrides);
+    });
+
+    setEditingHistoryId(null);
+    setEditHistoryDraft(null);
+    setLogsUpdateCounter(c => c + 1);
+    loadLinePins(false);
+
+    setFeedback({
+      type: 'success',
+      message: 'อัปเดตและเชื่อมโยงประวัติย้อนหลังเรียบร้อยแล้ว'
     });
     setTimeout(() => setFeedback(null), 2500);
   };
@@ -1654,530 +2100,924 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
       )}
 
       {/* ======================================================== */}
-      {/* 3. CLEAN OPERATOR ACTION MODAL (ENFORCING RECORD LATEST SHOT) */}
+      {/* 3. CLEAN OPERATOR ACTION MODAL (LIVE/MANUAL SHOT + FLEXIBLE LOG + LINKED HISTORY) */}
       {/* ======================================================== */}
-      {selectedPin && (
-        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-3 sm:p-5 backdrop-blur-md animate-fadeIn overflow-y-auto">
-          <div className="liquid-glass-card border border-white/15 rounded-3xl max-w-2xl w-full p-5 sm:p-6 space-y-5 shadow-2xl my-auto text-slate-100 max-h-[92vh] overflow-y-auto custom-scrollbar">
-            {/* Modal Header */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-mono font-bold text-sm border shadow-lg ${
-                  selectedPin.status === 'broken'
-                    ? 'bg-rose-950 text-rose-300 border-rose-500'
-                    : selectedPin.status === 'warning'
-                    ? 'bg-amber-950 text-amber-300 border-amber-500'
-                    : 'bg-emerald-950 text-emerald-300 border-emerald-500'
-                }`}>
-                  {selectedPin.rowLabel}
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-white font-mono flex items-center gap-2">
-                    <span>{selectedPin.partName} ({selectedPin.pinCode})</span>
-                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-cyan-950/80 text-cyan-300 border border-cyan-500/40 font-mono">
-                      Line {selectedLineId}
-                    </span>
-                  </h3>
-                  <div className="text-xs text-slate-400 font-thai">
-                    {getCleanStageName(selectedPin.stageName)} • Col {selectedPin.col}, Row {selectedPin.rowLabel} (No. {selectedPin.seqNo})
-                  </div>
-                </div>
-              </div>
+      {selectedPin && (() => {
+        const stocks = storageService.getSpareStocks();
+        const lineConfigs = storageService.getLineConfigs();
+        const activeLineCfg = lineConfigs.find(c => c.lineId === selectedLineId);
+        const lineMonitoring = storageService.getLineMonitoring(selectedLineId);
 
-              <button
-                type="button"
-                onClick={() => setSelectedPin(null)}
-                className="liquid-pill p-2 rounded-full text-slate-400 hover:text-white bg-white/[0.04] hover:bg-white/[0.1] border border-white/10 active:scale-95 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+        let resolvedStockPartCode = selectedPin.partCode;
+        if (!stocks.some(s => s.partCode === resolvedStockPartCode)) {
+          const liveItem = lineMonitoring?.items?.find(it =>
+            isPartMatchingInteractiveStage(it, selectedPin.partCode, selectedPin.stageName)
+          );
+          if (liveItem?.partCode) {
+            resolvedStockPartCode = liveItem.partCode;
+          } else {
+            const matchedPm = storageService.getPartMasters().find(pm => {
+              const linesList = ((pm as any).applicableLines || []) as ProductionLineId[];
+              const lineOk = linesList.length === 0 || linesList.includes(selectedLineId);
+              return (
+                lineOk &&
+                isPartMatchingInteractiveStage(
+                  { partCode: pm.partCode, partName: pm.partName, stagePunchDie: pm.stageName },
+                  selectedPin.partCode,
+                  selectedPin.stageName
+                )
+              );
+            });
+            if (matchedPm?.partCode) {
+              resolvedStockPartCode = matchedPm.partCode;
+            }
+          }
+        }
 
-            {/* MANDATORY: Record Latest Machine Shot Input Card */}
-            <div className="bg-gradient-to-r from-blue-950/60 to-indigo-950/60 border border-cyan-500/50 rounded-2xl p-4 sm:p-5 space-y-3 font-mono shadow-lg">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <label className="text-xs font-bold text-cyan-300 uppercase flex items-center gap-2">
-                  <Gauge className="w-4 h-4 text-cyan-400 animate-pulse" />
-                  <span>บันทึกเลขมิเตอร์ช็อตเครื่องล่าสุด ณ ขณะเปลี่ยน (MANDATORY MACHINE SHOT) *</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const lineMonitoring = storageService.getLineMonitoring(selectedLineId);
-                    const live = lineMonitoring?.machineShotTotal || 0;
-                    setMachineShotInput(live);
-                  }}
-                  className="liquid-pill px-3 py-1 rounded-full bg-blue-900/60 hover:bg-blue-800/80 text-[11px] text-cyan-200 border border-blue-400/50 flex items-center gap-1.5 active:scale-95 cursor-pointer"
-                >
-                  <RefreshCw className="w-3 h-3" />
-                  ดึงจากมิเตอร์สด ({formatShots(storageService.getLineMonitoring(selectedLineId)?.machineShotTotal || 0)})
-                </button>
-              </div>
+        const lineMatrixQty = activeLineCfg?.stockQuantities?.[resolvedStockPartCode];
+        const lineStockEntry = stocks.find(s => s.partCode === `${selectedLineId}-${resolvedStockPartCode}`);
+        const globalStockEntry = stocks.find(s => s.partCode === resolvedStockPartCode);
+        const availableStockQty: number | null =
+          lineMatrixQty !== undefined
+            ? lineMatrixQty
+            : lineStockEntry
+            ? (lineStockEntry.availableQuantity ?? lineStockEntry.onHandQuantity ?? lineStockEntry.currentStockQty ?? 0)
+            : globalStockEntry
+            ? (globalStockEntry.availableQuantity ?? globalStockEntry.onHandQuantity ?? globalStockEntry.currentStockQty ?? 0)
+            : null;
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
-                <div className="sm:col-span-2">
-                  <input
-                    type="number"
-                    min="1"
-                    value={machineShotInput || ''}
-                    onChange={e => setMachineShotInput(parseInt(e.target.value) || 0)}
-                    placeholder="กรอกเลขช็อตเครื่องล่าสุด..."
-                    className="liquid-input w-full rounded-xl px-3.5 py-2 text-base text-cyan-200 font-mono font-bold focus:outline-none focus:ring-2 focus:ring-cyan-400"
-                    required
-                  />
-                  <div className="text-[10px] text-slate-400 mt-1 font-thai">
-                    * ต้องจำเป็นต้องบันทึก Shot ล่าสุดของเครื่องทุกครั้งก่อนเปลี่ยนหรือเจียรอะไหล่นั้นๆ
-                  </div>
-                </div>
+        const autoDeduct = shouldAutoDeductStock(actionType);
+        const remainingAfterDeduct =
+          availableStockQty !== null ? Math.max(0, availableStockQty - Math.max(1, changedQtyInput)) : null;
 
-                <div className="bg-black/40 border border-white/10 rounded-xl p-3 text-xs space-y-1">
-                  <div className="text-[10px] text-slate-400">ช็อตเปลี่ยนรอบก่อน:</div>
-                  <div className="font-bold text-slate-200 font-mono">{formatShots(selectedPin.lastReplacementShot)}</div>
-                  <div className="text-[10px] text-emerald-400 font-bold border-t border-white/10 pt-1 font-mono">
-                    ช็อตใช้งานจริง: {formatShots(Math.max(0, machineShotInput - selectedPin.lastReplacementShot))}
-                  </div>
-                </div>
-              </div>
-            </div>
+        const effectiveUsedShots = manualUsedShotOverride
+          ? Math.max(0, usedShotInput)
+          : Math.max(0, machineShotInput - selectedPin.lastReplacementShot);
+        const currentPercent = selectedPin.maxShots > 0
+          ? Math.min(100, Math.round((selectedPin.currentShots / selectedPin.maxShots) * 100))
+          : 0;
 
-            {/* Current Metrics Snapshot */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 font-mono">
-              <div>
-                <div className="text-[10px] text-slate-400 uppercase font-bold">CURRENT SHOT LIFE</div>
-                <div className="text-base font-bold text-cyan-300">
-                  {formatShots(selectedPin.currentShots)} <span className="text-xs text-slate-400 font-normal">/ {formatShots(selectedPin.maxShots)}</span>
-                </div>
-                {/* Progress bar */}
-                <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1">
-                  <div
-                    className={`h-full ${
-                      selectedPin.currentShots >= selectedPin.maxShots * 0.9 ? 'bg-rose-500' : selectedPin.currentShots >= selectedPin.maxShots * 0.7 ? 'bg-amber-400' : 'bg-emerald-400'
-                    }`}
-                    style={{ width: `${Math.min(100, (selectedPin.currentShots / selectedPin.maxShots) * 100)}%` }}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <div className="text-[10px] text-slate-400 uppercase font-bold">LAST REPLACEMENT SHOT</div>
-                <div className="text-base font-bold text-slate-200">
-                  {formatShots(selectedPin.lastReplacementShot)}
-                </div>
-                <div className="text-[10px] text-slate-400 font-thai">
-                  วิ่งมาแล้ว {formatShots(selectedPin.currentShots)} ช็อต
-                </div>
-              </div>
-
-              <div>
-                <div className="text-[10px] text-slate-400 uppercase font-bold">REGRIND COUNT</div>
-                <div className="text-base font-bold text-amber-300">
-                  {selectedPin.regrindCount} <span className="text-xs text-slate-400 font-normal">/ {selectedPin.maxRegrind} cycles</span>
-                </div>
-                <div className="text-[10px] text-slate-400">
-                  เจียรสะสม: {selectedPin.totalGrindDepthMm}mm / Shim: +{selectedPin.shimThicknessMm}mm
-                </div>
-              </div>
-            </div>
-
-            {/* Operator Action Entry Form (Replace, Regrind, Broken) */}
-            <form onSubmit={handleSaveAction} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-300 uppercase font-mono">
-                  เลือกการดำเนินการสำหรับตำแหน่งนี้ *
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                  {/* 1. เปลี่ยนอะไหล่ใหม่ (Replace New) */}
-                  <button
-                    type="button"
-                    onClick={() => setActionType('REPLACE_NEW')}
-                    className={`p-3.5 rounded-xl border text-left flex flex-col justify-between transition-all ${
-                      actionType === 'REPLACE_NEW'
-                        ? 'bg-emerald-950/90 border-emerald-400 text-emerald-300 ring-2 ring-emerald-500/50 shadow-lg'
-                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800/80 hover:text-slate-200'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <Wrench className="w-5 h-5 text-emerald-400" />
-                      {actionType === 'REPLACE_NEW' && <Check className="w-4 h-4 text-emerald-400" />}
-                    </div>
-                    <div className="mt-2.5">
-                      <div className="text-xs font-bold font-mono text-emerald-300">เปลี่ยนอะไหล่ใหม่ (Replace)</div>
-                      <div className="text-[10px] text-slate-400 font-thai">บันทึกช็อตเครื่อง & รีเซ็ตช็อต 0</div>
-                    </div>
-                  </button>
-
-                  {/* 2. ส่งเจียรลับคม (Send to Regrind) */}
-                  <button
-                    type="button"
-                    onClick={() => setActionType('REGRIND')}
-                    className={`p-3.5 rounded-xl border text-left flex flex-col justify-between transition-all ${
-                      actionType === 'REGRIND'
-                        ? 'bg-amber-950/90 border-amber-400 text-amber-300 ring-2 ring-amber-500/50 shadow-lg'
-                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800/80 hover:text-slate-200'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <RotateCcw className="w-5 h-5 text-amber-400" />
-                      {actionType === 'REGRIND' && <Check className="w-4 h-4 text-amber-400" />}
-                    </div>
-                    <div className="mt-2.5">
-                      <div className="text-xs font-bold font-mono text-amber-300">ส่งเจียรลับคม (Regrind)</div>
-                      <div className="text-[10px] text-slate-400 font-thai">+1 รอบเจียร & ออกใบงาน</div>
-                    </div>
-                  </button>
-
-                  {/* 3. แจ้งชำรุด (Report Broken) */}
-                  <button
-                    type="button"
-                    onClick={() => setActionType('BROKEN')}
-                    className={`p-3.5 rounded-xl border text-left flex flex-col justify-between transition-all ${
-                      actionType === 'BROKEN'
-                        ? 'bg-rose-950/90 border-rose-400 text-rose-300 ring-2 ring-rose-500/50 shadow-lg'
-                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800/80 hover:text-slate-200'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <AlertOctagon className="w-5 h-5 text-rose-400" />
-                      {actionType === 'BROKEN' && <Check className="w-4 h-4 text-rose-400" />}
-                    </div>
-                    <div className="mt-2.5">
-                      <div className="text-xs font-bold font-mono text-rose-300">แจ้งชำรุด (Report Broken)</div>
-                      <div className="text-[10px] text-slate-400 font-thai">แจ้งเตือนเปลี่ยนด่วน (แดง)</div>
-                    </div>
-                  </button>
-                </div>
-              </div>
-
-              {/* Regrind Parameters (if Regrind selected) */}
-              {actionType === 'REGRIND' && (
-                <div className="grid grid-cols-2 gap-3 bg-amber-950/30 border border-amber-800/50 rounded-xl p-3.5 font-mono text-xs">
-                  <div>
-                    <label className="block text-amber-300 font-bold mb-1">ความหนาเจียรออก (มม.) *</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0.05"
-                      max="1.50"
-                      value={regrindDepthMm}
-                      onChange={e => setRegrindDepthMm(parseFloat(e.target.value) || 0)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-amber-300 font-bold focus:outline-none focus:border-amber-400"
-                      required
-                    />
+        return (
+          <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-3 sm:p-5 backdrop-blur-md animate-fadeIn overflow-y-auto">
+            <div className="liquid-glass-card border border-white/15 rounded-3xl max-w-3xl w-full p-5 sm:p-6 space-y-4 shadow-2xl my-auto text-slate-100 max-h-[94vh] overflow-y-auto custom-scrollbar">
+              {/* Modal Header */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-mono font-bold text-sm border shadow-lg ${
+                    selectedPin.status === 'broken'
+                      ? 'bg-rose-950 text-rose-300 border-rose-500'
+                      : selectedPin.status === 'warning'
+                      ? 'bg-amber-950 text-amber-300 border-amber-500'
+                      : 'bg-emerald-950 text-emerald-300 border-emerald-500'
+                  }`}>
+                    {selectedPin.rowLabel}
                   </div>
                   <div>
-                    <label className="block text-amber-300 font-bold mb-1">ความหนาชิมรองชดเชย (มม.) *</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0.00"
-                      max="1.50"
-                      value={shimThicknessMm}
-                      onChange={e => setShimThicknessMm(parseFloat(e.target.value) || 0)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-amber-300 font-bold focus:outline-none focus:border-amber-400"
-                      required
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Form Fields: Technician, Date-Time, Remarks */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-mono">
-                <div>
-                  <label className="block text-slate-400 font-bold mb-1">ช่างซ่อม / ผู้บันทึก *</label>
-                  <div className="relative">
-                    <UserCheck className="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      value={technicianName}
-                      onChange={e => setTechnicianName(e.target.value)}
-                      placeholder="ระบุชื่อช่าง..."
-                      className="w-full bg-slate-950 border border-slate-700 rounded pl-8 pr-2.5 py-1.5 text-slate-100 focus:outline-none focus:border-cyan-400"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-slate-400 font-bold mb-1">วัน-เวลา *</label>
-                  <div className="relative">
-                    <Calendar className="w-4 h-4 text-white absolute left-2.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="datetime-local"
-                      value={actionDateTime}
-                      onChange={e => setActionDateTime(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-600 rounded pl-8 pr-2.5 py-1.5 text-white focus:outline-none focus:border-cyan-400 [color-scheme:dark]"
-                      required
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-400 font-bold mb-1 text-xs font-mono">
-                  สาเหตุ / หมายเหตุ *
-                </label>
-                <div className="space-y-1.5">
-                  <select
-                    onChange={e => {
-                      if (e.target.value) setRemarks(e.target.value);
-                    }}
-                    className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-300 font-thai focus:outline-none focus:border-cyan-400"
-                  >
-                    <option value="">-- เลือกสาเหตุมาตรฐาน --</option>
-                    {COMMON_REASONS.map((r, idx) => (
-                      <option key={idx} value={r}>{r}</option>
-                    ))}
-                  </select>
-                  <textarea
-                    rows={2}
-                    value={remarks}
-                    onChange={e => setRemarks(e.target.value)}
-                    placeholder="ระบุรายละเอียดเพิ่มเติม เช่น รอยแตกที่ปลาย Punch, การติดขัด..."
-                    className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-xs text-slate-100 font-thai focus:outline-none focus:border-cyan-400"
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* SECTION: Evidence & Damage Photo Upload (Responsive for Mobile & Desktop) */}
-              <div className="pt-2 pb-1 border-t border-slate-800 space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-mono font-bold text-slate-300 flex items-center gap-1.5">
-                    <Camera className="w-3.5 h-3.5 text-rose-400" />
-                    <span>แนบรูปถ่ายความเสียหาย (DAMAGE PHOTO & EVIDENCE)</span>
-                  </label>
-                  <span className="text-[10px] text-slate-500 font-thai">เพื่อใช้วิเคราะห์ในการประชุมคุณภาพ</span>
-                </div>
-
-                {/* Hidden File Inputs */}
-                <input
-                  type="file"
-                  ref={cameraInputRef}
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) processImageFile(file);
-                    e.target.value = '';
-                  }}
-                />
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) processImageFile(file);
-                    e.target.value = '';
-                  }}
-                />
-
-                {/* Photo Dropzone or Preview */}
-                {!damagePhotoUrl ? (
-                  <div
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      setIsDragOverPhoto(true);
-                    }}
-                    onDragLeave={() => setIsDragOverPhoto(false)}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      setIsDragOverPhoto(false);
-                      const file = e.dataTransfer.files?.[0];
-                      if (file) processImageFile(file);
-                    }}
-                    className={`border-2 border-dashed rounded-xl p-3 text-center transition-all ${
-                      isDragOverPhoto
-                        ? 'border-cyan-400 bg-cyan-950/30'
-                        : 'border-slate-800 bg-slate-950/60 hover:border-slate-700'
-                    }`}
-                  >
-                    {isCompressingPhoto ? (
-                      <div className="flex items-center justify-center gap-2 py-3 text-cyan-400 text-xs font-mono">
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>กำลังประมวลผลและบีบอัดรูปภาพ...</span>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-                        <button
-                          type="button"
-                          onClick={() => cameraInputRef.current?.click()}
-                          className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-rose-600/90 hover:bg-rose-500 text-white font-mono text-xs font-bold shadow-md active:scale-95 transition-all cursor-pointer min-h-[44px]"
-                        >
-                          <Camera className="w-4 h-4" />
-                          <span>ถ่ายรูปทันที (กล้องมือถือ)</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => fileInputRef.current?.click()}
-                          className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-mono text-xs font-bold active:scale-95 transition-all cursor-pointer min-h-[44px]"
-                        >
-                          <UploadCloud className="w-4 h-4 text-cyan-400" />
-                          <span>เลือกจากคลังภาพ / PC</span>
-                        </button>
-                      </div>
-                    )}
-                    <p className="text-[10px] text-slate-500 mt-2 font-thai">
-                      รองรับไฟล์ภาพ JPEG, PNG, WEBP (ระบบบีบอัดอัตโนมัติเพื่อประหยัดพื้นที่)
-                    </p>
-                  </div>
-                ) : (
-                  <div className="bg-slate-950 border border-rose-500/40 rounded-xl p-3 flex items-center justify-between gap-3 shadow-inner">
-                    <div className="flex items-center gap-3">
-                      <div 
-                        onClick={() => setActivePhotoModal({
-                          url: damagePhotoUrl,
-                          title: `ภาพความเสียหายตำแหน่ง ${selectedPin.pinCode} (${selectedPin.partName})`,
-                          subtitle: `Line ${selectedLineId} • ${selectedPin.stageName}`,
-                          timestamp: actionDateTime.replace('T', ' '),
-                          technician: technicianName || currentUser.name,
-                          remarks: remarks || 'แนบหลักฐานความเสียหาย'
-                        })}
-                        className="relative w-16 h-16 rounded-lg overflow-hidden border border-slate-700 cursor-pointer group flex-shrink-0 bg-black shadow"
-                      >
-                        <img 
-                          src={damagePhotoUrl} 
-                          alt="Damage Evidence" 
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                        />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                          <ZoomIn className="w-5 h-5 text-white" />
-                        </div>
-                      </div>
-                      <div className="text-xs font-mono">
-                        <div className="text-rose-400 font-bold flex items-center gap-1.5">
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>แนบรูปภาพแล้ว (พร้อมบันทึก)</span>
-                        </div>
-                        <p className="text-[11px] text-slate-400 font-thai mt-0.5">
-                          คลิกรูปภาพเพื่อดูขนาดเต็มก่อนบันทึก
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setActivePhotoModal({
-                          url: damagePhotoUrl,
-                          title: `ภาพความเสียหายตำแหน่ง ${selectedPin.pinCode} (${selectedPin.partName})`,
-                          subtitle: `Line ${selectedLineId} • ${selectedPin.stageName}`,
-                          timestamp: actionDateTime.replace('T', ' '),
-                          technician: technicianName || currentUser.name,
-                          remarks: remarks || 'แนบหลักฐานความเสียหาย'
-                        })}
-                        className="px-2.5 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono font-bold flex items-center gap-1"
-                        title="ดูรูปขนาดเต็ม"
-                      >
-                        <ZoomIn className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">ดูภาพ</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDamagePhotoUrl(null)}
-                        className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-md bg-rose-950/60 hover:bg-rose-900 border border-rose-800 text-rose-300 text-xs font-mono font-bold flex items-center gap-1 transition-colors cursor-pointer"
-                        title="ลบรูปภาพนี้"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">ลบรูป</span>
-                      </button>
+                    <h3 className="text-base font-bold text-white font-mono flex items-center gap-2 flex-wrap">
+                      <span>{selectedPin.partName} ({selectedPin.pinCode})</span>
+                      <span className="text-xs text-cyan-300 font-mono">Line {selectedLineId}</span>
+                    </h3>
+                    <div className="text-xs text-slate-400 font-thai">
+                      {getCleanStageName(selectedPin.stageName)} · No. {selectedPin.seqNo} · {resolvedStockPartCode}
                     </div>
                   </div>
-                )}
-              </div>
-
-              {/* Mini Recent History Log */}
-              <div className="space-y-2 pt-2 border-t border-slate-800">
-                <div className="flex items-center justify-between text-xs font-mono font-bold text-slate-300">
-                  <span className="flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-cyan-400" />
-                    RECENT HISTORY (ประวัติการซ่อมเฉพาะตำแหน่ง {selectedPin.pinCode})
-                  </span>
-                  <span className="text-[10px] text-slate-500">{(selectedPin.historyLogs || []).length} logs</span>
                 </div>
 
-                <div className="space-y-1.5 max-h-32 overflow-y-auto custom-scrollbar">
-                  {(selectedPin.historyLogs && selectedPin.historyLogs.length > 0) ? (
-                    selectedPin.historyLogs.slice(0, 5).map((log, idx) => (
-                      <div
-                        key={idx}
-                        className="bg-slate-950/70 border border-slate-800/80 rounded-lg p-2 text-[11px] font-mono flex flex-wrap items-center justify-between gap-2"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                            log.actionType === 'REPLACE_NEW'
-                              ? 'bg-emerald-950 text-emerald-300 border border-emerald-700'
-                              : log.actionType === 'REGRIND'
-                              ? 'bg-amber-950 text-amber-300 border border-amber-700'
-                              : 'bg-rose-950 text-rose-300 border border-rose-700'
-                          }`}>
-                            {log.actionType}
-                          </span>
-                          <span className="text-slate-300 font-thai">{log.remarks}</span>
-
-                          {/* Photo Evidence Badge if available */}
-                          {log.photoUrl && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setActivePhotoModal({
-                                  url: log.photoUrl!,
-                                  title: `หลักฐานความเสียหาย: ${log.partName} (${log.pinCode})`,
-                                  subtitle: `Line ${log.lineId} • ${log.stageName}`,
-                                  timestamp: log.dateTime,
-                                  technician: log.technician,
-                                  remarks: log.remarks
-                                });
-                              }}
-                              className="px-1.5 py-0.5 rounded bg-rose-950/80 border border-rose-500/50 text-rose-300 text-[10px] font-bold flex items-center gap-1 hover:bg-rose-900 transition-colors"
-                            >
-                              <Camera className="w-3 h-3 text-rose-400" />
-                              <span>ดูรูป</span>
-                            </button>
-                          )}
-                        </div>
-                        <div className="text-slate-500 text-[10px] flex items-center gap-2">
-                          <span>Shot เครื่อง: {formatShots(log.machineShot)}</span>
-                          <span>•</span>
-                          <span>{log.dateTime}</span>
-                          <span>•</span>
-                          <span className="text-slate-400">{log.technician}</span>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-2.5 text-xs text-slate-500 font-thai">
-                      ยังไม่มีประวัติการซ่อมบำรุงสำหรับตำแหน่งนี้
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Modal Buttons (Sticky on mobile for seamless tap accessibility) */}
-              <div className="sticky bottom-0 sm:static bg-slate-900/95 sm:bg-transparent -mx-4 -mb-4 p-4 sm:p-0 sm:mx-0 sm:mb-0 flex items-center justify-end gap-3 pt-3 border-t border-white/10 z-10 backdrop-blur-md">
                 <button
                   type="button"
                   onClick={() => setSelectedPin(null)}
-                  className="flex-1 sm:flex-initial liquid-pill px-5 py-2.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] text-slate-300 hover:text-white text-xs font-mono font-bold border border-white/10 active:scale-95 cursor-pointer min-h-[44px]"
+                  className="liquid-pill p-2 rounded-full text-slate-400 hover:text-white bg-white/[0.04] hover:bg-white/[0.1] border border-white/10 active:scale-95 cursor-pointer"
                 >
-                  ยกเลิก
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 sm:flex-initial liquid-pill px-6 py-2.5 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs font-mono font-bold shadow-[0_0_20px_rgba(6,182,212,0.4)] flex items-center justify-center gap-2 active:scale-95 cursor-pointer border-none min-h-[44px]"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>บันทึกการเปลี่ยนอะไหล่</span>
+                  <X className="w-5 h-5" />
                 </button>
               </div>
-            </form>
+
+              {/* 1. SINGLE COMPACT SUMMARY STRIP (Zero duplicate metrics) */}
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 px-3.5 py-2.5 bg-slate-950/75 border border-slate-800 rounded-xl text-xs font-mono">
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-400">อายุใช้งาน:</span>
+                  <span className={`font-bold tabular-nums ${
+                    currentPercent >= 90 ? 'text-rose-400' : currentPercent >= 70 ? 'text-amber-300' : 'text-cyan-300'
+                  }`}>
+                    {formatShots(selectedPin.currentShots)} / {formatShots(selectedPin.maxShots)} ({currentPercent}%)
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-slate-300 tabular-nums">
+                  <span>เปลี่ยนล่าสุด: <b className="text-white">{formatShots(selectedPin.lastReplacementShot)}</b></span>
+                  <span className="text-slate-600">·</span>
+                  <span>เจียร: <b className="text-amber-300">{selectedPin.regrindCount}/{selectedPin.maxRegrind}</b></span>
+                  <span className="text-slate-600">·</span>
+                  <span className="inline-flex items-center gap-1">
+                    <Package className="w-3.5 h-3.5 text-cyan-400" />
+                    Parts Stock: <b className={availableStockQty !== null && availableStockQty <= 0 ? 'text-rose-400' : 'text-emerald-300'}>
+                      {availableStockQty !== null ? `${availableStockQty.toLocaleString()} EA` : 'N/A'}
+                    </b>
+                  </span>
+                </div>
+              </div>
+
+              {/* 2. STREAMLINED MACHINE SHOT CAPTURE (CSS selector 1) */}
+              <div className="bg-slate-950/80 border border-cyan-500/40 rounded-2xl p-4 space-y-3 font-mono">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <label className="text-xs font-bold text-cyan-300 flex items-center gap-2">
+                    <Gauge className="w-4 h-4 text-cyan-400" />
+                    <span>เลขช็อตหน้าเครื่อง</span>
+                  </label>
+
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex items-center bg-black/50 p-1 rounded-xl border border-white/10">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShotInputMode('LIVE');
+                          const mon = storageService.getLineMonitoring(selectedLineId);
+                          const live = mon?.machineShotTotal || 0;
+                          setLiveMachineShotValue(live);
+                          setMachineShotInput(live);
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                          shotInputMode === 'LIVE'
+                            ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        <Radio className="w-3.5 h-3.5" />
+                        <span>ดึงค่าสด</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShotInputMode('MANUAL')}
+                        className={`px-3 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                          shotInputMode === 'MANUAL'
+                            ? 'bg-amber-400 text-slate-950 shadow-sm'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                        <span>กรอกเอง</span>
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const mon = storageService.getLineMonitoring(selectedLineId);
+                        const live = mon?.machineShotTotal || 0;
+                        setLiveMachineShotValue(live);
+                        setMachineShotInput(live);
+                      }}
+                      title={`ดึงค่าล่าสุดจากหน้าเครื่อง (${formatShots(liveMachineShotValue)})`}
+                      className="p-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-cyan-300 border border-white/10 active:scale-95 cursor-pointer"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                  <div className="sm:col-span-7">
+                    <input
+                      type="number"
+                      min="0"
+                      value={machineShotInput}
+                      onChange={e => {
+                        const nextVal = Math.max(0, parseInt(e.target.value, 10) || 0);
+                        setShotInputMode('MANUAL');
+                        setMachineShotInput(nextVal);
+                      }}
+                      placeholder="กรอกเลขช็อตเครื่อง..."
+                      className="liquid-input w-full rounded-xl px-3.5 py-2 text-lg text-cyan-200 font-mono font-bold tabular-nums focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                      required
+                    />
+                  </div>
+
+                  <div className="sm:col-span-5 bg-black/40 border border-white/10 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-[10px] text-slate-400">ช็อตใช้งานรอบนี้ (Used)</div>
+                      {manualUsedShotOverride ? (
+                        <input
+                          type="number"
+                          min="0"
+                          value={usedShotInput}
+                          onChange={e => setUsedShotInput(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                          className="mt-1 w-full bg-slate-950 border border-amber-500/60 rounded-lg px-2 py-1 text-sm text-amber-300 font-mono font-bold tabular-nums focus:outline-none focus:border-amber-400"
+                        />
+                      ) : (
+                        <div className="text-base font-black text-emerald-400 font-mono tabular-nums">
+                          {formatShots(effectiveUsedShots)}
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextManual = !manualUsedShotOverride;
+                        setManualUsedShotOverride(nextManual);
+                        if (nextManual) {
+                          setUsedShotInput(Math.max(0, machineShotInput - selectedPin.lastReplacementShot));
+                        }
+                      }}
+                      className={`shrink-0 text-[10px] px-2.5 py-1 rounded-lg border cursor-pointer transition-colors ${
+                        manualUsedShotOverride
+                          ? 'bg-amber-950 text-amber-300 border-amber-500/50'
+                          : 'bg-white/5 text-slate-300 border-white/15 hover:text-white'
+                      }`}
+                    >
+                      {manualUsedShotOverride ? 'ใช้คำนวณ' : 'แก้ไข'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. FLEXIBLE OPERATOR ACTION ENTRY FORM */}
+              <form 
+                onSubmit={handleSaveAction} 
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && e.target instanceof HTMLInputElement) {
+                    e.preventDefault();
+                  }
+                }}
+                className="space-y-4"
+              >
+                {/* Action Selector: 6 Flexible Shop-Floor Modes */}
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold text-slate-300 font-mono">
+                    ประเภทงาน *
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActionType('REPLACE_NEW')}
+                      className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all cursor-pointer min-h-[44px] ${
+                        actionType === 'REPLACE_NEW'
+                          ? 'bg-emerald-950/90 border-emerald-400 text-emerald-200 ring-2 ring-emerald-500/40 shadow-lg'
+                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800/80 hover:text-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <Wrench className="w-4 h-4 text-emerald-400" />
+                        {actionType === 'REPLACE_NEW' && <Check className="w-4 h-4 text-emerald-400" />}
+                      </div>
+                      <div className="mt-1.5">
+                        <div className="text-xs font-bold font-mono text-emerald-300">เปลี่ยนอะไหล่ใหม่</div>
+                        <div className="text-[10px] text-slate-400 font-thai">รีเซ็ตช็อต 0 · ตัดสต็อกอัตโนมัติ</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setActionType('INSTALL_REGROUND')}
+                      className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all cursor-pointer min-h-[44px] ${
+                        actionType === 'INSTALL_REGROUND'
+                          ? 'bg-teal-950/90 border-teal-400 text-teal-200 ring-2 ring-teal-500/40 shadow-lg'
+                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800/80 hover:text-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <RefreshCw className="w-4 h-4 text-teal-400" />
+                        {actionType === 'INSTALL_REGROUND' && <Check className="w-4 h-4 text-teal-400" />}
+                      </div>
+                      <div className="mt-1.5">
+                        <div className="text-xs font-bold font-mono text-teal-300">ใส่อะไหล่เจียรแล้ว</div>
+                        <div className="text-[10px] text-slate-400 font-thai">เปลี่ยนชิ้นสำรองที่ลับคมแล้ว</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setActionType('REGRIND')}
+                      className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all cursor-pointer min-h-[44px] ${
+                        actionType === 'REGRIND'
+                          ? 'bg-amber-950/90 border-amber-400 text-amber-200 ring-2 ring-amber-500/40 shadow-lg'
+                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800/80 hover:text-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <RotateCcw className="w-4 h-4 text-amber-400" />
+                        {actionType === 'REGRIND' && <Check className="w-4 h-4 text-amber-400" />}
+                      </div>
+                      <div className="mt-1.5">
+                        <div className="text-xs font-bold font-mono text-amber-300">ส่งเจียรลับคม (Regrind)</div>
+                        <div className="text-[10px] text-slate-400 font-thai">+1 รอบเจียร & ออกใบงานคิว</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setActionType('BROKEN')}
+                      className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all cursor-pointer min-h-[44px] ${
+                        actionType === 'BROKEN'
+                          ? 'bg-rose-950/90 border-rose-400 text-rose-200 ring-2 ring-rose-500/40 shadow-lg'
+                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800/80 hover:text-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <AlertOctagon className="w-4 h-4 text-rose-400" />
+                        {actionType === 'BROKEN' && <Check className="w-4 h-4 text-rose-400" />}
+                      </div>
+                      <div className="mt-1.5">
+                        <div className="text-xs font-bold font-mono text-rose-300">แจ้งชำรุด (Broken)</div>
+                        <div className="text-[10px] text-slate-400 font-thai">ขึ้นเตือนสีแดง · ตัดสต็อกอัตโนมัติ</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setActionType('INSPECT_ADJUST')}
+                      className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all cursor-pointer min-h-[44px] ${
+                        actionType === 'INSPECT_ADJUST'
+                          ? 'bg-sky-950/90 border-sky-400 text-sky-200 ring-2 ring-sky-500/40 shadow-lg'
+                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800/80 hover:text-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <Sliders className="w-4 h-4 text-sky-400" />
+                        {actionType === 'INSPECT_ADJUST' && <Check className="w-4 h-4 text-sky-400" />}
+                      </div>
+                      <div className="mt-1.5">
+                        <div className="text-xs font-bold font-mono text-sky-300">ปรับตั้ง / ตรวจสอบ</div>
+                        <div className="text-[10px] text-slate-400 font-thai">บันทึกเช็คระยะ ไม่รีเซ็ตช็อต</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActionType('RETROACTIVE_LOG');
+                        setShotInputMode('MANUAL');
+                      }}
+                      className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all cursor-pointer min-h-[44px] ${
+                        actionType === 'RETROACTIVE_LOG'
+                          ? 'bg-indigo-950/90 border-indigo-400 text-indigo-200 ring-2 ring-indigo-500/40 shadow-lg'
+                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800/80 hover:text-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <History className="w-4 h-4 text-indigo-400" />
+                        {actionType === 'RETROACTIVE_LOG' && <Check className="w-4 h-4 text-indigo-400" />}
+                      </div>
+                      <div className="mt-1.5">
+                        <div className="text-xs font-bold font-mono text-indigo-300">บันทึกประวัติย้อนหลัง</div>
+                        <div className="text-[10px] text-slate-400 font-thai">ลง Log ย้อนหลัง ไม่ทับค่าปัจจุบัน</div>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Regrind Parameters (if Regrind selected) */}
+                {actionType === 'REGRIND' && (
+                  <div className="grid grid-cols-2 gap-3 bg-amber-950/30 border border-amber-800/50 rounded-xl p-3.5 font-mono text-xs">
+                    <div>
+                      <label className="block text-amber-300 font-bold mb-1">ความหนาเจียรออก (มม.) *</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        max="2.00"
+                        value={regrindDepthMm}
+                        onChange={e => setRegrindDepthMm(parseFloat(e.target.value) || 0)}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-amber-300 font-bold focus:outline-none focus:border-amber-400"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-amber-300 font-bold mb-1">ความหนาชิมรองชดเชย (มม.) *</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.00"
+                        max="2.00"
+                        value={shimThicknessMm}
+                        onChange={e => setShimThicknessMm(parseFloat(e.target.value) || 0)}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-amber-300 font-bold focus:outline-none focus:border-amber-400"
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Flexible Part Details: Qty, Lot, Serial & Automatic Parts Stock Status */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 bg-black/30 border border-white/10 rounded-xl p-3.5 text-xs font-mono items-center">
+                  <div className="sm:col-span-2">
+                    <label className="block text-slate-400 font-bold mb-1">จำนวน (EA)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max={999}
+                      value={changedQtyInput}
+                      onChange={e => setChangedQtyInput(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-cyan-300 font-bold tabular-nums focus:outline-none focus:border-cyan-400"
+                    />
+                  </div>
+                  <div className="sm:col-span-3">
+                    <label className="block text-slate-400 font-bold mb-1">Lot อะไหล่</label>
+                    <input
+                      type="text"
+                      value={partLotNumber}
+                      onChange={e => setPartLotNumber(e.target.value)}
+                      placeholder="เช่น LOT-26-01"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-100 focus:outline-none focus:border-cyan-400"
+                    />
+                  </div>
+                  <div className="sm:col-span-3">
+                    <label className="block text-slate-400 font-bold mb-1">Serial No.</label>
+                    <input
+                      type="text"
+                      value={partSerialNumber}
+                      onChange={e => setPartSerialNumber(e.target.value)}
+                      placeholder="เช่น SN-001 (ถ้ามี)"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-100 focus:outline-none focus:border-cyan-400"
+                    />
+                  </div>
+                  <div className="sm:col-span-4 flex flex-col justify-center pt-1 sm:pt-4">
+                    {autoDeduct ? (
+                      <div className="text-[11px] font-thai leading-snug">
+                        <div className="font-bold text-emerald-400">
+                          ตัดสต็อก Parts Stock อัตโนมัติ (-{changedQtyInput} EA)
+                        </div>
+                        <div className="text-slate-400 tabular-nums">
+                          {remainingAfterDeduct !== null
+                            ? `คงเหลือหลังบันทึก: ${remainingAfterDeduct.toLocaleString()} EA`
+                            : 'ไม่พบยอดคลัง'}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] font-thai text-slate-400">
+                        ไม่ตัดสต็อก Parts Stock สำหรับงานประเภทนี้
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Form Fields: Technician (Plain Input with Last Memory) & Date-Time */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-mono">
+                  <div>
+                    <label className="block text-slate-400 font-bold mb-1">ช่างซ่อม / ผู้บันทึก *</label>
+                    <div className="relative">
+                      <UserCheck className="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={technicianName}
+                        onChange={e => setTechnicianName(e.target.value)}
+                        placeholder="ระบุชื่อช่าง..."
+                        className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-8 pr-2.5 py-2 text-slate-100 focus:outline-none focus:border-cyan-400"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-400 font-bold mb-1">วัน-เวลาที่ดำเนินการ (เวลาไทย) *</label>
+                    <div className="relative">
+                      <Calendar className="w-4 h-4 text-white absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="datetime-local"
+                        value={actionDateTime}
+                        onChange={e => setActionDateTime(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-600 rounded-lg pl-8 pr-2.5 py-2 text-white focus:outline-none focus:border-cyan-400 [color-scheme:dark]"
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* CSS selector 4 area: Empty & Optional Remarks + Evidence Photo */}
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-slate-400 font-bold mb-1 text-xs font-mono">
+                      หมายเหตุเพิ่มเติม (ไม่บังคับ)
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={remarks}
+                      onChange={e => setRemarks(e.target.value)}
+                      placeholder="พิมพ์หมายเหตุเพิ่มเติม (เว้นว่างได้)..."
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-slate-100 font-thai focus:outline-none focus:border-cyan-400"
+                    />
+                  </div>
+
+                  {/* Evidence & Damage Photo Upload */}
+                  <div className="pt-2 pb-1 border-t border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-mono font-bold text-slate-300 flex items-center gap-1.5">
+                        <Camera className="w-3.5 h-3.5 text-rose-400" />
+                        <span>แนบรูปถ่ายความเสียหาย / หลักฐานงานซ่อม</span>
+                      </label>
+                      <span className="text-[10px] text-slate-500 font-thai">เปิดดูย้อนหลังได้จากประวัติ</span>
+                    </div>
+
+                    <input
+                      type="file"
+                      ref={cameraInputRef}
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) processImageFile(file);
+                        e.target.value = '';
+                      }}
+                    />
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) processImageFile(file);
+                        e.target.value = '';
+                      }}
+                    />
+
+                    {!damagePhotoUrl ? (
+                      <div
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setIsDragOverPhoto(true);
+                        }}
+                        onDragLeave={() => setIsDragOverPhoto(false)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          setIsDragOverPhoto(false);
+                          const file = e.dataTransfer.files?.[0];
+                          if (file) processImageFile(file);
+                        }}
+                        className={`border-2 border-dashed rounded-xl p-2.5 text-center transition-all ${
+                          isDragOverPhoto
+                            ? 'border-cyan-400 bg-cyan-950/30'
+                            : 'border-slate-800 bg-slate-950/60 hover:border-slate-700'
+                        }`}
+                      >
+                        {isCompressingPhoto ? (
+                          <div className="flex items-center justify-center gap-2 py-2 text-cyan-400 text-xs font-mono">
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            <span>กำลังประมวลผลและบีบอัดรูปภาพ...</span>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5">
+                            <button
+                              type="button"
+                              onClick={() => cameraInputRef.current?.click()}
+                              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-rose-600/90 hover:bg-rose-500 text-white font-mono text-xs font-bold shadow-md active:scale-95 transition-all cursor-pointer min-h-[44px]"
+                            >
+                              <Camera className="w-4 h-4" />
+                              <span>ถ่ายรูปทันที (กล้องมือถือ)</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => fileInputRef.current?.click()}
+                              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-mono text-xs font-bold active:scale-95 transition-all cursor-pointer min-h-[44px]"
+                            >
+                              <UploadCloud className="w-4 h-4 text-cyan-400" />
+                              <span>เลือกจากคลังภาพ / PC</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="bg-slate-950 border border-rose-500/40 rounded-xl p-3 flex items-center justify-between gap-3 shadow-inner">
+                        <div className="flex items-center gap-3">
+                          <div
+                            onClick={() => setActivePhotoModal({
+                              url: damagePhotoUrl,
+                              title: `ภาพความเสียหายตำแหน่ง ${selectedPin.pinCode} (${selectedPin.partName})`,
+                              subtitle: `Line ${selectedLineId} • ${selectedPin.stageName}`,
+                              timestamp: actionDateTime.replace('T', ' '),
+                              technician: technicianName || currentUser.name,
+                              remarks: remarks || 'แนบหลักฐานความเสียหาย'
+                            })}
+                            className="relative w-14 h-14 rounded-lg overflow-hidden border border-slate-700 cursor-pointer group flex-shrink-0 bg-black shadow"
+                          >
+                            <img
+                              src={damagePhotoUrl}
+                              alt="Damage Evidence"
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                              <ZoomIn className="w-4 h-4 text-white" />
+                            </div>
+                          </div>
+                          <div className="text-xs font-mono">
+                            <div className="text-rose-400 font-bold flex items-center gap-1.5">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>แนบรูปภาพแล้ว (พร้อมบันทึก)</span>
+                            </div>
+                            <p className="text-[11px] text-slate-400 font-thai mt-0.5">คลิกรูปภาพเพื่อดูขนาดเต็ม</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setDamagePhotoUrl(null)}
+                            className="p-2 rounded-md bg-rose-950/60 hover:bg-rose-900 border border-rose-800 text-rose-300 text-xs font-mono font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                            title="ลบรูปภาพนี้"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">ลบรูป</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 4. LINKED HISTORY EXPLORER (VIEW / SEARCH / EDIT / DELETE IN MODAL) */}
+                <div className="space-y-2.5 pt-3 border-t border-slate-800">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+                    <span className="flex items-center gap-1.5 font-bold text-slate-200">
+                      <History className="w-4 h-4 text-cyan-400" />
+                      <span>ประวัติเชื่อมโยงย้อนหลัง ({selectedPinLinkedLogs.length} รายการ)</span>
+                    </span>
+
+                    <div className="flex items-center gap-1.5 bg-black/40 p-1 rounded-lg border border-white/10">
+                      <button
+                        type="button"
+                        onClick={() => setHistoryModalScope('PIN')}
+                        className={`px-2.5 py-1 rounded text-[10px] font-bold cursor-pointer transition-colors ${
+                          historyModalScope === 'PIN' ? 'bg-cyan-500 text-slate-950' : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        เฉพาะตำแหน่งนี้
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setHistoryModalScope('STAGE')}
+                        className={`px-2.5 py-1 rounded text-[10px] font-bold cursor-pointer transition-colors ${
+                          historyModalScope === 'STAGE' ? 'bg-cyan-500 text-slate-950' : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        ทั้ง Stage นี้
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Search & Filter inside Modal History */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="relative flex-1 min-w-[160px]">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={historyModalSearch}
+                        onChange={e => setHistoryModalSearch(e.target.value)}
+                        placeholder="ค้นหาช่าง, Lot, สาเหตุ..."
+                        className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-8 pr-2.5 py-1.5 text-[11px] font-mono text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-cyan-400"
+                      />
+                    </div>
+                    <select
+                      value={historyModalActionFilter}
+                      onChange={e => setHistoryModalActionFilter(e.target.value)}
+                      className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-[11px] font-mono text-slate-200 focus:outline-none focus:border-cyan-400 cursor-pointer"
+                    >
+                      <option value="ALL">ทุกประเภท</option>
+                      <option value="REPLACE_NEW">เปลี่ยนใหม่</option>
+                      <option value="INSTALL_REGROUND">ใส่อะไหล่เจียร</option>
+                      <option value="REGRIND">ส่งเจียร</option>
+                      <option value="BROKEN">แจ้งชำรุด</option>
+                      <option value="INSPECT_ADJUST">ปรับตั้ง/ตรวจ</option>
+                      <option value="RETROACTIVE_LOG">บันทึกย้อนหลัง</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar pr-1">
+                    {selectedPinLinkedLogs.length > 0 ? (
+                      selectedPinLinkedLogs.map((log) => {
+                        const isEditing = editingHistoryId === log.id;
+                        const isConfirmingDelete = confirmDeleteHistoryId === log.id;
+
+                        return (
+                          <div
+                            key={log.id}
+                            className="bg-slate-950/80 border border-slate-800 rounded-xl p-2.5 text-[11px] font-mono space-y-2"
+                          >
+                            {isEditing && editHistoryDraft ? (
+                              <div className="space-y-2">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                  <div>
+                                    <label className="text-[10px] text-slate-400 block">วัน-เวลา</label>
+                                    <input
+                                      type="datetime-local"
+                                      value={editHistoryDraft.dateTime.replace(' ', 'T').slice(0, 16)}
+                                      onChange={e => setEditHistoryDraft({ ...editHistoryDraft, dateTime: e.target.value })}
+                                      className="w-full bg-black border border-cyan-500/50 rounded px-2 py-1 text-[11px] text-white [color-scheme:dark]"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] text-slate-400 block">Shot เครื่อง</label>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      value={editHistoryDraft.machineShot}
+                                      onChange={e => setEditHistoryDraft({ ...editHistoryDraft, machineShot: parseInt(e.target.value, 10) || 0 })}
+                                      className="w-full bg-black border border-cyan-500/50 rounded px-2 py-1 text-[11px] text-cyan-300 tabular-nums"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] text-slate-400 block">Shot ใช้งานจริง</label>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      value={editHistoryDraft.pinShot}
+                                      onChange={e => setEditHistoryDraft({ ...editHistoryDraft, pinShot: parseInt(e.target.value, 10) || 0 })}
+                                      className="w-full bg-black border border-cyan-500/50 rounded px-2 py-1 text-[11px] text-emerald-300 tabular-nums"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  <div>
+                                    <label className="text-[10px] text-slate-400 block">ช่างผู้บันทึก</label>
+                                    <input
+                                      type="text"
+                                      value={editHistoryDraft.technician}
+                                      onChange={e => setEditHistoryDraft({ ...editHistoryDraft, technician: e.target.value })}
+                                      className="w-full bg-black border border-slate-700 rounded px-2 py-1 text-[11px] text-white"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] text-slate-400 block">Lot / Serial</label>
+                                    <input
+                                      type="text"
+                                      value={editHistoryDraft.lotNumber}
+                                      onChange={e => setEditHistoryDraft({ ...editHistoryDraft, lotNumber: e.target.value })}
+                                      className="w-full bg-black border border-slate-700 rounded px-2 py-1 text-[11px] text-white"
+                                    />
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-slate-400 block">สาเหตุ / หมายเหตุ</label>
+                                  <input
+                                    type="text"
+                                    value={editHistoryDraft.remarks}
+                                    onChange={e => setEditHistoryDraft({ ...editHistoryDraft, remarks: e.target.value })}
+                                    className="w-full bg-black border border-slate-700 rounded px-2 py-1 text-[11px] text-white font-thai"
+                                  />
+                                </div>
+                                <div className="flex justify-end gap-2 pt-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingHistoryId(null);
+                                      setEditHistoryDraft(null);
+                                    }}
+                                    className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] cursor-pointer"
+                                  >
+                                    ยกเลิก
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveEditedHistoryEntry(log)}
+                                    className="px-3 py-1 rounded bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-[10px] flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <Save className="w-3 h-3" />
+                                    <span>บันทึกการแก้ไข</span>
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${getActionBadgeStyle(log.actionType)}`}>
+                                      {log.actionType}
+                                    </span>
+                                    {historyModalScope === 'STAGE' && (
+                                      <span className="text-cyan-300 font-bold">{log.pinCode}</span>
+                                    )}
+                                    <span className="text-slate-200 font-thai">{log.remarks}</span>
+                                    {log.lotNumber && (
+                                      <span className="text-[10px] text-amber-300">Lot: {log.lotNumber}</span>
+                                    )}
+                                    {log.photoUrl && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setActivePhotoModal({
+                                            url: log.photoUrl!,
+                                            title: `หลักฐานความเสียหาย: ${log.partName} (${log.pinCode})`,
+                                            subtitle: `Line ${log.lineId} • ${log.stageName}`,
+                                            timestamp: log.dateTime,
+                                            technician: log.technician,
+                                            remarks: log.remarks
+                                          });
+                                        }}
+                                        className="px-1.5 py-0.5 rounded bg-rose-950/80 border border-rose-500/50 text-rose-300 text-[10px] font-bold flex items-center gap-1 hover:bg-rose-900 transition-colors cursor-pointer"
+                                      >
+                                        <Camera className="w-3 h-3 text-rose-400" />
+                                        <span>ดูรูป</span>
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  <div className="flex items-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setConfirmDeleteHistoryId(null);
+                                        setEditingHistoryId(log.id);
+                                        setEditHistoryDraft({
+                                          dateTime: log.dateTime || getLocalDateTimeInputValue(),
+                                          machineShot: log.machineShot || 0,
+                                          pinShot: log.pinShot || 0,
+                                          technician: log.technician || '',
+                                          lotNumber: log.lotNumber || '',
+                                          remarks: log.remarks || ''
+                                        });
+                                      }}
+                                      title="แก้ไขรายการนี้"
+                                      className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 cursor-pointer"
+                                    >
+                                      <Edit3 className="w-3 h-3" />
+                                    </button>
+                                    {isConfirmingDelete ? (
+                                      <div className="flex items-center gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            handleDeleteLog(log.id, log.linkedReplacementId);
+                                            setConfirmDeleteHistoryId(null);
+                                          }}
+                                          className="px-2 py-0.5 rounded bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-bold cursor-pointer"
+                                        >
+                                          ยืนยันลบ
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setConfirmDeleteHistoryId(null)}
+                                          className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px] cursor-pointer"
+                                        >
+                                          ยกเลิก
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => setConfirmDeleteHistoryId(log.id)}
+                                        title="ลบรายการนี้"
+                                        className="p-1 rounded bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800/70 cursor-pointer"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="text-slate-400 text-[10px] flex flex-wrap items-center gap-x-2 gap-y-0.5 tabular-nums">
+                                  <span>Shot เครื่อง: <b className="text-cyan-300">{formatShots(log.machineShot)}</b></span>
+                                  <span>·</span>
+                                  <span>ใช้งาน: <b className="text-emerald-400">{formatShots(log.pinShot)}</b></span>
+                                  <span>·</span>
+                                  <span>{log.dateTime}</span>
+                                  <span>·</span>
+                                  <span className="text-slate-300">{log.technician}</span>
+                                  {log.changedQty && log.changedQty > 1 && (
+                                    <>
+                                      <span>·</span>
+                                      <span className="text-amber-300">{log.changedQty} EA</span>
+                                    </>
+                                  )}
+                                  {log.updatedAt && (
+                                    <span className="text-slate-500">(แก้ไขแล้ว)</span>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="text-center py-3 text-xs text-slate-500 font-thai bg-black/25 rounded-xl border border-white/5">
+                        ยังไม่มีประวัติการซ่อมบำรุงสำหรับ{historyModalScope === 'PIN' ? 'ตำแหน่งนี้' : ' Stage นี้'}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Modal Buttons (Sticky on mobile for seamless tap accessibility) */}
+                <div className="sticky bottom-0 sm:static bg-slate-900/95 sm:bg-transparent -mx-4 -mb-4 p-4 sm:p-0 sm:mx-0 sm:mb-0 flex items-center justify-end gap-3 pt-3 border-t border-white/10 z-10 backdrop-blur-md">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPin(null)}
+                    className="flex-1 sm:flex-initial liquid-pill px-5 py-2.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] text-slate-300 hover:text-white text-xs font-mono font-bold border border-white/10 active:scale-95 cursor-pointer min-h-[44px]"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 sm:flex-initial liquid-pill px-6 py-2.5 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs font-mono font-bold shadow-[0_0_20px_rgba(6,182,212,0.4)] flex items-center justify-center gap-2 active:scale-95 cursor-pointer border-none min-h-[44px]"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>บันทึกข้อมูลและเชื่อมโยงประวัติ</span>
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ======================================================== */}
       {/* 3.5 SWAP ENTIRE STAGE MODAL (BATCH UPDATE / MAINTENANCE) */}
@@ -2238,9 +3078,9 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
                 <div>
                   <input
                     type="number"
-                    min="1"
-                    value={swapMachineShotInput || ''}
-                    onChange={e => setSwapMachineShotInput(parseInt(e.target.value) || 0)}
+                    min="0"
+                    value={Number.isNaN(swapMachineShotInput) ? '' : swapMachineShotInput}
+                    onChange={e => setSwapMachineShotInput(Math.max(0, parseInt(e.target.value, 10) || 0))}
                     placeholder="กรอกเลขช็อตเครื่องล่าสุด..."
                     className="liquid-input w-full rounded-xl px-3.5 py-2 text-base text-cyan-200 font-mono font-bold focus:outline-none focus:ring-2 focus:ring-cyan-400"
                     required
@@ -2265,28 +3105,25 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
               </div>
 
               {swapActionType === 'REPLACE_NEW' && (
-                <div className="border-t sm:border-t-0 sm:border-l border-slate-800 pl-0 sm:pl-3 pt-2 sm:pt-0">
-                  <div className="text-[10px] text-slate-400 uppercase font-bold mb-1">INVENTORY SYSTEM INTEGRATION</div>
-                  <label className="flex items-start gap-2 cursor-pointer select-none mt-2">
-                    <input
-                      type="checkbox"
-                      checked={swapDeductStock}
-                      onChange={e => setSwapDeductStock(e.target.checked)}
-                      className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-cyan-500 focus:ring-cyan-400 mt-0.5"
-                    />
-                    <div>
-                      <span className="text-xs font-bold text-slate-200 font-thai">ตัดสต็อกพาร์ทอะไหล่อัตโนมัติ (Deduct Spare Stock)</span>
-                      <p className="text-[10px] text-slate-400 font-thai mt-0.5">
-                        ระบบจะหักลบสต็อกอะไหล่ในคลังสำหรับรหัส <span className="text-amber-400 font-bold">{selectedStageForSwap.partCode}</span> ออกจำนวน <span className="text-cyan-400 font-bold">{selectedStageForSwap.totalPins} ชิ้น</span> ทันทีที่ดำเนินการสำเร็จ
-                      </p>
-                    </div>
-                  </label>
+                <div className="border-t sm:border-t-0 sm:border-l border-slate-800 pl-0 sm:pl-3 pt-2 sm:pt-0 flex flex-col justify-center">
+                  <div className="text-[10px] text-emerald-400 uppercase font-bold mb-1">PARTS STOCK AUTO DEDUCTION</div>
+                  <p className="text-[11px] text-slate-300 font-thai leading-snug">
+                    ตัดสต็อก Parts Stock อัตโนมัติ <span className="text-emerald-400 font-bold">-{selectedStageForSwap.totalPins} EA</span> เมื่อบันทึกเปลี่ยนอะไหล่ใหม่ยก Stage
+                  </p>
                 </div>
               )}
             </div>
 
             {/* Operator Action Entry Form (Replace, Regrind) */}
-            <form onSubmit={handleSaveSwapStage} className="space-y-4">
+            <form 
+              onSubmit={handleSaveSwapStage} 
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && e.target instanceof HTMLInputElement) {
+                  e.preventDefault();
+                }
+              }}
+              className="space-y-4"
+            >
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-slate-300 uppercase font-mono">
                   เลือกการดำเนินการสำหรับทั้ง Stage *
@@ -2400,29 +3237,15 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
 
               <div>
                 <label className="block text-slate-400 font-bold mb-1 text-xs font-mono">
-                  สาเหตุ / หมายเหตุในการทำบำรุงรักษายกบล็อก *
+                  หมายเหตุเพิ่มเติม (ไม่บังคับ)
                 </label>
-                <div className="space-y-1.5">
-                  <select
-                    onChange={e => {
-                      if (e.target.value) setSwapRemarks(e.target.value);
-                    }}
-                    className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-300 font-thai focus:outline-none focus:border-cyan-400"
-                  >
-                    <option value="">-- เลือกสาเหตุมาตรฐาน --</option>
-                    {COMMON_REASONS.map((r, idx) => (
-                      <option key={idx} value={r}>{r}</option>
-                    ))}
-                  </select>
-                  <textarea
-                    rows={2}
-                    value={swapRemarks}
-                    onChange={e => setSwapRemarks(e.target.value)}
-                    placeholder="ระบุรายละเอียดหรือความจำเป็นในการเปลี่ยนยกสเตจ..."
-                    className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-xs text-slate-100 font-thai focus:outline-none focus:border-cyan-400"
-                    required
-                  />
-                </div>
+                <textarea
+                  rows={2}
+                  value={swapRemarks}
+                  onChange={e => setSwapRemarks(e.target.value)}
+                  placeholder="พิมพ์หมายเหตุเพิ่มเติม (เว้นว่างได้)..."
+                  className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-xs text-slate-100 font-thai focus:outline-none focus:border-cyan-400"
+                />
               </div>
 
               {/* Modal Buttons */}
@@ -2499,10 +3322,13 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
                 className="bg-[#090d16] border border-white/20 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-cyan-400 cursor-pointer shadow-sm"
               >
                 <option value="ALL" className="bg-[#090d16] text-white font-bold py-1">ทุกประเภทการทำงาน (All Actions)</option>
-                <option value="REPLACE_NEW" className="bg-[#090d16] text-emerald-300 py-1">● เปลี่ยนอะไหล่ใหม่ (Replace)</option>
-                <option value="REGRIND" className="bg-[#090d16] text-cyan-300 py-1">⚡ ส่งเจียรลับคม (Regrind)</option>
-                <option value="BROKEN" className="bg-[#090d16] text-rose-300 py-1">✖ แจ้งชำรุด (Broken)</option>
-                <option value="SETUP_CHANGE" className="bg-[#090d16] text-amber-300 py-1">⚙ Toolroom Setup Overhaul</option>
+                <option value="REPLACE_NEW" className="bg-[#090d16] text-emerald-300 py-1">เปลี่ยนอะไหล่ใหม่ (Replace)</option>
+                <option value="INSTALL_REGROUND" className="bg-[#090d16] text-teal-300 py-1">ใส่อะไหล่เจียรแล้ว (Install Re-ground)</option>
+                <option value="REGRIND" className="bg-[#090d16] text-amber-300 py-1">ส่งเจียรลับคม (Regrind)</option>
+                <option value="BROKEN" className="bg-[#090d16] text-rose-300 py-1">แจ้งชำรุด (Broken)</option>
+                <option value="INSPECT_ADJUST" className="bg-[#090d16] text-sky-300 py-1">ปรับตั้ง/ตรวจสอบ (Inspect)</option>
+                <option value="RETROACTIVE_LOG" className="bg-[#090d16] text-indigo-300 py-1">บันทึกย้อนหลัง (Retroactive)</option>
+                <option value="SETUP_CHANGE" className="bg-[#090d16] text-purple-300 py-1">Toolroom Setup Overhaul</option>
               </select>
 
               <DateRangeFilter
@@ -2582,20 +3408,15 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
                         <td className="p-3 whitespace-nowrap font-bold text-slate-200">{log.pinCode}</td>
                         <td className="p-3 text-slate-300">{log.partName}</td>
                         <td className="p-3 whitespace-nowrap">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            log.actionType === 'REPLACE_NEW'
-                              ? 'bg-emerald-950 text-emerald-300 border border-emerald-700'
-                              : log.actionType === 'REGRIND'
-                              ? 'bg-amber-950 text-amber-300 border border-amber-700'
-                              : log.actionType === 'BROKEN'
-                              ? 'bg-rose-950 text-rose-300 border border-rose-700'
-                              : 'bg-purple-950 text-purple-300 border border-purple-700'
-                          }`}>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getActionBadgeStyle(log.actionType)}`}>
                             {log.actionLabelTh || log.actionType}
                           </span>
+                          {log.lotNumber && (
+                            <span className="block text-[10px] text-amber-300 mt-0.5">Lot: {log.lotNumber}</span>
+                          )}
                         </td>
-                        <td className="p-3 text-right font-bold text-cyan-300">{formatShots(log.machineShot)}</td>
-                        <td className="p-3 text-right font-bold text-emerald-400">{formatShots(log.pinShot)}</td>
+                        <td className="p-3 text-right font-bold text-cyan-300 tabular-nums">{formatShots(log.machineShot)}</td>
+                        <td className="p-3 text-right font-bold text-emerald-400 tabular-nums">{formatShots(log.pinShot)}</td>
                         <td className="p-3 text-slate-300 whitespace-nowrap">{log.technician}</td>
                         <td className="p-3 whitespace-nowrap">
                           {log.photoUrl ? (
@@ -2750,7 +3571,7 @@ export const InteractiveDieLayoutView: React.FC<InteractiveDieLayoutViewProps> =
       <MasterLogDeleteModal
         log={deletingLog}
         onClose={() => setDeletingLog(null)}
-        onConfirmDelete={handleDeleteLog}
+        onConfirmDelete={(logId) => handleDeleteLog(logId, deletingLog?.linkedReplacementId)}
       />
 
     </div>

@@ -161,7 +161,7 @@ export const Part3DBlueprintModal: React.FC<Part3DBlueprintModalProps> = ({
       const img = new Image();
       img.onload = () => {
         try {
-          const maxDim = 1600;
+          const maxDim = 800;
           let width = img.width;
           let height = img.height;
 
@@ -181,7 +181,7 @@ export const Part3DBlueprintModal: React.FC<Part3DBlueprintModalProps> = ({
           const ctx = canvas.getContext('2d');
           if (ctx) {
             ctx.drawImage(img, 0, 0, width, height);
-            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
+            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.72);
             setPreviewImageUrl(compressedDataUrl);
           } else {
             setPreviewImageUrl(e.target?.result as string);
